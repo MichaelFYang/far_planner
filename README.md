@@ -2,11 +2,7 @@ FAR Planner uses a dynamically updated visibility graph for fast replanning. The
 
 FAR Planner was used by the [CMU-OSU Team](https://www.subt-explorer.com) in attending [DARPA Subterranean Challenge](https://www.subtchallenge.com). In the final competition which took place in Louisville Mega Cavern, KY, the team's robots conducted the most complete traversing and mapping across the site (26 out of 28 sectors) among all teams, winning a "Most Sectors Explored Award".
 
-<!-- [A video showing functionalities of FAR Planner is available.](https://youtu.be/5shnlyZ4L9M)
-
-<p align="center">
-  <img src="img/method.png" alt="Method" width="70%"/>
-</p> -->
+[A video showing functionalities of FAR Planner is available.](https://youtu.be/5shnlyZ4L9M)
 
 [![A video showing functionalities of FAR Planner is available.](img/method.png)](https://youtu.be/5shnlyZ4L9M)
 
