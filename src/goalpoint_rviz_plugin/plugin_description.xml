@@ -1,0 +1,9 @@
+<library path="lib/libgoalpoint_rviz_plugin">
+    <class name="rviz/GoalPointTool"
+           type="rviz::GoalPointTool"
+           base_class_type="rviz::Tool">
+        <description>
+            A tool for sending goalpoint to FAR route planner
+        </description>
+    </class>
+</library>

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>goalpoint_rviz_plugin</name>
+  <version>0.0.1</version>
+  <description>Route Planner Goalpoint RVIZ Plugin</description>
+  <maintainer email="ccao1@andrew.cmu.edu">Chao Cao</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>rviz</build_depend>
+  <build_depend>qtbase5-dev</build_depend>
+
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>rospy</build_export_depend>
+  <build_export_depend>rviz</build_export_depend>
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>rviz</exec_depend>
+  <exec_depend>libqt5-core</exec_depend>
+  <exec_depend>libqt5-gui</exec_depend>
+  <exec_depend>libqt5-widgets</exec_depend>
+
+  <export>
+    <rviz plugin="${prefix}/plugin_description.xml"/>
+  </export>
+</package>

@@ -1,0 +1,15 @@
+<launch>
+    <arg name="odom_topic" default="/state_estimation"/>
+    <arg name="terrain_cloud_topic" default="/terrain_map_ext"/>
+    <arg name="terrain_local_topic" default="/terrain_map"/>
+    <arg name="scan_cloud_topic" default="/registered_scan"/>
+    <arg name="config" default="default"/>
+    <node pkg="far_planner" type="far_planner" name="far_planner" output="screen">
+        <rosparam command="load" file="$(find far_planner)/config/$(arg config).yaml" />
+        <remap from="/odom_world" to="$(arg odom_topic)"/> 
+        <remap from="/terrain_cloud" to="$(arg terrain_cloud_topic)"/>
+        <remap from="/scan_cloud" to="$(arg scan_cloud_topic)"/>
+        <remap from="/terrain_local_cloud" to="$(arg terrain_local_topic)"/>
+    </node>
+    <node type="rviz" name="farrviz" pkg="rviz" args="-d $(find far_planner)/rviz/$(arg config).rviz" respawn="true"/>
+</launch>

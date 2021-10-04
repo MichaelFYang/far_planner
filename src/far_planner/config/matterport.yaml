@@ -1,0 +1,74 @@
+# Dynamic Planner Default Params
+main_run_freq                           : 2.5
+voxel_dim                               : 0.1   # Unit: meter
+robot_dim                               : 0.5   # Unit: meter
+vehicle_height                          : 0.5   # Unit: meter
+sensor_range                            : 10.0  # Unit: meter
+terrain_range                           : 10.0  # Unit: meter
+waypoint_project_dist                   : 2.5   # Unit: meter
+visualize_ratio                         : 0.4
+is_opencv_visual                        : false # Obstalce Image Display
+is_static_env                           : true  
+is_debug_output                         : false
+is_attempt_autoswitch                   : true  # Auto switch to attemptable navigation
+world_frame                             : map
+
+# Graph Messager
+GraphMsger/robot_id                     : 0
+
+# Map Handler Params
+MapHandler/ceil_length                  : 5.0    # Unit: meter
+MapHandler/ceil_height                  : 1.0    # Unit: meter
+MapHandler/map_grid_max_length          : 200.0  # Unit: meter
+MapHandler/map_grad_max_height          : 10.0   # Unit: meter 
+
+# Scan Handler Params
+ScanHandler/inflate_scan_size           : 2
+
+# Dynamic Planner Utility Params
+Util/angle_noise                        : 12.0  # Unit: degree
+Util/accept_max_align_angle             : 5.0   # Unit: degree
+Util/new_intensity_thred                : 2.0
+Util/nav_clear_dist                     : 0.3   # Unit: meter
+Util/edge_project_dist                  : 0.2   # Unit: meter
+Util/terrain_free_Z                     : 0.15
+Util/dyosb_update_thred                 : 4
+Util/new_point_counter                  : 5
+Util/dynamic_obs_dacay_time             : 10.0  # Unit: second
+Util/new_points_decay_time              : 1.5   # Unit: second
+
+# Dynamic Graph Params
+Graph/node_near_dist                    : 0.5   # Unit: meter
+Graph/match_margin_dist                 : 0.6   # Unit: meter
+Graph/move_thred                        : 0.05  # Unit: meter
+Graph/connect_votes_size                : 10
+Graph/trajectory_interval_ratio         : 5.0
+Graph/terrain_inflate_size              : 2           
+Graph/clear_dumper_thred                : 4
+Graph/node_finalize_thred               : 6
+Graph/filter_pool_size                  : 12
+Graph/connect_angle_thred               : 6.0   # Unit: degree
+Graph/pos_filter_margin                 : 0.25  # Unit: meter
+Graph/dirs_filter_margin                : 10.0  # Unit: degree
+
+# Corner Detector Params
+CDetector/resize_ratio                  : 3.0
+CDetector/img_blur_size                 : 2.0
+CDetector/filter_count_value            : 7
+CDetector/is_save_img                   : false
+CDetector/img_folder_path               : /path
+
+# Graph Planner Params
+GPlanner/converge_distance              : 0.25  # Unit: meter
+GPlanner/goal_adjust_radius             : 1.25  # Unit: meter
+GPlanner/free_counter_thred             : 7
+GPlanner/reach_goal_vote_size           : 5
+GPlanner/move_momentum_dist             : 0.1   # Unit: meter
+GPlanner/path_momentum_thred            : 5
+GPlanner/clear_inflate_size             : 3
+
+# Contour Graph Params
+ContourGraph/around_distance            : 0.2  # Unit: meter
+ContourGraph/pillar_perimeter_dist      : 1.5  # Unit: meter
+
+
