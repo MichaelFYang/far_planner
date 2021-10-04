@@ -158,8 +158,7 @@ private:
 
     inline void ResetInternalValues() {
         odom_node_ptr_ = NULL; 
-        is_cloud_init_      = false; 
-        is_odom_init_       = false; 
+        is_cloud_init_      = false;  
         is_scan_init_       = false;
         is_planner_running_ = false;  
         is_graph_init_      = false; 

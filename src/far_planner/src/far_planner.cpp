@@ -497,10 +497,7 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
-  if (!is_odom_init_) {
-    ROS_WARN_THROTTLE(1.0, "FARMaster: wait for odom to init.");
-    return;
-  }
+  if (!is_odom_init_) return;
   if (!is_stop_update_) {
     this->PrcocessCloud(pc, temp_cloud_ptr_);
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
