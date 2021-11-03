@@ -16,12 +16,13 @@
 /*ROS Library*/
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
-#include <nav_graph_msg/Graph.h>
-#include <nav_graph_msg/Node.h>
+#include <visibility_graph_msg/Graph.h>
+#include <visibility_graph_msg/Node.h>
 #include <tf/transform_listener.h>
 #include <nav_msgs/Odometry.h>
 #include <std_msgs/Empty.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <std_msgs/Float32.h>
 #include <std_srvs/Trigger.h>
 #include <nav_msgs/Path.h>
@@ -33,6 +34,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 /* PCL Library*/
+#include <pcl/pcl_macros.h>
 #include <pcl/point_cloud.h>
 #include <pcl/search/kdtree.h>
 #include <pcl_ros/transforms.h>
@@ -49,7 +51,10 @@ typedef pcl::KdTreeFLANN<PCLPoint>::Ptr PointKdTreePtr;
 typedef std::vector<Point3D> PointStack;
 typedef std::vector<cv::Point2f> CVPointStack;
 typedef std::vector<NavNodePtr> NodePtrStack;
-typedef std::map<NavNodePtr, NavPair> NavMap;
+
+typedef std::vector<std::size_t> IdxStack;
+typedef std::unordered_set<std::size_t> IdxSet;
+typedef std::unordered_map<std::size_t, std::size_t> IdxMap;
 
 enum AngleNoiseDirect {
     NARROW = 1,
@@ -221,16 +226,16 @@ public:
     static void EraseNodeFromStack(const NavNodePtr& node_ptr,
                                    NodePtrStack& node_stack);
 
-    static void EraseNodeFromMap(const NavNodePtr& node_ptr,
-                                 NavMap& nav_map);
-
     static float NoiseCosValue(const float& dot_value, const bool& is_large, const float& noise = FARUtil::kAngleNoise);
 
     static void CopyGroundPCL(const PointCloudPtr& freeCloudIn,
                               const PointCloudPtr& freeCloudOut);
 
-    static bool IsInSurfacePairs(const Point3D& diff_p,
+    static bool IsOutReducedDirs(const Point3D& diff_p,
                                  const PointPair& surf_dirs);
+
+    static bool IsOutReducedDirs(const Point3D& diff_p,
+                                 const NavNodePtr& node_ptr);
 
     static bool IsInCoverageDirPairs(const Point3D& diff_p,
                                      const NavNodePtr& node_ptr);
@@ -245,7 +250,7 @@ public:
                                   const float& max_dist,
                                   const float& angle_noise);
 
-    static bool IsVoteTrue(const std::deque<int>& votes);
+    static bool IsVoteTrue(const std::deque<int>& votes, const bool& is_balance=true);
 
     static int VoteRankInVotes(const int& c, const std::unordered_map<int, std::deque<int>>& votes);
 

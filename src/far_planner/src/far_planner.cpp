@@ -23,7 +23,11 @@ void FARMaster::Init() {
   goal_pub_           = nh.advertise<geometry_msgs::PointStamped>("/way_point",5);
   runtime_pub_        = nh.advertise<std_msgs::Float32>("/runtime",1);
 
-  //DEBUG Publisher
+  // Terminal formatting subscriber
+  read_command_sub_   = nh.subscribe("/read_file_dir", 1, &FARMaster::ReadFileCommand, this);
+  save_command_sub_   = nh.subscribe("/save_file_dir", 1, &FARMaster::SaveFileCommand, this);
+
+  // DEBUG Publisher
   dynamic_obs_pub_     = nh.advertise<sensor_msgs::PointCloud2>("/FAR_dynamic_obs_debug",1);
   surround_free_debug_ = nh.advertise<sensor_msgs::PointCloud2>("/FAR_free_debug",1);
   surround_obs_debug_  = nh.advertise<sensor_msgs::PointCloud2>("/FAR_obs_debug",1);
@@ -339,10 +343,6 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(map_prefix + "map_grad_max_height", map_params_.grid_max_height, 100.0);
   map_params_.sensor_range = master_params_.sensor_range;
 
-  // graph messager params
-  nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
-  msger_parmas_.frame_id = master_params_.world_frame;
-
   // graph planner params
   nh.param<float>(planner_prefix + "converge_distance",    gp_params_.converge_dist, 1.0);
   nh.param<float>(planner_prefix + "goal_adjust_radius",   gp_params_.adjust_radius, 10.0);
@@ -369,6 +369,13 @@ void FARMaster::LoadROSParams() {
   graph_params_.kConnectAngleThred = graph_params_.kConnectAngleThred / 180.0 * M_PI;
   graph_params_.filter_dirs_margin = graph_params_.filter_dirs_margin / 180.0 * M_PI;
   graph_params_.sensor_range       = master_params_.sensor_range;
+
+    // graph messager params
+  nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
+  msger_parmas_.frame_id    = master_params_.world_frame;
+  msger_parmas_.votes_size  = graph_params_.votes_size;
+  msger_parmas_.pool_size   = graph_params_.pool_size;
+  msger_parmas_.dist_margin = graph_params_.filter_pos_margin;
 
   // utility params
   nh.param<float>(utility_prefix + "angle_noise",            FARUtil::kAngleNoise, 15.0);
@@ -633,11 +640,13 @@ TimeMeasure FARUtil::Timer;
 /* Global Graph */
 NodePtrStack DynamicGraph::globalGraphNodes_;
 std::size_t  DynamicGraph::id_tracker_;
+std::unordered_map<std::size_t, NavNodePtr> DynamicGraph::idx_node_map_;
 
 /* init static contour graph values */
 CTNodeStack  ContourGraph::contour_graph_;
 PolygonStack ContourGraph::contour_polygons_;
 std::vector<PointPair> ContourGraph::global_contour_;
+std::vector<PointPair> ContourGraph::inactive_contour_;
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "far_planner_node");

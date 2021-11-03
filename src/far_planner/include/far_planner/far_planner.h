@@ -41,9 +41,9 @@ private:
     ros::NodeHandle nh;
     ros::Subscriber reset_graph_sub_, joy_command_sub_, update_command_sub_;
     ros::Subscriber odom_sub_, terrain_sub_, terrain_local_sub_, scan_sub_, waypoint_sub_;
+    ros::Subscriber read_command_sub_, save_command_sub_; // only use for terminal formatting
     ros::Publisher  goal_pub_, runtime_pub_;
-    ros::Publisher  obs_world_pub_, new_PCL_pub_;
-    ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_, scan_grid_debug_;
+    ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_, scan_grid_debug_, new_PCL_pub_;
 
     ros::Timer planning_event_;
     std_msgs::Float32 runtimer_;
@@ -132,6 +132,38 @@ private:
         }   
     }
 
+    inline void FakeTerminalInit() {
+        std::cout<<std::endl;
+        if (master_params_.is_static_env) {
+            std::cout<<"\033[1;33m **************** STATIC ENV PLANNING **************** \033[0m\n"<<std::endl;
+        } else {
+            std::cout<< "\033[1;33m **************** DYNAMIC ENV PLANNING **************** \033[0m\n" << std::endl;
+        }
+        std::cout<<"\n"<<std::endl;
+        if (!PreconditionCheck()) return;
+        printf("\033[A"), printf("\033[A"), printf("\033[2K");
+        if (is_graph_init_) {
+            std::cout<< "\033[1;32m V-Graph Initialized \033[0m\n" << std::endl;
+            std::cout<<std::endl<<std::endl;
+        } else {
+            std::cout<< "\033[1;31m V-Graph Resetting...\033[0m\n" << std::endl;
+        }
+    }
+
+    inline void ReadFileCommand(const std_msgs::StringConstPtr& msg) {
+        if (!FARUtil::IsDebug) { // Terminal Output
+            printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
+            FakeTerminalInit();
+        }
+    }
+
+    inline void SaveFileCommand(const std_msgs::StringConstPtr& msg) {
+        if (!FARUtil::IsDebug) { // Terminal Output
+            printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
+            FakeTerminalInit();
+        }
+    }
+
     void ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
     void WaypointCallBack(const geometry_msgs::PointStamped& route_goal);
 
@@ -157,9 +189,7 @@ private:
     }
 
     inline void ResetInternalValues() {
-        odom_node_ptr_ = NULL; 
-        is_cloud_init_      = false;  
-        is_scan_init_       = false;
+        odom_node_ptr_ = NULL;
         is_planner_running_ = false;  
         is_graph_init_      = false; 
         ClearTempMemory();

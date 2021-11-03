@@ -131,14 +131,14 @@ bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
             return false;
         }
     }
+    // check for any inactive local contours
+    for (const auto& contour : ContourGraph::inactive_contour_) {
+        if (ContourGraph::IsEdgeCollideSegment(contour, cedge)) {
+            return false;
+        }
+    }
     if (is_global_check) {
         for (const auto& contour : ContourGraph::global_contour_) {
-            if (FARUtil::IsPointInToleratedHeight(contour.first) && FARUtil::IsPointInToleratedHeight(contour.second) &&
-                (contour.first - FARUtil::odom_pos).norm_flat() < FARUtil::kSensorRange &&
-                (contour.second - FARUtil::odom_pos).norm_flat() < FARUtil::kSensorRange) 
-            {
-                continue;
-            }
             if (ContourGraph::IsEdgeCollideSegment(contour, cedge)) {
                 return false;
             }
@@ -407,12 +407,23 @@ bool ContourGraph::ReprojectPointOutsidePolygons(Point3D& point, const float& fr
 
 void ContourGraph::ExtractGlobalContours(const NodePtrStack& nav_graph) {
     ContourGraph::global_contour_.clear();
+    ContourGraph::inactive_contour_.clear();
     const int N = nav_graph.size();
     for (std::size_t i=0; i<N; i++) {
         for (std::size_t j=0; j<N; j++) {
             if (i == j || j > i) continue;
-            if (FARUtil::IsTypeInStack(nav_graph[j], nav_graph[i]->contour_connects)) {
-                ContourGraph::global_contour_.push_back({nav_graph[i]->position, nav_graph[j]->position});
+            const NavNodePtr node_ptr1 = nav_graph[i];
+            const NavNodePtr node_ptr2 = nav_graph[j];
+            if (FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects)) {
+                ContourGraph::global_contour_.push_back({node_ptr1->position, node_ptr2->position});
+                if ((FARUtil::IsPointInToleratedHeight(node_ptr1->position) || FARUtil::IsPointInToleratedHeight(node_ptr2->position)) &&
+                    ((node_ptr1->position - FARUtil::odom_pos).norm() < FARUtil::kSensorRange ||
+                     (node_ptr2->position - FARUtil::odom_pos).norm() < FARUtil::kSensorRange)) 
+                {
+                    if (!node_ptr1->is_active || !node_ptr2->is_active || !node_ptr1->is_near_nodes || !node_ptr2->is_near_nodes) {
+                        ContourGraph::inactive_contour_.push_back({node_ptr1->position, node_ptr2->position});
+                    }
+                }
             }
         } 
     }

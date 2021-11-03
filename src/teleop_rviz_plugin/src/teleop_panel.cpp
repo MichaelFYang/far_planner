@@ -22,6 +22,10 @@ TeleopPanel::TeleopPanel( QWidget* parent )
   layout->addWidget( push_button_1_ );
   push_button_2_ = new QPushButton( "Resume Navigation to Goal", this );
   layout->addWidget( push_button_2_ );
+  push_button_3_ = new QPushButton( "Read", this );
+  layout->addWidget( push_button_3_ );
+  push_button_4_ = new QPushButton( "Save", this );
+  layout->addWidget( push_button_4_ );
   drive_widget_ = new DriveWidget;
   layout->addWidget( drive_widget_ );
   setLayout( layout );
@@ -30,6 +34,8 @@ TeleopPanel::TeleopPanel( QWidget* parent )
 
   connect( push_button_1_, SIGNAL( pressed() ), this, SLOT( pressButton1() ));
   connect( push_button_2_, SIGNAL( pressed() ), this, SLOT( pressButton2() ));
+  connect( push_button_3_, SIGNAL( pressed() ), this, SLOT( pressButton3() ));
+  connect( push_button_4_, SIGNAL( pressed() ), this, SLOT( pressButton4() ));
   connect( check_box_1_, SIGNAL( stateChanged(int) ), this, SLOT( clickBox1(int) ));
   connect( check_box_2_, SIGNAL( stateChanged(int) ), this, SLOT( clickBox2(int) ));
   connect( drive_widget_, SIGNAL( outputVelocity( float, float, bool )), this, SLOT( setVel( float, float, bool )));
@@ -41,6 +47,8 @@ TeleopPanel::TeleopPanel( QWidget* parent )
   attemptable_publisher_ = nh_.advertise<std_msgs::Bool>( "/planning_attemptable", 5 );
   update_publisher_ = nh_.advertise<std_msgs::Bool>( "/update_visibility_graph", 5 );
   reset_publisher_ = nh_.advertise<std_msgs::Empty>( "/reset_visibility_graph", 5 );
+  read_publisher_ = nh_.advertise<std_msgs::String>( "/read_file_dir", 5 );
+  save_publisher_ = nh_.advertise<std_msgs::String>( "/save_file_dir", 5 );
   drive_widget_->setEnabled( true );
 }
 
@@ -83,6 +91,40 @@ void TeleopPanel::pressButton2()
     joy.header.stamp = ros::Time::now();
     joy.header.frame_id = "teleop_panel";
     velocity_publisher_.publish( joy );
+  }
+}
+
+void TeleopPanel::pressButton3()
+{
+  if ( ros::ok() && velocity_publisher_ )
+  {
+    QString qFilename = QFileDialog::getOpenFileName(this, tr("Read File"), "/", tr("VGH - Visibility Graph Files (*.vgh)"));
+
+    std::string filename = qFilename.toStdString();
+    std_msgs::String msg;
+    msg.data = filename;
+    read_publisher_.publish(msg);
+  }
+}
+
+void TeleopPanel::pressButton4()
+{
+  if ( ros::ok() && velocity_publisher_ )
+  {
+    QString qFilename = QFileDialog::getSaveFileName(this, tr("Save File"), "/", tr("VGH - Visibility Graph Files (*.vgh)"));
+
+    std::string filename = qFilename.toStdString();
+    if (filename != "") {
+      int length = filename.length();
+      if (length < 4) {
+        filename += ".vgh";
+      } else if (filename[length - 4] != '.' || filename[length - 3] != 'v' || filename[length - 2] != 'g' || filename[length - 1] != 'h') {
+        filename += ".vgh";
+      }
+    }
+    std_msgs::String msg;
+    msg.data = filename;
+    save_publisher_.publish(msg);
   }
 }
 

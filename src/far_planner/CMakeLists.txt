@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   sensor_msgs
-  nav_graph_msg
+  visibility_graph_msg
   pcl_ros
 )
 

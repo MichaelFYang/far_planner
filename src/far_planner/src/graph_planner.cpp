@@ -24,7 +24,7 @@ void GraphPlanner::Init(const ros::NodeHandle& nh, const GraphPlannerParams& par
     attemptable_sub_ = nh_.subscribe("/planning_attemptable", 5, &GraphPlanner::AttemptStatusCallBack, this);
 
     // initialize terrian grid
-    const int col_num = std::ceil(gp_params_.adjust_radius*2.0/FARUtil::kLeafSize);
+    const int col_num = std::ceil(gp_params_.adjust_radius * 2.0f / FARUtil::kLeafSize);
     Eigen::Vector3i grid_size(col_num, col_num, 1);
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(FARUtil::kLeafSize, FARUtil::kLeafSize, FARUtil::kLeafSize);
@@ -41,9 +41,9 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
     this->InitNodesStates(current_graph_);
     // start expand the whole current_graph_
     odom_node_ptr_->gscore = 0.0;
-    std::unordered_set<std::size_t> open_set;
+    IdxSet open_set;
     std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_gcomp> open_queue;
-    std::unordered_set<std::size_t> close_set;
+    IdxSet close_set;
     // Expansion from odom node to all reachable navigation node
     open_queue.push(odom_node_ptr_);
     open_set.insert(odom_node_ptr_->id);
@@ -67,7 +67,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         }
     }
     std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_fgcomp> fopen_queue;
-    std::unordered_set<std::size_t> fopen_set;
+    IdxSet fopen_set;
     close_set.clear();
     // Expansion from odom node to all covered navigation node
     odom_node_ptr_->fgscore = 0.0;
@@ -108,7 +108,7 @@ void GraphPlanner::UpdateGoalNavNodeConnects(const NavNodePtr& goal_ptr)
             DynamicGraph::DeletePolygonEdge(node_ptr, goal_ptr, gp_params_.votes_size);
         }
         const auto it = goal_ptr->edge_votes.find(node_ptr->id);
-        if (it != goal_ptr->edge_votes.end() && FARUtil::IsVoteTrue(it->second)) {
+        if (it != goal_ptr->edge_votes.end() && FARUtil::IsVoteTrue(it->second, false)) {
             DynamicGraph::AddEdge(node_ptr, goal_ptr);
             node_ptr->is_block_to_goal = false;
         } else {
@@ -121,7 +121,7 @@ void GraphPlanner::UpdateGoalNavNodeConnects(const NavNodePtr& goal_ptr)
 bool GraphPlanner::IsValidConnectToGoal(const NavNodePtr& node_ptr, const NavNodePtr& goal_node_ptr) {
     if (!node_ptr->is_block_to_goal || IsResetBlockStatus(node_ptr, goal_node_ptr)) {
         const Point3D diff_p = goal_node_ptr->position - node_ptr->position;
-        if (FARUtil::IsInFreeDirofNode(diff_p, node_ptr) && ContourGraph::IsNavToGoalConnectFreePolygon(node_ptr, goal_node_ptr)) 
+        if (FARUtil::IsOutReducedDirs(diff_p, node_ptr) && ContourGraph::IsNavToGoalConnectFreePolygon(node_ptr, goal_node_ptr)) 
         {
             return true;
         }
@@ -348,8 +348,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr)
     const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_node_ptr_->position) ? true : false;
     goal_ptr->position = ori_pos_height;
     // reproject to nearby free space
-    if (!is_origin_free) 
-    {
+    if (!is_origin_free) {
         std::array<int, 4> dx = {-1, 0, 1, 0};
         std::array<int, 4> dy = { 0, 1, 0,-1};
         std::deque<int> q;
@@ -428,8 +427,8 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
         Eigen::Vector3i c_sub = free_terrian_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
         for (int i = -C_IF; i <= C_IF; i++) {
             for (int j = -C_IF; j <= C_IF; j++) {
-                Eigen::Vector3i sub;
-                sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = 0;
+                Eigen::Vector3i sub = c_sub;
+                sub.x() += i, sub.y() += j, sub.z() = 0;
                 if (free_terrian_grid_->InRange(sub)) {
                     const int ind = free_terrian_grid_->Sub2Ind(sub);
                     free_terrian_grid_->GetCell(ind) = free_terrian_grid_->GetCell(ind) | OBS_BIT;
@@ -442,8 +441,8 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
         Eigen::Vector3i c_sub = free_terrian_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
         for (int i = -1; i <= 1; i++) {
             for (int j = -1; j <= 1; j++) {
-                Eigen::Vector3i sub;
-                sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = 0;
+                Eigen::Vector3i sub = c_sub;
+                sub.x() += i, sub.y() += j, sub.z() = 0;
                 if (free_terrian_grid_->InRange(sub)) {
                     const int ind = free_terrian_grid_->Sub2Ind(sub);
                     free_terrian_grid_->GetCell(ind) = free_terrian_grid_->GetCell(ind) | FREE_BIT;

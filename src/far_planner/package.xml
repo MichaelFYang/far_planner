@@ -10,14 +10,12 @@
   <build_depend>roscpp</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
-  <build_depend>message_filters</build_depend>
-  <build_depend>nav_graph_msg</build_depend>
+  <build_depend>visibility_graph_msg</build_depend>
   <build_depend>pcl_ros</build_depend>
 
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
-  <run_depend>message_filters</run_depend>
-  <run_depend>nav_graph_msg</run_depend>
+  <run_depend>visibility_graph_msg</run_depend>
   <run_depend>pcl_ros</run_depend>
 </package>

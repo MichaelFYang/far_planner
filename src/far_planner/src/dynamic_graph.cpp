@@ -19,7 +19,7 @@ void DynamicGraph::Init(const ros::NodeHandle& nh, const DynamicGraphParams& par
     ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign);
     TRAJ_DIST       = dg_params_.sensor_range / dg_params_.traj_interval_ratio;
     MARGIN_DIST     = dg_params_.sensor_range - dg_params_.margin_dist;
-    id_tracker_     = 2;
+    id_tracker_     = 0;
     last_connect_pos_ = Point3D(0,0,0);
     /* Initialize Terrian Planner */
     tp_params_.world_frame  = FARUtil::worldFrameId;
@@ -318,14 +318,14 @@ bool DynamicGraph::IsInDirectConstraint(const NavNodePtr& node_ptr1,
     // check node1 -> node2
     if (node_ptr1->free_direct != NodeFreeDirect::PILLAR) {
         Point3D diff_1to2 = (node_ptr2->position - node_ptr1->position);
-        if (!FARUtil::IsInSurfacePairs(diff_1to2, node_ptr1->surf_dirs)) {
+        if (!FARUtil::IsOutReducedDirs(diff_1to2, node_ptr1->surf_dirs)) {
             return false;
         }
     }
     // check node1 -> node2
     if (node_ptr2->free_direct != NodeFreeDirect::PILLAR) {
         Point3D diff_2to1 = (node_ptr1->position - node_ptr2->position);
-        if (!FARUtil::IsInSurfacePairs(diff_2to1, node_ptr2->surf_dirs)) {
+        if (!FARUtil::IsOutReducedDirs(diff_2to1, node_ptr2->surf_dirs)) {
             return false;
         }
     }
@@ -342,7 +342,6 @@ bool DynamicGraph::IsInContourDirConstraint(const NavNodePtr& node_ptr1,
         if (!FARUtil::IsInContourDirPairs(diff_1to2, node_ptr1->surf_dirs)) {
             if (node_ptr1->contour_connects.size() < 2) {
                 this->ResetNodeFilters(node_ptr1);
-                this->ResetContourVotes(node_ptr1);
             } 
             return false;
         }
@@ -353,7 +352,6 @@ bool DynamicGraph::IsInContourDirConstraint(const NavNodePtr& node_ptr1,
         if (!FARUtil::IsInContourDirPairs(diff_2to1, node_ptr2->surf_dirs)) {
             if (node_ptr2->contour_connects.size() < 2) {
                 this->ResetNodeFilters(node_ptr2);
-                this->ResetContourVotes(node_ptr2);
             }
             return false;
         }
@@ -546,6 +544,82 @@ void DynamicGraph::RecordPolygonEdge(const NavNodePtr& node_ptr1,
     }
 }
 
+void DynamicGraph::FillPolygonEdgeConnect(const NavNodePtr& node_ptr1,
+                                        const NavNodePtr& node_ptr2,
+                                        const int& queue_size)
+{
+    if (node_ptr1 == node_ptr2) return;
+    const auto it1 = node_ptr1->edge_votes.find(node_ptr2->id);
+    const auto it2 = node_ptr2->edge_votes.find(node_ptr1->id);
+    if (it1 == node_ptr1->edge_votes.end() || it2 == node_ptr2->edge_votes.end()) {
+        std::deque<int> vote_queue1(queue_size, 1);
+        std::deque<int> vote_queue2(queue_size, 1);
+        node_ptr1->edge_votes.insert({node_ptr2->id, vote_queue1});
+        node_ptr2->edge_votes.insert({node_ptr1->id, vote_queue2});
+        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->potential_edges) && 
+            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->potential_edges)) 
+        {
+            node_ptr1->potential_edges.push_back(node_ptr2);
+            node_ptr2->potential_edges.push_back(node_ptr1);
+        }
+        // Add connections
+        if (!FARUtil::IsTypeInStack(node_ptr2, node_ptr1->connect_nodes) &&
+            !FARUtil::IsTypeInStack(node_ptr1, node_ptr2->connect_nodes)) 
+        {
+            node_ptr1->connect_nodes.push_back(node_ptr2);
+            node_ptr2->connect_nodes.push_back(node_ptr1);
+        }
+    }
+}
+
+void DynamicGraph::FillContourConnect(const NavNodePtr& node_ptr1,
+                                    const NavNodePtr& node_ptr2,
+                                    const int& queue_size)
+{
+    if (node_ptr1 == node_ptr2) return;
+    const auto it1 = node_ptr1->contour_votes.find(node_ptr2->id);
+    const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
+    std::deque<int> vote_queue1(queue_size, 1);
+    std::deque<int> vote_queue2(queue_size, 1);
+    if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) {
+        // init polygon edge votes
+        node_ptr1->contour_votes.insert({node_ptr2->id, vote_queue1});
+        node_ptr2->contour_votes.insert({node_ptr1->id, vote_queue2});
+        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->potential_contours) && 
+            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->potential_contours)) 
+        {
+            node_ptr1->potential_contours.push_back(node_ptr2);
+            node_ptr2->potential_contours.push_back(node_ptr1);
+        }
+        // Add contours
+        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects) &&
+            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects))
+        {
+            node_ptr1->contour_connects.push_back(node_ptr2);
+            node_ptr2->contour_connects.push_back(node_ptr1);
+        }   
+    }
+}
+
+void DynamicGraph::FillTrajConnect(const NavNodePtr& node_ptr1,
+                                 const NavNodePtr& node_ptr2)
+{
+    if (node_ptr1 == node_ptr2) return;
+    const auto it1 = node_ptr1->trajectory_votes.find(node_ptr2->id);
+    const auto it2 = node_ptr2->trajectory_votes.find(node_ptr1->id);
+    if (it1 == node_ptr1->trajectory_votes.end() || it2 == node_ptr2->trajectory_votes.end()) {
+        node_ptr1->trajectory_votes.insert({node_ptr2->id, 0});
+        node_ptr2->trajectory_votes.insert({node_ptr1->id, 0});
+        // Add connection
+        if (!FARUtil::IsTypeInStack(node_ptr2, node_ptr1->trajectory_connects) &&
+            !FARUtil::IsTypeInStack(node_ptr1, node_ptr2->trajectory_connects)) 
+        {   
+            node_ptr1->trajectory_connects.push_back(node_ptr2);
+            node_ptr2->trajectory_connects.push_back(node_ptr1);
+        }
+    }
+}
+
 void DynamicGraph::DeletePolygonEdge(const NavNodePtr& node_ptr1, 
                                      const NavNodePtr& node_ptr2,
                                      const int& queue_size,
@@ -572,6 +646,37 @@ void DynamicGraph::DeleteContourEdge(const NavNodePtr& node_ptr1, const NavNodeP
     }
 }
 
+bool DynamicGraph::IsActivateNavNode(const NavNodePtr& node_ptr) {
+    if (node_ptr->is_active) return true;
+    if (FARUtil::IsPointNearNewPoints(node_ptr->position, true)) {
+        node_ptr->is_active = true;
+        return true;
+    }
+    if (FARUtil::IsFreeNavNode(node_ptr)) {
+        const bool is_nearby = (node_ptr->position - odom_node_ptr_->position).norm() < FARUtil::kNearDist ? true : false;
+        if (is_nearby) {
+            node_ptr->is_active = true;
+            return true;
+        }
+        if (FARUtil::IsTypeInStack(node_ptr, odom_node_ptr_->connect_nodes)) {
+            node_ptr->is_active = true;
+            return true;
+        }
+        bool is_connects_activate = true;
+        for (const auto& cnode_ptr : node_ptr->connect_nodes) {
+            if (!cnode_ptr->is_active) {
+                is_connects_activate = false;
+                break;
+            }
+        }
+        if ((is_connects_activate && !node_ptr->connect_nodes.empty())) {
+            node_ptr->is_active = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 void DynamicGraph::UpdateGlobalNearNodes() {
     /* update nearby navigation nodes stack --> near_nav_nodes_ */
     near_nav_nodes_.clear(), wide_near_nodes_.clear(), internav_near_nodes_.clear(), surround_internav_nodes_.clear();
@@ -584,13 +689,15 @@ void DynamicGraph::UpdateGlobalNearNodes() {
             if (!FARUtil::IsPointInToleratedHeight(node_ptr->position)) continue;
             wide_near_nodes_.push_back(node_ptr);
             node_ptr->is_wide_near = true;
-            near_nav_nodes_.push_back(node_ptr);
-            node_ptr->is_near_nodes = true;
-            if (node_ptr->is_navpoint) {
-                node_ptr->position.intensity = node_ptr->fgscore;
-                internav_near_nodes_.push_back(node_ptr);
-                if (dist < FARUtil::kNearDist * 2.5) {
-                    surround_internav_nodes_.push_back(node_ptr);
+            if (this->IsActivateNavNode(node_ptr)) {
+                near_nav_nodes_.push_back(node_ptr);
+                node_ptr->is_near_nodes = true;
+                if (node_ptr->is_navpoint) {
+                    node_ptr->position.intensity = node_ptr->fgscore;
+                    internav_near_nodes_.push_back(node_ptr);
+                    if (dist < FARUtil::kNearDist * 2.5) {
+                        surround_internav_nodes_.push_back(node_ptr);
+                    }
                 }
             }
         }

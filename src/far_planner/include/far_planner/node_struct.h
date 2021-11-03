@@ -17,7 +17,6 @@ enum NodeFreeDirect {
 };
 
 typedef std::pair<Point3D, Point3D> PointPair;
-typedef std::pair<PointPair, PointPair> NavPair;
 
 namespace LiDARMODEL {
     /* array resolution: 1 degree */
@@ -70,10 +69,10 @@ struct NavNode
     std::deque<Point3D> pos_filter_vec;
     std::deque<PointPair> surf_dirs_vec;
     CTNodePtr ctnode;
+    bool is_active;
     bool is_contour_match;
     bool is_odom;
     bool is_goal;
-    bool is_intermediate;
     bool is_near_nodes;
     bool is_wide_near;
     bool is_merged;
@@ -81,7 +80,6 @@ struct NavNode
     bool is_finalized;
     bool is_navpoint;
     int clear_dumper_count;
-    int finalize_counter;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
     std::vector<std::shared_ptr<NavNode>> contour_connects;
     std::unordered_map<int, std::deque<int>> contour_votes;
@@ -103,7 +101,6 @@ struct NavNode
 };
 
 typedef std::shared_ptr<NavNode> NavNodePtr;
-typedef std::pair<NavNodePtr, NavPair> MapPair;
 
 struct nodeptr_equal
 {

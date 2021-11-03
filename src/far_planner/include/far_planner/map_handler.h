@@ -65,7 +65,7 @@ public:
 
     /**
      * Remove pointcloud from grid map
-     * @param
+     * @param obsCloud obstacle cloud points that need to be removed
     */ 
     void RemoveObsCloudFromGrid(const PointCloudPtr& obsCloud);
 

@@ -71,9 +71,9 @@ void AttemptStatusCallBack(const std_msgs::Bool& msg);
 
 inline void ResetFreeTerrainGridOrigin(const Point3D& p) {
     Eigen::Vector3d grid_origin;
-    grid_origin.x() = p.x - (free_terrian_grid_->GetResolution().x() * free_terrian_grid_->GetSize().x()) / 2.0;
-    grid_origin.y() = p.y - (free_terrian_grid_->GetResolution().y() * free_terrian_grid_->GetSize().y()) / 2.0;
-    grid_origin.z() = p.z - (free_terrian_grid_->GetResolution().z() * free_terrian_grid_->GetSize().z()) / 2.0;
+    grid_origin.x() = p.x - (free_terrian_grid_->GetResolution().x() * free_terrian_grid_->GetSize().x()) / 2.0f;
+    grid_origin.y() = p.y - (free_terrian_grid_->GetResolution().y() * free_terrian_grid_->GetSize().y()) / 2.0f;
+    grid_origin.z() = p.z - (free_terrian_grid_->GetResolution().z() * free_terrian_grid_->GetSize().z()) / 2.0f;
     free_terrian_grid_->SetOrigin(grid_origin);
     grid_center_ = p;
 }

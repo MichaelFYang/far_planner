@@ -14,7 +14,7 @@ is_attempt_autoswitch                   : true  # Auto switch to attemptable nav
 world_frame                             : map
 
 # Graph Messager
-GraphMsger/robot_id                     : 0
+GraphMsger/robot_id                     : 1  # graph from robot id "0" is extracted from files
 
 # Map Handler Params
 MapHandler/ceil_length                  : 10.0    # Unit: meter
@@ -60,7 +60,7 @@ CDetector/img_folder_path               : /path
 
 # Graph Planner Params
 GPlanner/converge_distance              : 0.5  # Unit: meter
-GPlanner/goal_adjust_radius             : 2.5  # Unit: meter
+GPlanner/goal_adjust_radius             : 3.0  # Unit: meter
 GPlanner/free_counter_thred             : 7
 GPlanner/reach_goal_vote_size           : 5
 GPlanner/move_momentum_dist             : 0.75 # Unit: meter

@@ -12,4 +12,7 @@
         <remap from="/terrain_local_cloud" to="$(arg terrain_local_topic)"/>
     </node>
     <node type="rviz" name="farrviz" pkg="rviz" args="-d $(find far_planner)/rviz/$(arg config).rviz" respawn="true"/>
+
+    <!-- Launch Graph Manager for saving and loading graph -->
+    <include file="$(find graph_decoder)/launch/decoder.launch" />
 </launch>

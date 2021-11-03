@@ -225,15 +225,16 @@ void FARUtil::UpdateKdTrees(const PointCloudPtr& newObsCloudIn)
 }
 
 void FARUtil::ClearKdTree(const PointCloudPtr& cloud_ptr,
-                         const PointKdTreePtr& kdTree_ptr) {
-  PCLPoint temp_p = FARUtil::Point3DToPCLPoint(Point3D(0,0,0));
+                          const PointKdTreePtr& kdTree_ptr) {
+  PCLPoint temp_p;
+  temp_p.x = temp_p.y = temp_p.z = 0.0f;
   cloud_ptr->resize(1), cloud_ptr->points[0] = temp_p;
   kdTree_ptr->setInputCloud(cloud_ptr);
 }
 
 bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
-  const std::size_t near_c = FARUtil::PointInNewCounter(p, FARUtil::kNearDist * 2.0);
-  const int counter_limit = is_creation ? std::floor(FARUtil::KNewPointC / 2.0) : FARUtil::KNewPointC;
+  const std::size_t near_c = FARUtil::PointInNewCounter(p, FARUtil::kNearDist * 2.0f);
+  const int counter_limit = is_creation ? std::floor(FARUtil::KNewPointC / 2.0f) : FARUtil::KNewPointC;
   return (near_c > counter_limit) ? true : false;
 }
 
@@ -284,17 +285,6 @@ void FARUtil::EraseNodeFromStack(const NavNodePtr& node_ptr,
   }
 }
 
-void FARUtil::EraseNodeFromMap(const NavNodePtr& node_ptr,
-                              NavMap& nav_map) {
-  for (auto it = nav_map.begin(); it != nav_map.end();) {
-    if (it->first  == node_ptr) {
-      it = nav_map.erase(it);
-    } else {
-      ++it;
-    }
-  }
-}
-
 bool FARUtil::IsSamePoint3D(const Point3D& p1, const Point3D& p2) {
   if ((p2 - p1).norm() < FARUtil::kEpsilon) {
     return true;
@@ -317,8 +307,8 @@ float FARUtil::MarginAngleNoise(const float& dist, const float& max_shift_dist, 
   return margin_angle_noise;
 }
 
-bool FARUtil::IsInSurfacePairs(const Point3D& diff_p,
-                              const PointPair& surf_dirs) 
+bool FARUtil::IsOutReducedDirs(const Point3D& diff_p,
+                               const PointPair& surf_dirs) 
 {
   const Point3D norm_dir = diff_p.normalize_flat();
   const float margin_angle_noise = FARUtil::MarginAngleNoise(diff_p.norm_flat(), 
@@ -340,6 +330,17 @@ bool FARUtil::IsInSurfacePairs(const Point3D& diff_p,
     return true;
   }
   return false;
+}
+
+bool FARUtil::IsOutReducedDirs(const Point3D& diff_p,
+                               const NavNodePtr& node_ptr)
+{
+  if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
+    if (!FARUtil::IsOutReducedDirs(diff_p, node_ptr->surf_dirs)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool FARUtil::IsInCoverageDirPairs(const Point3D& diff_p,
@@ -799,13 +800,11 @@ void FARUtil::CreatePointsAroundCenter(const Point3D& center_p,
   }
 }
 
-bool FARUtil::IsVoteTrue(const std::deque<int>& votes) {
+bool FARUtil::IsVoteTrue(const std::deque<int>& votes, const bool& is_balance) {
   const int N = votes.size();
-  float sum = 0;
-  for (const auto& v : votes) {
-      sum += v;
-  }
-  if (sum > std::floor(N / 2.0f)) {
+  const float sum = std::accumulate(votes.begin(), votes.end(), 0);
+  const float factor = is_balance ? 2.0f : 3.0f;
+  if (sum > std::floor(N / factor)) {
       return true;
   }
   return false;

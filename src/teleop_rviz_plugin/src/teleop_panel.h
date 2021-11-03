@@ -15,9 +15,11 @@
 #include <QTimer>
 #include <QPushButton>
 #include <QCheckBox>
+#include <QFileDialog>
 
 #include <std_msgs/Empty.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <sensor_msgs/Joy.h>
 
 class QLineEdit;
@@ -41,6 +43,8 @@ public Q_SLOTS:
 protected Q_SLOTS:
   void pressButton1();
   void pressButton2();
+  void pressButton3();
+  void pressButton4();
   void clickBox1(int val);
   void clickBox2(int val);
   void sendVel();
@@ -51,10 +55,14 @@ protected:
   ros::Publisher attemptable_publisher_;
   ros::Publisher update_publisher_;
   ros::Publisher reset_publisher_;
+  ros::Publisher read_publisher_;
+  ros::Publisher save_publisher_;
   ros::NodeHandle nh_;
 
   QPushButton *push_button_1_;
   QPushButton *push_button_2_;
+  QPushButton *push_button_3_;
+  QPushButton *push_button_4_;
   QCheckBox *check_box_1_;
   QCheckBox *check_box_2_;
 

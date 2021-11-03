@@ -30,14 +30,15 @@ private:
     NavNodePtr cur_internav_ptr_  = NULL;
     NavNodePtr last_internav_ptr_ = NULL;
     NodePtrStack new_nodes_;
-    static std::size_t id_tracker_; // Odom node owns default ID "1", Goal Node owns default ID "0"
     DynamicGraphParams dg_params_;
     NodePtrStack near_nav_nodes_, wide_near_nodes_, internav_near_nodes_, surround_internav_nodes_;
     float CONNECT_ANGLE_COS, NOISE_ANGLE_COS, ALIGN_ANGLE_COS, TRAJ_DIST, MARGIN_DIST;
     bool is_bridge_internav_ = false;
     Point3D last_connect_pos_;
 
+    static std::size_t id_tracker_; // Global unique id start from "0" [per robot]
     static NodePtrStack globalGraphNodes_;
+    static std::unordered_map<std::size_t, NavNodePtr> idx_node_map_;
 
     TerrainPlanner terrain_planner_;
     TerrainPlannerParams tp_params_;
@@ -69,6 +70,8 @@ private:
     /* check whether there is a connection in similar diection */
     bool IsSimilarConnectInDiection(const NavNodePtr& node_ptr_from,
                                     const NavNodePtr& node_ptr_to);
+
+    bool IsActivateNavNode(const NavNodePtr& node_ptr);
 
     bool IsAShorterConnectInDir(const NavNodePtr& node_ptr_from, const NavNodePtr& node_ptr_to);
 
@@ -104,16 +107,13 @@ private:
 
     /* Assign ID to new navigation node */
     static inline void AssignGlobalNodeID(const NavNodePtr& node_ptr) {
-        if (FARUtil::IsOutsideGoal(node_ptr)) {
-            node_ptr->id = 0;
-            return;
-        }
-        if (node_ptr->is_odom) {
-            node_ptr->id = 1;
-            return;
-        }
         node_ptr->id = id_tracker_;
+        idx_node_map_.insert({node_ptr->id, node_ptr});
         id_tracker_ ++;
+    }
+
+    static inline void RemoveNodeIdFromMap(const NavNodePtr& node_ptr) {
+        idx_node_map_.erase(node_ptr->id);
     }
 
     inline void UpdateCurInterNavNode(const NavNodePtr& internav_node_ptr) {
@@ -189,8 +189,9 @@ private:
 
     inline void ReduceDumperCounter(const NavNodePtr& node_ptr) {
         if (FARUtil::IsStaticNode(node_ptr)) return;
-        if (node_ptr->clear_dumper_count > 0) {
-            node_ptr->clear_dumper_count --;
+        node_ptr->clear_dumper_count = node_ptr->clear_dumper_count - 2;
+        if (node_ptr->clear_dumper_count < 0) {
+            node_ptr->clear_dumper_count = 0;
         }
     }
 
@@ -391,6 +392,7 @@ private:
                 ClearNodeConnectInGraph(node_ptr);
                 ClearContourConnectionInGraph(node_ptr);
                 ClearTrajectoryConnectInGraph(node_ptr);
+                RemoveNodeIdFromMap(node_ptr);
             }
         }
         const auto new_end = std::remove_if(globalGraphNodes_.begin(), globalGraphNodes_.end(), IsMergedNode);
@@ -441,17 +443,27 @@ public:
                                   const int& queue_size,
                                   const bool& is_reset=false);
 
+    static void FillPolygonEdgeConnect(const NavNodePtr& node_ptr1,
+                                       const NavNodePtr& node_ptr2,
+                                       const int& queue_size);
+
+    static void FillContourConnect(const NavNodePtr& node_ptr1,
+                                   const NavNodePtr& node_ptr2,
+                                   const int& queue_size);
+
+    static void FillTrajConnect(const NavNodePtr& node_ptr1,
+                               const NavNodePtr& node_ptr2);
+
     static inline void CreateNavNodeFromPoint(const Point3D& point, NavNodePtr& node_ptr, const bool& is_odom, 
                                               const bool& is_navpoint=false, const bool& is_goal=false) 
     {
         node_ptr = std::make_shared<NavNode>();
-        AssignGlobalNodeID(node_ptr);
         node_ptr->pos_filter_vec.clear();
         node_ptr->surf_dirs_vec.clear();
         node_ptr->ctnode = NULL;
+        node_ptr->is_active = true;
         node_ptr->is_contour_match = false;
-        node_ptr->is_odom = is_odom;
-        node_ptr->is_intermediate = false;  
+        node_ptr->is_odom = is_odom;  
         node_ptr->is_near_nodes = true;
         node_ptr->is_wide_near = true;
         node_ptr->is_merged = false;
@@ -461,17 +473,17 @@ public:
         node_ptr->is_navpoint = is_navpoint;
         node_ptr->is_goal = is_goal;
         node_ptr->clear_dumper_count = 0;
-        node_ptr->finalize_counter = 0;
         node_ptr->connect_nodes.clear();
         node_ptr->contour_connects.clear();
         node_ptr->contour_votes.clear();
         node_ptr->potential_contours.clear();
         node_ptr->trajectory_connects.clear();
         node_ptr->trajectory_votes.clear();
-        node_ptr->node_type = NodeType::NOT_DEFINED; // TODO: define different node type
         node_ptr->free_direct = (is_odom || is_navpoint) ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
         InitNodePosition(node_ptr, point);
         node_ptr->near_odom_dist = FARUtil::kINF;
+        // Assign Global Unique ID
+        AssignGlobalNodeID(node_ptr);
     }
 
     static inline void ClearNodeConnectInGraph(const NavNodePtr& node_ptr) {
@@ -530,16 +542,26 @@ public:
         FARUtil::EraseNodeFromStack(node_ptr1, node_ptr2->connect_nodes);
     }
 
+    static inline NavNodePtr MappedNavNodeFromId(const std::size_t id) {
+        const auto it = idx_node_map_.find(id);
+        if (it != idx_node_map_.end()) {
+            return it->second;
+        } else {
+            return NULL;
+        }
+    }
+
     /* Clear Current Graph */
     inline void ResetCurrentGraph() {
         odom_node_ptr_     = NULL; 
         cur_internav_ptr_  = NULL; 
         last_internav_ptr_ = NULL;
 
-        id_tracker_         = 2;
+        id_tracker_         = 0;
         is_bridge_internav_ = false;
         last_connect_pos_   = Point3D(0,0,0);
         
+        idx_node_map_.clear();
         near_nav_nodes_.clear(); 
         wide_near_nodes_.clear(); 
         internav_near_nodes_.clear();
@@ -552,7 +574,6 @@ public:
     const NavNodePtr GetOdomNode() const { return odom_node_ptr_;};
     const NodePtrStack& GetNavGraph() const { return globalGraphNodes_;};
     const NodePtrStack& GetNearNavGraph() const { return near_nav_nodes_;};
-    const NodePtrStack& GetWideNavGraph() const { return wide_near_nodes_;};
     const NodePtrStack& GetNewNodes() const { return new_nodes_;};
     const NavNodePtr& GetLastInterNavNode() const { return last_internav_ptr_;};
 

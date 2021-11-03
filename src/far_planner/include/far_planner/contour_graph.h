@@ -49,6 +49,7 @@ public:
 
     static CTNodeStack  contour_graph_;
     static std::vector<PointPair> global_contour_;
+    static std::vector<PointPair> inactive_contour_;
 
     void Init(const ContourGraphParams& params);
     
@@ -142,7 +143,7 @@ private:
     static bool IsEdgeCollideSegment(const PointPair& line, const ConnectPair& edge);
 
     inline static bool IsNeedGlobalCheck(const Point3D& p1, const Point3D& p2, const Point3D& robot_p) {
-        if ((p1 - robot_p).norm() > FARUtil::kSensorRange || (p2 - robot_p).norm() > FARUtil::kSensorRange) {
+        if ((p1 - robot_p).norm_flat() > FARUtil::kSensorRange || (p2 - robot_p).norm_flat() > FARUtil::kSensorRange) {
             return true;
         }
         return false;
