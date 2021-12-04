@@ -46,7 +46,6 @@ private:
     /* Evaluate exist edges */
     bool IsValidConnect(const NavNodePtr& node_ptr1, 
                         const NavNodePtr& node_ptr2,
-                        const bool& is_local_only,
                         const bool& is_check_contour);
 
     bool NodeLocalPerception(const NavNodePtr& node_ptr,
@@ -60,8 +59,6 @@ private:
     bool IsInterNavpointNecessary();
     
     void ReEvaluateConvexity(const NavNodePtr& node_ptr);
-
-    bool IsOldNodesAround(const CTNodePtr& ctnode, const float& radius);
 
     /* Merge two nodes in Graph into one remain node, (mark one node as merged)*/
     void MergeNodeInGraph(const NavNodePtr& node_ptr1, 
@@ -272,6 +269,15 @@ private:
         }
     }
 
+    inline bool IsBoundaryConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
+            if (FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     inline bool IsConvexConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         if (node_ptr1->free_direct != NodeFreeDirect::CONCAVE && 
             node_ptr2->free_direct != NodeFreeDirect::CONCAVE)
@@ -455,7 +461,7 @@ public:
                                const NavNodePtr& node_ptr2);
 
     static inline void CreateNavNodeFromPoint(const Point3D& point, NavNodePtr& node_ptr, const bool& is_odom, 
-                                              const bool& is_navpoint=false, const bool& is_goal=false) 
+                                              const bool& is_navpoint=false, const bool& is_goal=false, const bool& is_boundary=false) 
     {
         node_ptr = std::make_shared<NavNode>();
         node_ptr->pos_filter_vec.clear();
@@ -471,8 +477,10 @@ public:
         node_ptr->is_finalized = is_navpoint ? true : false;
         node_ptr->is_traversable = is_odom;
         node_ptr->is_navpoint = is_navpoint;
+        node_ptr->is_boundary = is_boundary;
         node_ptr->is_goal = is_goal;
         node_ptr->clear_dumper_count = 0;
+        node_ptr->invalid_boundary.clear();
         node_ptr->connect_nodes.clear();
         node_ptr->contour_connects.clear();
         node_ptr->contour_votes.clear();

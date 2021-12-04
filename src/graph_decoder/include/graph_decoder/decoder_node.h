@@ -50,6 +50,7 @@ struct NavNode {
     PointPair surf_dirs;
     bool is_frontier;
     bool is_navpoint;
+    bool is_boundary;
     std::vector<std::size_t> connect_idxs;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
 

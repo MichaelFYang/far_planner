@@ -51,7 +51,7 @@ roslaunch vehicle_simulator system_<environment>.launch
 roslaunch far_planner far_planner.launch
 ```
 To run FAR Planner in a [Matterport3D](https://niessner.github.io/Matterport) environment, follow instructions on the development environment page to setup the Matterport3D environment. Then, use the command lines below to launch the system and FAR Planner.
-```bash
+```
 roslaunch vehicle_simulator system_matterport.launch
 roslaunch far_planner far_planner.launch config:=matterport
 ```
@@ -60,14 +60,15 @@ roslaunch far_planner far_planner.launch config:=matterport
   <img src="img/matterport.gif" alt="Matterport" width="70%"/>
 </p>
 
+Users have the option to define custom navigation boundaries. To do this, users need to supply a boundary file and a trajectory file. Examples are provided as 'boundary.ply' and 'trajectory.txt' in the 'src/far_planner/data' folder. The files can be viewed by text editors. Specifically, the boundary file contains user-defined polygons where each polygon has an index. The trajectory file contains poses where each pose is a row with x (m), y (m), z (m), roll (rad), pitch (rad), yaw (rad), and time duration from start of the run (second). The trajectory file is in the same format as those saved by the development environment and needs to contain at least one pose to determine the traversable side of the navigation boundaries. Users can use the command line below to generate a visibility graph file in the same folder (provided as 'boundary_graph.vgh'), which can be loaded to FAR Planner using the 'Read' button.
+```
+roslaunch boundary_handler boundary_handler.launch
+```
+
 ## Configuration
 
 FAR planner settings are kept in default.yaml in the 'src/far_planner/config' folder. For Matterport3D environments, the settings are in matterport.yaml in the same folder.
 - *is_static_env* (default: true) - set to false if the environment contains dynamic obstacles.
-
-## Todo
-
-- The current implementation does not support multi-floor environments. The environment can be 3D but needs to be single floored. An upgrade is planned for multi-floor environment support.
 
 ## Reference
 

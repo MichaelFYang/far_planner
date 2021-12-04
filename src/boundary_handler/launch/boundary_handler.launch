@@ -1,0 +1,13 @@
+<launch>
+    <arg name="boundary_file" default="boundary.ply"/>
+    <arg name="traj_file" default="trajectory.txt"/>
+    <arg name="graph_file" default="boundary_graph.vgh"/>
+    <node pkg="boundary_handler" type="boundary_handler" name="boundary_handler" output="screen">
+        <rosparam command="load" file="$(find boundary_handler)/config/default.yaml"/>
+        <param name="folder_path" type="string" value="$(find far_planner)/data/" />
+        <param name="boundary_file" type="string" value="$(arg boundary_file)" />
+        <param name="traj_file" type="string" value="$(arg traj_file)" />
+        <param name="graph_file" type="string" value="$(arg graph_file)" />
+    </node>
+    <node type="rviz" name="boundary_rviz" pkg="rviz" args="-d $(find boundary_handler)/rviz/default.rviz" respawn="true"/>
+</launch>

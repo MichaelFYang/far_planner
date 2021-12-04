@@ -86,6 +86,7 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
     }
     node_ptr->is_frontier = msg.is_frontier;
     node_ptr->is_navpoint = msg.is_navpoint;
+    node_ptr->is_boundary = msg.is_boundary;
     // assigan connection idxs
     node_ptr->connect_idxs.clear(), node_ptr->contour_idxs.clear(), node_ptr->traj_idxs.clear();
     for (const auto& cid : msg.connect_nodes) {
@@ -210,19 +211,20 @@ void GraphDecoder::CreateNavNode(std::string str, NavNodePtr& node_ptr) {
         // node internal infos
         if (i == 11) node_ptr->is_frontier = std::stoi(components[i]) == 0 ? false : true;
         if (i == 12) node_ptr->is_navpoint = std::stoi(components[i]) == 0 ? false : true;
-        if (i  > 12 && !is_connect) {
+        if (i == 13) node_ptr->is_boundary = std::stoi(components[i]) == 0 ? false : true;
+        if (i  > 13 && !is_connect) {
             if (components[i] != "|") {
                 node_ptr->connect_idxs.push_back((std::size_t)std::stoi(components[i]));
             } else {
                 is_connect = true;
             }
-        } else if (i > 12 && is_connect && !is_contour) {
+        } else if (i > 13 && is_connect && !is_contour) {
             if (components[i] != "|") {
                 node_ptr->contour_idxs.push_back((std::size_t)std::stoi(components[i]));
             } else {
                 is_contour = true;
             }
-        } else if (i > 12 && is_connect && is_contour) {
+        } else if (i > 13 && is_connect && is_contour) {
             node_ptr->connect_idxs.push_back((std::size_t)std::stoi(components[i]));
         }
     }
@@ -239,6 +241,7 @@ void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg
         msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
+        msg_node.is_boundary = node_ptr->is_boundary;
         msg_node.surface_dirs.clear();
         msg_node.surface_dirs.push_back(ToGeoMsgP(node_ptr->surf_dirs.first));
         msg_node.surface_dirs.push_back(ToGeoMsgP(node_ptr->surf_dirs.second));
@@ -308,6 +311,7 @@ void GraphDecoder::SaveGraphCallBack(const std_msgs::StringConstPtr& msg) {
         OutputPoint3D(node_ptr->surf_dirs.second);
         graph_file << std::to_string(static_cast<int>(node_ptr->is_frontier)) << " ";
         graph_file << std::to_string(static_cast<int>(node_ptr->is_navpoint)) << " ";
+        graph_file << std::to_string(static_cast<int>(node_ptr->is_boundary)) << " ";
         for (const auto& cidx : node_ptr->connect_idxs) {
             graph_file << std::to_string(cidx) << " ";
         } 

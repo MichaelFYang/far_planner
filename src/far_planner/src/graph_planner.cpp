@@ -28,7 +28,7 @@ void GraphPlanner::Init(const ros::NodeHandle& nh, const GraphPlannerParams& par
     Eigen::Vector3i grid_size(col_num, col_num, 1);
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(FARUtil::kLeafSize, FARUtil::kLeafSize, FARUtil::kLeafSize);
-    free_terrian_grid_ = std::make_unique<grid_ns::Grid<char>>(grid_size, INIT_BIT, grid_origin, grid_resolution, 3);
+    free_terrain_grid_ = std::make_unique<grid_ns::Grid<char>>(grid_size, INIT_BIT, grid_origin, grid_resolution, 3);
 }
 
 void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr& goal_ptr) 
@@ -54,7 +54,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         close_set.insert(current->id);
         current->is_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (close_set.count(neighbor->id)) continue;
+            if (close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
             const float temp_gscore = current->gscore + this->EulerCost(current, neighbor);
             if (temp_gscore < neighbor->gscore) {
                 neighbor->parent = current;
@@ -80,7 +80,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         close_set.insert(current->id);
         current->is_free_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (neighbor->is_frontier || close_set.count(neighbor->id)) continue;
+            if (neighbor->is_frontier || close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
             const float e_dist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && (!is_goal_in_freespace_ || e_dist > FARUtil::kTerrainRange)) continue;
             const float temp_fgscore = current->fgscore + e_dist;
@@ -343,7 +343,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr)
             goal_ptr->position.z = (recorded_path_.end() - 2)->z;
         }
     }
-    const Eigen::Vector3i ori_sub = free_terrian_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
+    const Eigen::Vector3i ori_sub = free_terrain_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
     const Point3D ori_pos_height(origin_goal_pos_.x, origin_goal_pos_.y, goal_ptr->position.z);
     const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_node_ptr_->position) ? true : false;
     goal_ptr->position = ori_pos_height;
@@ -353,38 +353,38 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr)
         std::array<int, 4> dy = { 0, 1, 0,-1};
         std::deque<int> q;
         std::unordered_set<int> visited_set;
-        q.push_back(free_terrian_grid_->Sub2Ind(ori_sub));
-        visited_set.insert(free_terrian_grid_->Sub2Ind(ori_sub));
+        q.push_back(free_terrain_grid_->Sub2Ind(ori_sub));
+        visited_set.insert(free_terrain_grid_->Sub2Ind(ori_sub));
         int valid_idx = -1;
         while (!q.empty()) {
             const int cur_id = q.front();
             q.pop_front();
-            if (free_terrian_grid_->GetCell(cur_id) == FREE_BIT) {
+            if (free_terrain_grid_->GetCell(cur_id) == FREE_BIT) {
                 valid_idx = cur_id;
                 break;
             }
             for (int i=0; i<4; i++) {
-                Eigen::Vector3i csub = free_terrian_grid_->Ind2Sub(cur_id);
+                Eigen::Vector3i csub = free_terrain_grid_->Ind2Sub(cur_id);
                 csub.x() += dx[i], csub.y() += dy[i], csub.z() = 0;
-                if (!free_terrian_grid_->InRange(csub)) continue;
-                const int cidx = free_terrian_grid_->Sub2Ind(csub);
+                if (!free_terrain_grid_->InRange(csub)) continue;
+                const int cidx = free_terrain_grid_->Sub2Ind(csub);
                 if (!visited_set.count(cidx)) {
                     q.push_back(cidx);
                     visited_set.insert(cidx);
                 }
             }
         }
-        if (valid_idx != -1 && free_terrian_grid_->InRange(valid_idx)) {
-            Point3D new_p = Point3D(free_terrian_grid_->Ind2Pos(valid_idx));
+        if (valid_idx != -1 && free_terrain_grid_->InRange(valid_idx)) {
+            Point3D new_p = Point3D(free_terrain_grid_->Ind2Pos(valid_idx));
             new_p.z = goal_ptr->position.z;
             const float pred = (goal_ptr->position - ori_pos_height).norm();
             const float curd = (new_p - ori_pos_height).norm();
-            if (abs(curd - pred) > FARUtil::kLeafSize) {
+            if (abs(curd - pred) > FARUtil::kLeafSize && !ContourGraph::IsEdgeCollideBoundary(goal_ptr->position, new_p)) {
                 if (FARUtil::IsDebug) ROS_INFO_THROTTLE(1.0, "GP: adjusting goal into free space.");
                 goal_ptr->position = new_p;
             }
         } 
-        if (FARUtil::IsPointInToleratedHeight(goal_ptr->position) && (odom_node_ptr_->position - goal_ptr->position).norm_flat() < FARUtil::kSensorRange) {
+        if (FARUtil::IsNodeInLocalRange(goal_ptr)) {
             Point3D current_goal_pos = goal_ptr->position;
             if (ContourGraph::ReprojectPointOutsidePolygons(current_goal_pos, FARUtil::kNearDist)) {
                 if (FARUtil::IsDebug) {
@@ -417,35 +417,35 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     // reset grid
     const Point3D origin_center(origin_goal_pos_.x, origin_goal_pos_.y, center.z);
     this->ResetFreeTerrainGridOrigin(origin_center);
-    free_terrian_grid_->ReInitGrid(INIT_BIT);
+    free_terrain_grid_->ReInitGrid(INIT_BIT);
     // evaluate goal freespace status
     is_goal_in_freespace_ = false;
     if (obsCloudIn->empty() && freeCloudIn->empty()) return;
     // process cloud
     const int C_IF = gp_params_.clear_inflate_size;
     for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
-        Eigen::Vector3i c_sub = free_terrian_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
+        Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
         for (int i = -C_IF; i <= C_IF; i++) {
             for (int j = -C_IF; j <= C_IF; j++) {
                 Eigen::Vector3i sub = c_sub;
                 sub.x() += i, sub.y() += j, sub.z() = 0;
-                if (free_terrian_grid_->InRange(sub)) {
-                    const int ind = free_terrian_grid_->Sub2Ind(sub);
-                    free_terrian_grid_->GetCell(ind) = free_terrian_grid_->GetCell(ind) | OBS_BIT;
+                if (free_terrain_grid_->InRange(sub)) {
+                    const int ind = free_terrain_grid_->Sub2Ind(sub);
+                    free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
                 }
             }
         }
     }
     // Set free cloud in free terrain grid
     for (const auto& point : freeCloudIn->points) {
-        Eigen::Vector3i c_sub = free_terrian_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
+        Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
         for (int i = -1; i <= 1; i++) {
             for (int j = -1; j <= 1; j++) {
                 Eigen::Vector3i sub = c_sub;
                 sub.x() += i, sub.y() += j, sub.z() = 0;
-                if (free_terrian_grid_->InRange(sub)) {
-                    const int ind = free_terrian_grid_->Sub2Ind(sub);
-                    free_terrian_grid_->GetCell(ind) = free_terrian_grid_->GetCell(ind) | FREE_BIT;
+                if (free_terrain_grid_->InRange(sub)) {
+                    const int ind = free_terrain_grid_->Sub2Ind(sub);
+                    free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | FREE_BIT;
                     is_goal_in_freespace_ = true;
                 }
             }

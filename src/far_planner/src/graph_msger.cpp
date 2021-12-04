@@ -33,6 +33,7 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
+        msg_node.is_boundary = node_ptr->is_boundary;
         msg_node.surface_dirs.clear();
         msg_node.surface_dirs.push_back(FARUtil::Point3DToGeoMsgPoint(node_ptr->surf_dirs.first));
         msg_node.surface_dirs.push_back(FARUtil::Point3DToGeoMsgPoint(node_ptr->surf_dirs.second));
@@ -114,21 +115,21 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
         NavNodePtr cnode_ptr = NULL;
         for (const auto& cid : connect_idxs) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
-            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active)) {
+            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillPolygonEdgeConnect(node_ptr, cnode_ptr, gm_params_.votes_size);
             }
         }
         // contour connections
         for (const auto& cid : contour_idxs) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
-            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active)) {
+            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillContourConnect(node_ptr, cnode_ptr, gm_params_.votes_size);
             }
         }
         // trajectory connection
         for (const auto& cid : traj_idxs) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
-            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active)) {
+            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillTrajConnect(node_ptr, cnode_ptr);
             }
         }
@@ -153,10 +154,11 @@ NavNodePtr GraphMsger::NearestNodePtrOnGraph(const Point3D p, const float radius
 
 void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr) {
     const Point3D p = Point3D(vnode.position.x, vnode.position.y, vnode.position.z);
-    const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
     const bool is_frontier = vnode.is_frontier == 0 ? false : true;
-    DynamicGraph::CreateNavNodeFromPoint(p, node_ptr, false, is_navpoint);
-    node_ptr->is_active = false;
+    const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
+    const bool is_boundary = vnode.is_boundary == 0 ? false : true;
+    DynamicGraph::CreateNavNodeFromPoint(p, node_ptr, false, is_navpoint, false, is_boundary);
+    node_ptr->is_active = is_boundary ? true : false;
     /* Assign relative values */
     node_ptr->is_frontier = is_frontier;
     // positions

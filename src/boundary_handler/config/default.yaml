@@ -1,0 +1,4 @@
+# Boundary Graph Extractor Params
+world_frame                             : map
+visual_scale_ratio                      : 0.5
+height_tolz                             : 2.0

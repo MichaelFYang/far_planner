@@ -5,10 +5,12 @@ robot_dim                               : 0.5   # Unit: meter
 vehicle_height                          : 0.5   # Unit: meter
 sensor_range                            : 10.0  # Unit: meter
 terrain_range                           : 10.0  # Unit: meter
+near_boundary_range                     : 5.0   # Unit: meter
 waypoint_project_dist                   : 2.5   # Unit: meter
 visualize_ratio                         : 0.4
 is_opencv_visual                        : false # Obstalce Image Display
-is_static_env                           : true  
+is_static_env                           : true
+is_pub_boundary                         : true  
 is_debug_output                         : false
 is_attempt_autoswitch                   : true  # Auto switch to attemptable navigation
 world_frame                             : map

@@ -140,12 +140,13 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     MarkerArray graph_marker_array;
     Marker nav_node_marker, unfinal_node_marker, near_node_marker, covered_node_marker, internav_node_marker, 
            edge_marker, contour_edge_marker, free_edge_marker, odom_edge_marker, goal_edge_marker, trajectory_edge_marker,
-           corner_surf_marker, contour_align_marker, corner_helper_marker;
+           corner_surf_marker, contour_align_marker, corner_helper_marker, boundary_node_marker, boundary_edge_marker;
     nav_node_marker.type       = Marker::SPHERE_LIST;
     unfinal_node_marker.type   = Marker::SPHERE_LIST;
     near_node_marker.type      = Marker::SPHERE_LIST;
     covered_node_marker.type   = Marker::SPHERE_LIST;
     internav_node_marker.type  = Marker::SPHERE_LIST;
+    boundary_node_marker.type  = Marker::SPHERE_LIST;
     contour_align_marker.type  = Marker::LINE_LIST;
     edge_marker.type           = Marker::LINE_LIST;
     free_edge_marker.type      = Marker::LINE_LIST;
@@ -153,6 +154,7 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     odom_edge_marker.type      = Marker::LINE_LIST;
     goal_edge_marker.type      = Marker::LINE_LIST;
     trajectory_edge_marker.type = Marker::LINE_LIST;
+    boundary_edge_marker.type  = Marker::LINE_LIST;
     corner_surf_marker.type    = Marker::LINE_LIST;
     corner_helper_marker.type  = Marker::CUBE_LIST;
     this->SetMarker(VizColor::WHITE,   "global_vertex",     0.5f,  0.5f,  nav_node_marker);
@@ -160,9 +162,11 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     this->SetMarker(VizColor::MAGNA,   "localrange_vertex", 0.5f,  0.8f,  near_node_marker);
     this->SetMarker(VizColor::BLUE,    "freespace_vertex",  0.5f,  0.8f,  covered_node_marker);
     this->SetMarker(VizColor::YELLOW,  "trajectory_vertex", 0.5f,  0.8f,  internav_node_marker);
+    this->SetMarker(VizColor::GREEN,   "boundary_vertex",   0.5f,  0.8f,  boundary_node_marker);
     this->SetMarker(VizColor::EMERALD, "global_vgraph",     0.1f,  0.2f,  edge_marker);
     this->SetMarker(VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.2f,  free_edge_marker);
     this->SetMarker(VizColor::RED,     "polygon_edge",      0.15f, 0.2f,  contour_edge_marker);
+    this->SetMarker(VizColor::ORANGE,  "boundary_edge",     0.2f,  0.25f, boundary_edge_marker);
     this->SetMarker(VizColor::ORANGE,  "odom_edge",         0.1f,  0.15f, odom_edge_marker);
     this->SetMarker(VizColor::YELLOW,  "to_goal_edge",      0.1f,  0.15f, goal_edge_marker);
     this->SetMarker(VizColor::GREEN,   "trajectory_edge",   0.1f,  0.5f,  trajectory_edge_marker);
@@ -214,6 +218,10 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
             p2 = FARUtil::Point3DToGeoMsgPoint(ct_cnode->position);
             contour_edge_marker.points.push_back(p1);
             contour_edge_marker.points.push_back(p2);
+            if (node_ptr->is_boundary && ct_cnode->is_boundary) {
+                boundary_edge_marker.points.push_back(p1);
+                boundary_edge_marker.points.push_back(p2);
+            }
         }
         // inter navigation trajectory connections
         if (node_ptr->is_navpoint) {
@@ -269,6 +277,9 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
         if (!nav_node_ptr->is_frontier) {
             covered_node_marker.points.push_back(cpoint);
         }
+        if (nav_node_ptr->is_boundary) {
+            boundary_node_marker.points.push_back(cpoint);
+        }
         Draw_Edge(nav_node_ptr);
         Draw_Surf_Dir(nav_node_ptr);
         Draw_Contour_Align(nav_node_ptr);
@@ -280,10 +291,12 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     graph_marker_array.markers.push_back(near_node_marker);
     graph_marker_array.markers.push_back(covered_node_marker);
     graph_marker_array.markers.push_back(internav_node_marker);
+    graph_marker_array.markers.push_back(boundary_node_marker);
     graph_marker_array.markers.push_back(edge_marker);
     graph_marker_array.markers.push_back(free_edge_marker);
     graph_marker_array.markers.push_back(goal_edge_marker);
     graph_marker_array.markers.push_back(contour_edge_marker);
+    graph_marker_array.markers.push_back(boundary_edge_marker);
     graph_marker_array.markers.push_back(odom_edge_marker);
     graph_marker_array.markers.push_back(trajectory_edge_marker);
     graph_marker_array.markers.push_back(corner_surf_marker);

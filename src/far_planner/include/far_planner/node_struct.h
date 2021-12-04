@@ -79,7 +79,9 @@ struct NavNode
     bool is_frontier;
     bool is_finalized;
     bool is_navpoint;
+    bool is_boundary;
     int clear_dumper_count;
+    std::unordered_set<std::size_t> invalid_boundary;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
     std::vector<std::shared_ptr<NavNode>> contour_connects;
     std::unordered_map<int, std::deque<int>> contour_votes;

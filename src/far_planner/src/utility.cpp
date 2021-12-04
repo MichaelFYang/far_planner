@@ -835,3 +835,98 @@ bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {
   }
   return false;
 }
+
+bool FARUtil::IsPointInLocalRange(const Point3D& p) {
+  if (FARUtil::IsPointInToleratedHeight(p) && (p - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
+      return true;
+  }
+  return false;
+}
+
+float FARUtil::DistanceToLineSeg2D(const Point3D& p, const PointPair& line) {
+  /* Source: https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment */
+  float A, B, C, D, dot, len_sq, param, xx, yy, dx, dy;
+  A = (p - line.first).x, B = (p - line.first).y;
+  C = (line.second - line.first).x, D = (line.second - line.first).y;
+  dot = A * C + B * D;
+  len_sq = C * C + D * D;
+  param = -1.0f;
+  if (len_sq != 0.0f) param = dot / len_sq;
+  if (param < 0.0f) {
+    xx = line.first.x, yy = line.first.y;
+  } else if (param > 1.0f) {
+    xx = line.second.x, yy = line.second.y;
+  } else {
+    xx = line.first.x + param * C;
+    yy = line.first.y + param * D;
+  }
+  dx = p.x - xx, dy = p.y - yy;
+  return sqrt(dx * dx + dy * dy);
+}
+
+bool FARUtil::ClockwiseLess(const Point3D& a, const Point3D& b) {
+  /* Source: https://stackoverflow.com/questions/6989100/sort-points-in-clockwise-order */
+  if (a.x >= 0.0f && b.x < 0.0f)
+        return true;
+    if (a.x < 0.0f && b.x >= 0.0f)
+        return false;
+    if (a.x == 0.0f && b.x == 0.0f) {
+        if (a.y >= 0.0f || b.y >= 0.0f) return a.y > b.y;
+        return b.y > a.y;
+    }
+    // compute the cross product of vectors (center -> a) x (center -> b)
+    float det = (a.x ) * (b.y) - (b.x ) * (a.y);
+    if (det < 0.0f)
+        return true;
+    if (det > 0.0f)
+        return false;
+    // points a and b are on the same line from the center
+    // check which point is closer to the center
+    float d1 = (a.x) * (a.x) + (a.y) * (a.y);
+    float d2 = (b.x) * (b.x) + (b.y) * (b.y);
+    return d1 > d2;
+}
+
+void FARUtil::ClockwiseTwoPoints(const Point3D& center, PointPair& edge) {
+  PointPair edge_copy;
+  edge_copy.first = Point3D(edge.first), edge_copy.second = Point3D(edge.second);
+  Point3D center_copy = Point3D(center);
+  const Point3D c = (center + edge.first + edge.second) / 3.0f;
+  PointStack vertices;
+  edge_copy.first = edge_copy.first - c; vertices.push_back(edge_copy.first);
+  edge_copy.second = edge_copy.second - c; vertices.push_back(edge_copy.second);
+  center_copy = center_copy - c; vertices.push_back(center_copy);
+  std::sort(vertices.begin(), vertices.end(), ClockwiseLess);
+  int center_id = 0;
+  for (int i=0; i<3; i++) {
+    if (FARUtil::IsSamePoint3D(vertices[i], center_copy)) {
+      center_id = i;
+      break;
+    }
+  }
+  edge.first = vertices[FARUtil::Mod(center_id+1, 3)] + c;
+  edge.second = vertices[FARUtil::Mod(center_id+2, 3)] + c;
+}
+
+struct {
+  bool operator() (const PointPair& edge1, const PointPair& edge2) const {
+    const Point3D center1 = (edge1.first + edge1.second) / 2.0f;
+    const Point3D center2 = (edge2.first + edge2.second) / 2.0f;
+    return FARUtil::ClockwiseLess(center1, center1); 
+  }
+} EdgeClockwiseLess;
+
+void FARUtil::SortEdgesClockWise(const Point3D& center, std::vector<PointPair>& edges) {
+  for (auto& edge : edges) {
+    edge.first  = edge.first - center;
+    edge.second = edge.second - center; 
+  }
+  std::sort(edges.begin(), edges.end(), EdgeClockwiseLess);
+  for (auto& edge : edges) {
+    edge.first  = edge.first + center;
+    edge.second = edge.second + center; 
+  }
+  for (auto& edge : edges) {
+    FARUtil::ClockwiseTwoPoints(center, edge);
+  }
+}

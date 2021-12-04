@@ -19,11 +19,13 @@ struct FARMasterParams {
     float voxel_dim;
     float sensor_range;
     float terrain_range;
+    float boundary_range;
     float waypoint_project_dist;
     float main_run_freq;
     float viz_ratio;
     bool  is_visual_opencv;
     bool  is_static_env;
+    bool  is_pub_boundary;
     bool  is_debug_output;
     bool  is_attempt_autoswitch;
     std::string world_frame;
@@ -44,6 +46,7 @@ private:
     ros::Subscriber read_command_sub_, save_command_sub_; // only use for terminal formatting
     ros::Publisher  goal_pub_, runtime_pub_;
     ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_, scan_grid_debug_, new_PCL_pub_;
+    ros::Publisher  boundary_pub_;
 
     ros::Timer planning_event_;
     std_msgs::Float32 runtimer_;
@@ -98,6 +101,8 @@ private:
     void LoadROSParams();
 
     void ResetEnvironmentAndGraph();
+
+    void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
 
     void PlanningCallBack(const ros::TimerEvent& event);
     

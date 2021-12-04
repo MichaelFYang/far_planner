@@ -87,7 +87,7 @@ void ContourGraph::MatchContourWithNavGraph(const NodePtrStack& nav_graph, CTNod
     }
 }
 
-bool ContourGraph::IsNavNodesConnectFreePolygon(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const bool& is_local_only) {
+bool ContourGraph::IsNavNodesConnectFreePolygon(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
     if (node_ptr1->is_navpoint || node_ptr2->is_navpoint) {
         if ((node_ptr1->position - node_ptr2->position).norm() < FARUtil::kNavClearDist) { // connect to internav node
             return true;
@@ -99,32 +99,53 @@ bool ContourGraph::IsNavNodesConnectFreePolygon(const NavNodePtr& node_ptr1, con
     } else if (node_ptr2->is_odom) {
         cedge.end_p = cv::Point2f(FARUtil::free_odom_p.x, FARUtil::free_odom_p.y);
     }
+    ConnectPair bd_cedge = cedge;
+    if (!node_ptr1->is_boundary) bd_cedge.start_p = cv::Point2f(node_ptr1->position.x, node_ptr1->position.y);
+    if (!node_ptr2->is_boundary) bd_cedge.end_p = cv::Point2f(node_ptr2->position.x, node_ptr2->position.y);
     bool is_global_check = false;
-    if (!is_local_only && (!node_ptr1->is_contour_match || !node_ptr2->is_contour_match) && 
-        ContourGraph::IsNeedGlobalCheck(node_ptr1->position, node_ptr2->position, FARUtil::odom_pos)) 
-    {
+    if (ContourGraph::IsNeedGlobalCheck(node_ptr1->position, node_ptr2->position)) {
         is_global_check = true;
     }
-    return ContourGraph::IsPointsConnectFreePolygon(cedge, is_global_check);
+    return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, is_global_check);
 }
 
 bool ContourGraph::IsPoint3DConnectFreePolygon(const Point3D& p1, const Point3D& p2) {
-    const bool is_global_check = ContourGraph::IsNeedGlobalCheck(p1, p2, FARUtil::odom_pos);
+    const bool is_global_check = ContourGraph::IsNeedGlobalCheck(p1, p2);
     const ConnectPair ori_cedge(p1, p2);
     const ConnectPair cedge = ori_cedge;
-    return ContourGraph::IsPointsConnectFreePolygon(cedge, is_global_check);
+    return ContourGraph::IsPointsConnectFreePolygon(cedge, ori_cedge, is_global_check);
+}
+
+bool ContourGraph::IsEdgeCollideBoundary(const Point3D& p1, const Point3D& p2) {
+    if (ContourGraph::boundary_contour_.empty()) return false;
+    const ConnectPair edge = ConnectPair(p1, p2);
+    for (const auto& contour : ContourGraph::boundary_contour_) {
+        if (ContourGraph::IsEdgeCollideSegment(contour, edge)) {return true;}
+    }
+    return false;
 }
 
 bool ContourGraph::IsNavToGoalConnectFreePolygon(const NavNodePtr& node_ptr, const NavNodePtr& goal_ptr) {
     if ((node_ptr->position - goal_ptr->position).norm() < FARUtil::kNavClearDist) return true;
-    ConnectPair cedge = ContourGraph::ReprojectEdge(node_ptr, goal_ptr, FARUtil::kProjectDist);
-    const bool is_global_check = ContourGraph::IsNeedGlobalCheck(node_ptr->position, goal_ptr->position, FARUtil::odom_pos);
-    return ContourGraph::IsPointsConnectFreePolygon(cedge, is_global_check);
+    const ConnectPair cedge    = ContourGraph::ReprojectEdge(node_ptr, goal_ptr, FARUtil::kProjectDist);
+    ConnectPair bd_cedge = cedge;
+    if (!node_ptr->is_boundary) bd_cedge.start_p = cv::Point2f(node_ptr->position.x, node_ptr->position.y);
+    if (!goal_ptr->is_boundary) bd_cedge.end_p = cv::Point2f(goal_ptr->position.x, goal_ptr->position.y);
+    const bool is_global_check = ContourGraph::IsNeedGlobalCheck(node_ptr->position, goal_ptr->position);
+    return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, is_global_check);
 }
 
 bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
+                                              const ConnectPair& bd_cedge,
                                               const bool& is_global_check)
 {
+    // check for boundaries edges 
+    for (const auto& contour : ContourGraph::boundary_contour_) {
+        if (ContourGraph::IsEdgeCollideSegment(contour, bd_cedge)) {
+            return false;
+        }
+    }
+    // check for local range polygons
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
         if (poly_ptr->is_pillar) continue;
         if (ContourGraph::IsEdgeCollidePoly(poly_ptr->vertices, cedge)) {
@@ -160,6 +181,13 @@ bool ContourGraph::IsNavNodesConnectFromContour(const NavNodePtr& node_ptr1, con
 
 bool ContourGraph::IsCTNodesConnectFromContour(const CTNodePtr& ctnode1, const CTNodePtr& ctnode2) {
     if (ctnode1 == ctnode2 || ctnode1->poly_ptr != ctnode2->poly_ptr) return false;
+    // check for boundary collision
+    const ConnectPair cedge = ConnectPair(ctnode1->position, ctnode2->position);
+    for (const auto& contour : ContourGraph::boundary_contour_) {
+        if (ContourGraph::IsEdgeCollideSegment(contour, cedge)) {
+            return false;
+        }
+    }
     // forward search
     CTNodePtr next_ctnode = ctnode1->front; 
     while (next_ctnode != NULL && next_ctnode != ctnode1) {
@@ -405,9 +433,19 @@ bool ContourGraph::ReprojectPointOutsidePolygons(Point3D& point, const float& fr
     return is_inside_poly;
 }
 
+
+bool ContourGraph::IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    if (FARUtil::IsNodeInLocalRange(node_ptr1) || FARUtil::IsNodeInLocalRange(node_ptr2)) {
+        return true;
+    }
+    return false;
+}
+
 void ContourGraph::ExtractGlobalContours(const NodePtrStack& nav_graph) {
     ContourGraph::global_contour_.clear();
     ContourGraph::inactive_contour_.clear();
+    ContourGraph::boundary_contour_.clear();
+    ContourGraph::local_boundary_.clear();
     const int N = nav_graph.size();
     for (std::size_t i=0; i<N; i++) {
         for (std::size_t j=0; j<N; j++) {
@@ -416,10 +454,17 @@ void ContourGraph::ExtractGlobalContours(const NodePtrStack& nav_graph) {
             const NavNodePtr node_ptr2 = nav_graph[j];
             if (FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects)) {
                 ContourGraph::global_contour_.push_back({node_ptr1->position, node_ptr2->position});
-                if ((FARUtil::IsPointInToleratedHeight(node_ptr1->position) || FARUtil::IsPointInToleratedHeight(node_ptr2->position)) &&
-                    ((node_ptr1->position - FARUtil::odom_pos).norm() < FARUtil::kSensorRange ||
-                     (node_ptr2->position - FARUtil::odom_pos).norm() < FARUtil::kSensorRange)) 
-                {
+                if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
+                    ContourGraph::boundary_contour_.push_back({node_ptr1->position, node_ptr2->position});
+                    if (this->IsEdgeInLocalRange(node_ptr1, node_ptr2)) {
+                        ContourGraph::local_boundary_.push_back({node_ptr1->position, node_ptr2->position});
+                        bool is_new_invalid = false;
+                        if (!this->IsValidBoundary(node_ptr1, node_ptr2, is_new_invalid) && is_new_invalid) {
+                            node_ptr1->invalid_boundary.insert(node_ptr2->id);
+                            node_ptr2->invalid_boundary.insert(node_ptr1->id);
+                        }
+                    }
+                } else if (this->IsEdgeInLocalRange(node_ptr1, node_ptr2)) {
                     if (!node_ptr1->is_active || !node_ptr2->is_active || !node_ptr1->is_near_nodes || !node_ptr2->is_near_nodes) {
                         ContourGraph::inactive_contour_.push_back({node_ptr1->position, node_ptr2->position});
                     }
@@ -427,6 +472,23 @@ void ContourGraph::ExtractGlobalContours(const NodePtrStack& nav_graph) {
             }
         } 
     }
+}
+
+bool ContourGraph::IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, bool& is_new) {
+    is_new = true;
+    if (node_ptr1->invalid_boundary.find(node_ptr2->id) != node_ptr1->invalid_boundary.end()) { // already invalid
+        is_new = false;
+        return false;
+    }
+    // check against local polygon
+    const ConnectPair cedge = ConnectPair(node_ptr1->position, node_ptr2->position);
+    for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
+        if (poly_ptr->is_pillar) continue;
+        if (ContourGraph::IsEdgeCollidePoly(poly_ptr->vertices, cedge)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& global_free_p) {

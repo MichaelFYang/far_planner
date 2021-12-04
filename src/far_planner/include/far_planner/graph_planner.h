@@ -51,7 +51,7 @@ Point3D last_planning_odom_;
 
 // local terrain map for freespace adjustment
 Point3D grid_center_ = Point3D(0,0,0);
-std::unique_ptr<grid_ns::Grid<char>> free_terrian_grid_;
+std::unique_ptr<grid_ns::Grid<char>> free_terrain_grid_;
 
 float PriorityScore(const NavNodePtr& node_ptr);
 
@@ -69,12 +69,21 @@ Point3D NextNavWaypointFromPath(const PointStack& global_path, const NavNodePtr 
 
 void AttemptStatusCallBack(const std_msgs::Bool& msg);
 
+inline bool IsInvalidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
+        if (node_ptr1->invalid_boundary.find(node_ptr2->id) != node_ptr1->invalid_boundary.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline void ResetFreeTerrainGridOrigin(const Point3D& p) {
     Eigen::Vector3d grid_origin;
-    grid_origin.x() = p.x - (free_terrian_grid_->GetResolution().x() * free_terrian_grid_->GetSize().x()) / 2.0f;
-    grid_origin.y() = p.y - (free_terrian_grid_->GetResolution().y() * free_terrian_grid_->GetSize().y()) / 2.0f;
-    grid_origin.z() = p.z - (free_terrian_grid_->GetResolution().z() * free_terrian_grid_->GetSize().z()) / 2.0f;
-    free_terrian_grid_->SetOrigin(grid_origin);
+    grid_origin.x() = p.x - (free_terrain_grid_->GetResolution().x() * free_terrain_grid_->GetSize().x()) / 2.0f;
+    grid_origin.y() = p.y - (free_terrain_grid_->GetResolution().y() * free_terrain_grid_->GetSize().y()) / 2.0f;
+    grid_origin.z() = p.z - (free_terrain_grid_->GetResolution().z() * free_terrain_grid_->GetSize().z()) / 2.0f;
+    free_terrain_grid_->SetOrigin(grid_origin);
     grid_center_ = p;
 }
 

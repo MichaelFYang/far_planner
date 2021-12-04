@@ -1,0 +1,21 @@
+<package>
+  <name>boundary_handler</name>
+  <version>0.0.1</version>
+  <description>Boundary Graph Extractor</description>
+  <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>visibility_graph_msg</build_depend>
+  <build_depend>pcl_ros</build_depend>
+
+  <run_depend>roscpp</run_depend>
+  <run_depend>std_msgs</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>visibility_graph_msg</run_depend>
+  <run_depend>pcl_ros</run_depend>
+</package>

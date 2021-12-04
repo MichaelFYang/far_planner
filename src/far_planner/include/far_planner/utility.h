@@ -30,6 +30,7 @@
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PolygonStamped.h>
 /*OpenCV Library*/
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
@@ -262,6 +263,12 @@ public:
                              const int& inflate_size,
                              const bool& deep_down_inflate);
 
+    static void SortEdgesClockWise(const Point3D& center, std::vector<PointPair>& edges);
+
+    static bool ClockwiseLess(const Point3D& p1, const Point3D& p2);
+
+    static void ClockwiseTwoPoints(const Point3D& center, PointPair& edge);
+
     static void ExtractOverlapCloud(const PointCloudPtr& cloudIn,
                                     const PointCloudPtr& cloudRef,
                                     const PointCloudPtr& cloudOverlapOut,
@@ -292,6 +299,8 @@ public:
 
     static std::size_t CounterOfPillar(const std::deque<PointPair>& dirs_stack);
 
+    static float DistanceToLineSeg2D(const Point3D& p, const PointPair& line);
+
     static void CorrectDirectOrder(const PointPair& ref_dir, PointPair& dirInOUt);
 
     static void CreatePointsAroundCenter(const Point3D& center_p, 
@@ -320,6 +329,12 @@ public:
                                    const float& radius);
 
     static bool IsOutReachNode(const NavNodePtr& node_ptr);
+
+    static bool IsPointInLocalRange(const Point3D& p);
+
+    static bool IsNodeInLocalRange(const NavNodePtr& node_ptr) {
+        return IsPointInLocalRange(node_ptr->position);
+    }
 
     static bool IsFreeNavNode(const NavNodePtr& node_ptr) {
         if (node_ptr->is_odom || node_ptr->is_navpoint) return true;

@@ -22,6 +22,7 @@ void FARMaster::Init() {
   update_command_sub_ = nh.subscribe("/update_visibility_graph", 5, &FARMaster::UpdateCommandCallBack, this);
   goal_pub_           = nh.advertise<geometry_msgs::PointStamped>("/way_point",5);
   runtime_pub_        = nh.advertise<std_msgs::Float32>("/runtime",1);
+  boundary_pub_       = nh.advertise<geometry_msgs::PolygonStamped>("/navigation_boundary",5);
 
   // Terminal formatting subscriber
   read_command_sub_   = nh.subscribe("/read_file_dir", 1, &FARMaster::ReadFileCommand, this);
@@ -181,6 +182,8 @@ void FARMaster::Loop() {
       std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
     }
     contour_graph_.ExtractGlobalContours(nav_graph_);
+    /* Publish local boundary */
+    this->LocalBoundaryHandler(ContourGraph::local_boundary_);
     /* Planner Graph Update */
     graph_planner_.UpdaetVGraph(nav_graph_);
     /* Graph Messager Update */
@@ -280,6 +283,28 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
   }
 }
 
+void FARMaster::LocalBoundaryHandler(const std::vector<PointPair>& local_boundary) {
+  if (!master_params_.is_pub_boundary || local_boundary.empty()) return;
+  geometry_msgs::PolygonStamped boundary_poly;
+  boundary_poly.header.frame_id = master_params_.world_frame;
+  boundary_poly.header.stamp = ros::Time::now();
+  float index_z = robot_pos_.z;
+  std::vector<PointPair> sorted_boundary;
+  for (const auto& edge : local_boundary) {
+    if (FARUtil::DistanceToLineSeg2D(robot_pos_, edge) > master_params_.boundary_range) continue;
+    sorted_boundary.push_back(edge);
+  }
+  FARUtil::SortEdgesClockWise(robot_pos_, sorted_boundary); /* For better rviz visualization purpose only! */ 
+  for (const auto& edge : sorted_boundary) {
+    geometry_msgs::Point32 geo_p1, geo_p2;
+    geo_p1.x = edge.first.x,  geo_p1.y = edge.first.y,  geo_p1.z = index_z;
+    geo_p2.x = edge.second.x, geo_p2.y = edge.second.y, geo_p2.z = index_z;
+    boundary_poly.polygon.points.push_back(geo_p1), boundary_poly.polygon.points.push_back(geo_p2);
+    index_z += 0.001f; // seperate polygon lines
+  }
+  boundary_pub_.publish(boundary_poly);
+}
+
 
 Point3D FARMaster::ProjectNavWaypoint(const Point3D& nav_waypoint, const Point3D& last_waypoint) {
   const bool is_momentum = (last_waypoint - nav_waypoint).norm() < FARUtil::kEpsilon ? true : false; // momentum heading if same goal
@@ -327,10 +352,12 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(master_prefix + "vehicle_height",        master_params_.vehicle_height, 0.75);
   nh.param<float>(master_prefix + "sensor_range",          master_params_.sensor_range, 50.0);
   nh.param<float>(master_prefix + "terrain_range",         master_params_.terrain_range, 15.0);
+  nh.param<float>(master_prefix + "near_boundary_range",   master_params_.boundary_range, 5.0);
   nh.param<float>(master_prefix + "waypoint_project_dist", master_params_.waypoint_project_dist, 5.0);
   nh.param<float>(master_prefix + "visualize_ratio",       master_params_.viz_ratio, 1.0);
   nh.param<bool>(master_prefix  + "is_opencv_visual",      master_params_.is_visual_opencv, true);
   nh.param<bool>(master_prefix  + "is_static_env",         master_params_.is_static_env, true);
+  nh.param<bool>(master_prefix  + "is_pub_boundary",       master_params_.is_pub_boundary, true);
   nh.param<bool>(master_prefix  + "is_debug_output",       master_params_.is_debug_output, false);
   nh.param<bool>(master_prefix  + "is_attempt_autoswitch", master_params_.is_attempt_autoswitch, true);
   nh.param<std::string>(master_prefix + "world_frame",     master_params_.world_frame, "map");
@@ -647,6 +674,8 @@ CTNodeStack  ContourGraph::contour_graph_;
 PolygonStack ContourGraph::contour_polygons_;
 std::vector<PointPair> ContourGraph::global_contour_;
 std::vector<PointPair> ContourGraph::inactive_contour_;
+std::vector<PointPair> ContourGraph::boundary_contour_;
+std::vector<PointPair> ContourGraph::local_boundary_;
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "far_planner_node");

@@ -50,6 +50,8 @@ public:
     static CTNodeStack  contour_graph_;
     static std::vector<PointPair> global_contour_;
     static std::vector<PointPair> inactive_contour_;
+    static std::vector<PointPair> boundary_contour_;
+    static std::vector<PointPair> local_boundary_;
 
     void Init(const ContourGraphParams& params);
     
@@ -63,6 +65,10 @@ public:
 
     void ExtractGlobalContours(const NodePtrStack& nav_graph);
 
+    bool IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+
+    bool IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, bool& is_new);
+
     static bool IsNavNodesConnectFromContour(const NavNodePtr& node_ptr1, 
                                           const NavNodePtr& node_ptr2);
 
@@ -70,15 +76,17 @@ public:
                                             const CTNodePtr& ctnode2);
 
     static bool IsNavNodesConnectFreePolygon(const NavNodePtr& node_ptr1,
-                                             const NavNodePtr& node_ptr2,
-                                             const bool& is_local_only=false);
+                                             const NavNodePtr& node_ptr2);
 
     static bool IsNavToGoalConnectFreePolygon(const NavNodePtr& node_ptr,
                                               const NavNodePtr& goal_ptr);
 
     static bool IsPoint3DConnectFreePolygon(const Point3D& p1, const Point3D& p2);
 
+    static bool IsEdgeCollideBoundary(const Point3D& p1, const Point3D& p2);
+
     static bool IsPointsConnectFreePolygon(const ConnectPair& cedge,
+                                           const ConnectPair& bd_cedge,
                                            const bool& is_global_check);
 
     static bool ReprojectPointOutsidePolygons(Point3D& point, const float& free_radius);
@@ -142,8 +150,8 @@ private:
 
     static bool IsEdgeCollideSegment(const PointPair& line, const ConnectPair& edge);
 
-    inline static bool IsNeedGlobalCheck(const Point3D& p1, const Point3D& p2, const Point3D& robot_p) {
-        if ((p1 - robot_p).norm_flat() > FARUtil::kSensorRange || (p2 - robot_p).norm_flat() > FARUtil::kSensorRange) {
+    inline static bool IsNeedGlobalCheck(const Point3D& p1, const Point3D& p2) {
+        if (!FARUtil::IsPointInLocalRange(p1) || !FARUtil::IsPointInLocalRange(p2)) {
             return true;
         }
         return false;
