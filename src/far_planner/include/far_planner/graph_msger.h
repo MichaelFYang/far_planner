@@ -45,7 +45,8 @@ private:
     inline bool IsMismatchFreeNode(const NavNodePtr& nearest_ptr, const visibility_graph_msg::Node& vnode) {
         if (nearest_ptr == NULL) return false;
         const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
-        if (nearest_ptr->is_navpoint != is_navpoint) return true;
+        const bool is_boundary = vnode.is_boundary == 0 ? false : true;
+        if (nearest_ptr->is_navpoint != is_navpoint || nearest_ptr->is_boundary != is_boundary) return true;
         return false;
     }
 
