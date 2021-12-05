@@ -10,7 +10,7 @@ waypoint_project_dist                   : 2.5   # Unit: meter
 visualize_ratio                         : 0.4
 is_opencv_visual                        : false # Obstalce Image Display
 is_static_env                           : true
-is_pub_boundary                         : true  
+is_pub_boundary                         : false
 is_debug_output                         : false
 is_attempt_autoswitch                   : true  # Auto switch to attemptable navigation
 world_frame                             : map
