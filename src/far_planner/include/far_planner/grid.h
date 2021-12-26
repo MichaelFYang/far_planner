@@ -14,7 +14,7 @@
 #pragma once
 
 #include <vector>
-#include "Eigen/Core"
+#include <Eigen/Core>
 #include <algorithm>
 
 namespace grid_ns

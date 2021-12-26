@@ -15,8 +15,10 @@ void ContourGraph::Init(const ContourGraphParams& params) {
     ctgraph_params_ = params;
     ContourGraph::contour_graph_.clear();
     ContourGraph::contour_polygons_.clear();
-    ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign);
+    ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign / 2.0f);
     is_robot_inside_poly_ = false;
+    ContourGraph::global_contour_set_.clear();
+    ContourGraph::boundary_contour_set_.clear();
 }
 
 void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
@@ -51,22 +53,24 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
                 ctnode_stack[idx]->back = ctnode_stack[ref_idx];
                 this->AddCTNodeToGraph(ctnode_stack[idx]);
             }
+            // add first ctnode of each polygon to poly ctnodes stack
+            if (!ctnode_stack.empty()) ContourGraph::polys_ctnodes_.push_back(ctnode_stack.front());
         }
     }
     this->AnalysisSurfAngleAndConvexity(ContourGraph::contour_graph_);      
 }
 
 /* Match current contour with global navigation nodes */
-void ContourGraph::MatchContourWithNavGraph(const NodePtrStack& nav_graph, CTNodeStack& new_convex_vertices) {
-    for (const auto& node_ptr : nav_graph) {
+void ContourGraph::MatchContourWithNavGraph(const NodePtrStack& global_nodes, const NodePtrStack& near_nodes, CTNodeStack& new_convex_vertices) {
+    for (const auto& node_ptr : global_nodes) {
         node_ptr->is_contour_match = false;
         node_ptr->ctnode = NULL;
     }
-    for (const auto& ctnode_ptr : ContourGraph::contour_graph_) {
+    for (const auto& ctnode_ptr : ContourGraph::contour_graph_) { // distance match
         ctnode_ptr->is_global_match = false;
         ctnode_ptr->nav_node_id = 0; // note: 0 is the id of odom node
         if (ctnode_ptr->free_direct != NodeFreeDirect::UNKNOW) {
-            const NavNodePtr matched_node = this->NearestNavNodeForCTNode(ctnode_ptr, nav_graph);
+            const NavNodePtr matched_node = this->NearestNavNodeForCTNode(ctnode_ptr, near_nodes);
             if (matched_node != NULL) {
                 ctnode_ptr->is_global_match = true;
                 ctnode_ptr->nav_node_id = matched_node->id;
@@ -75,6 +79,7 @@ void ContourGraph::MatchContourWithNavGraph(const NodePtrStack& nav_graph, CTNod
             }
         }
     }
+    this->EnclosePolygonsCheck();
     new_convex_vertices.clear();
     for (const auto& ctnode_ptr : ContourGraph::contour_graph_) { // Get new vertices
         if (!ctnode_ptr->is_global_match && ctnode_ptr->free_direct != NodeFreeDirect::UNKNOW) {
@@ -127,12 +132,20 @@ bool ContourGraph::IsEdgeCollideBoundary(const Point3D& p1, const Point3D& p2) {
 
 bool ContourGraph::IsNavToGoalConnectFreePolygon(const NavNodePtr& node_ptr, const NavNodePtr& goal_ptr) {
     if ((node_ptr->position - goal_ptr->position).norm() < FARUtil::kNavClearDist) return true;
-    const ConnectPair cedge    = ContourGraph::ReprojectEdge(node_ptr, goal_ptr, FARUtil::kProjectDist);
+    const ConnectPair cedge = ContourGraph::ReprojectEdge(node_ptr, goal_ptr, FARUtil::kProjectDist);
     ConnectPair bd_cedge = cedge;
     if (!node_ptr->is_boundary) bd_cedge.start_p = cv::Point2f(node_ptr->position.x, node_ptr->position.y);
     if (!goal_ptr->is_boundary) bd_cedge.end_p = cv::Point2f(goal_ptr->position.x, goal_ptr->position.y);
     const bool is_global_check = ContourGraph::IsNeedGlobalCheck(node_ptr->position, goal_ptr->position);
     return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, is_global_check);
+}
+
+
+bool ContourGraph::IsMatchLineConnectFreePolygon(const CTNodePtr& matched_ctnode, const NavNodePtr& matched_navnode) {
+    if ((matched_ctnode->position - matched_navnode->position).norm() < FARUtil::kNavClearDist) return true;
+    const ConnectPair bd_cedge = ConnectPair(matched_ctnode->position, matched_navnode->position);
+    const ConnectPair cedge = ContourGraph::ReprojectEdge(matched_ctnode, matched_navnode, FARUtil::kProjectDist);
+    return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, true);
 }
 
 bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
@@ -170,12 +183,9 @@ bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
 
 bool ContourGraph::IsNavNodesConnectFromContour(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
     if (node_ptr1->is_odom || node_ptr2->is_odom) return false;
-    if (!node_ptr1->is_contour_match || !node_ptr2->is_contour_match) {
-        return false;
-    }
     const CTNodePtr ctnode1 = node_ptr1->ctnode;
     const CTNodePtr ctnode2 = node_ptr2->ctnode;
-    if (ctnode1 == ctnode2) return false;
+    if (ctnode1 == NULL || ctnode2 == NULL || ctnode1 == ctnode2) return false;
     return ContourGraph::IsCTNodesConnectFromContour(ctnode1, ctnode2);
 }
 
@@ -217,12 +227,136 @@ bool ContourGraph::IsCTNodesConnectFromContour(const CTNodePtr& ctnode1, const C
     return false;
 }
 
+CTNodePtr ContourGraph::FirstMatchedCTNode(const CTNodePtr& ctnode_ptr) {
+    if (ctnode_ptr->is_global_match) return ctnode_ptr;
+    CTNodePtr cur_ctnode_ptr = ctnode_ptr->front;
+    while (cur_ctnode_ptr != ctnode_ptr) {
+        if (cur_ctnode_ptr->is_global_match) return cur_ctnode_ptr;
+        cur_ctnode_ptr = cur_ctnode_ptr->front;
+    }
+    return NULL;
+}
+
+void ContourGraph::MatchOutrangeContourNodes(const NodePtrStack& near_nodes, const NodePtrStack& outrange_nodes) {
+    if (near_nodes.empty() || outrange_nodes.empty()) return;
+    for (const auto& oc_node_ptr : outrange_nodes) {
+        float min_cost = FARUtil::kINF;
+        CTNodePtr min_matched_ctnode = NULL;
+        for (const auto& node_ptr : near_nodes) {
+            if (!node_ptr->is_contour_match) continue;
+            CTNodePtr matched_ctnode = NULL;
+            if (IsContourLineMatch(node_ptr, oc_node_ptr, matched_ctnode)) {
+                const float dist = FARUtil::VerticalDistToLine(node_ptr->position, matched_ctnode->position, oc_node_ptr->position);
+                if (dist < min_cost) {
+                    min_cost = dist;
+                    min_matched_ctnode = matched_ctnode;
+                }
+            }
+        }
+        if (min_matched_ctnode != NULL) {
+            min_matched_ctnode->is_global_match = true;
+            min_matched_ctnode->nav_node_id = oc_node_ptr->id;
+            oc_node_ptr->ctnode = min_matched_ctnode;
+            oc_node_ptr->is_contour_match = true;
+        }
+    }
+}
+
+bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNodePtr& outNode_ptr, CTNodePtr& matched_ctnode) {
+    const CTNodePtr ctnode_ptr = inNode_ptr->ctnode;
+    matched_ctnode = NULL;
+    if (ctnode_ptr == NULL || ctnode_ptr->poly_ptr->is_pillar) return false;
+    // check forward
+    const PointPair line1(inNode_ptr->position, outNode_ptr->position);
+    const float line1_dist = (line1.first - line1.second).norm();
+    CTNodePtr next_ctnode = ctnode_ptr->front;
+    CTNodePtr prev_ctnode = ctnode_ptr;
+    while (!next_ctnode->is_global_match && next_ctnode != ctnode_ptr &&
+           FARUtil::IsInCylinder(ctnode_ptr->position, next_ctnode->position, prev_ctnode->position, FARUtil::kNearDist)) 
+    {
+        if (!FARUtil::IsPointInMarginRange(next_ctnode->position) &&
+            (inNode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
+        {
+            const PointPair line2(inNode_ptr->position, next_ctnode->position);
+            if (FARUtil::LineMatchPercentage(line1, line2) > 0.95f) {
+                if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
+                    matched_ctnode = next_ctnode;
+                    return true;
+                }
+            }
+        }
+        prev_ctnode = next_ctnode;
+        next_ctnode = next_ctnode->front;
+    }
+    // check backward
+    next_ctnode = ctnode_ptr->back;
+    prev_ctnode = ctnode_ptr;
+    while (!next_ctnode->is_global_match && next_ctnode != ctnode_ptr &&
+           FARUtil::IsInCylinder(ctnode_ptr->position, next_ctnode->position, prev_ctnode->position, FARUtil::kNearDist)) 
+    {
+        if (!FARUtil::IsPointInMarginRange(next_ctnode->position) && 
+            (inNode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
+        {
+            const PointPair line2(inNode_ptr->position, next_ctnode->position);
+            if (FARUtil::LineMatchPercentage(line1, line2) > 0.95f) {
+                if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
+                    matched_ctnode = next_ctnode;
+                    return true;
+                }
+            }
+        }
+        prev_ctnode = next_ctnode;
+        next_ctnode = next_ctnode->back;
+    }
+    return false;
+}
+
+bool ContourGraph::IsCTNodesConnectWithinOrder(const CTNodePtr& ctnode1, const CTNodePtr& ctnode2, CTNodePtr& block_vertex) {
+    block_vertex = NULL;
+    if (ctnode1 == ctnode2 || ctnode1->poly_ptr != ctnode2->poly_ptr) return false;
+    CTNodePtr next_ctnode = ctnode1->front; // forward search
+    while (next_ctnode != NULL && next_ctnode != ctnode2) {
+        if (!FARUtil::IsInCylinder(ctnode1->position, ctnode2->position, next_ctnode->position, FARUtil::kNearDist)) {
+            block_vertex = next_ctnode;
+            return false;
+        }
+        next_ctnode = next_ctnode->front;
+    }
+    return true;
+}
+
+void ContourGraph::EnclosePolygonsCheck() {
+    for (const auto& ctnode_ptr : ContourGraph::polys_ctnodes_) { // loop each polygon
+        if (ctnode_ptr->poly_ptr->is_pillar) continue;
+        const CTNodePtr start_ctnode_ptr = FirstMatchedCTNode(ctnode_ptr);
+        if (start_ctnode_ptr == NULL) continue;
+        CTNodePtr pre_ctnode_ptr = start_ctnode_ptr;
+        CTNodePtr cur_ctnode_ptr = start_ctnode_ptr->front;
+        while (cur_ctnode_ptr != start_ctnode_ptr) {
+            if (!cur_ctnode_ptr->is_global_match) {
+                cur_ctnode_ptr = cur_ctnode_ptr->front;
+                continue;
+            }
+            CTNodePtr block_vertex = NULL;
+            if (!IsCTNodesConnectWithinOrder(pre_ctnode_ptr, cur_ctnode_ptr, block_vertex) && block_vertex != NULL) {
+                if (block_vertex->is_ground_associated && FARUtil::IsPointInMarginRange(block_vertex->position)) {
+                    block_vertex->is_contour_necessary = true;
+                }
+            }
+            pre_ctnode_ptr = cur_ctnode_ptr;
+            cur_ctnode_ptr = cur_ctnode_ptr->front;
+        }
+    }
+}
+
 void ContourGraph::CreateCTNode(const Point3D& pos, CTNodePtr& ctnode_ptr, const PolygonPtr& poly_ptr, const bool& is_pillar) {
     ctnode_ptr = std::make_shared<CTNode>();
     ctnode_ptr->position = pos;
     ctnode_ptr->front = NULL;
     ctnode_ptr->back  = NULL;
     ctnode_ptr->is_global_match = false;
+    ctnode_ptr->is_ground_associated = false;
+    ctnode_ptr->is_contour_necessary = false;
     ctnode_ptr->nav_node_id = 0;
     ctnode_ptr->poly_ptr = poly_ptr;
     ctnode_ptr->free_direct = is_pillar ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
@@ -233,17 +367,16 @@ void ContourGraph::CreatePolygon(const PointStack& poly_points, PolygonPtr& poly
     poly_ptr = std::make_shared<Polygon>();
     poly_ptr->N = poly_points.size();
     poly_ptr->vertices = poly_points;
-    poly_ptr->is_visiable = false;
     poly_ptr->is_robot_inside = FARUtil::PointInsideAPoly(poly_points, odom_node_ptr_->position);
     poly_ptr->is_pillar = this->IsAPillarPolygon(poly_points);
 }
 
-NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, const NodePtrStack& nav_graph) {
+NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, const NodePtrStack& near_nodes) {
     float nearest_dist = FARUtil::kINF;
     NavNodePtr nearest_node = NULL;
     float min_edist = FARUtil::kINF;
     const float dir_thred = 0.5f; //cos(pi/3);
-    for (const auto& node_ptr : nav_graph) {
+    for (const auto& node_ptr : near_nodes) {
         if (node_ptr->is_odom || node_ptr->is_navpoint || FARUtil::IsOutsideGoal(node_ptr)) continue;
         // no match with pillar to non-pillar local vertices
         if ((node_ptr->free_direct == NodeFreeDirect::PILLAR && ctnode_ptr->free_direct != NodeFreeDirect::PILLAR) ||
@@ -251,7 +384,7 @@ NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, co
         {
             continue;
         }
-        float dist_thred = ctgraph_params_.kMatchDist;
+        float dist_thred = FARUtil::kMatchDist;
         float dir_score = 0.0f;
         if (ctnode_ptr->free_direct != NodeFreeDirect::PILLAR && node_ptr->free_direct != NodeFreeDirect::UNKNOW && node_ptr->free_direct != NodeFreeDirect::PILLAR) {
             if (ctnode_ptr->free_direct == node_ptr->free_direct) {
@@ -433,44 +566,49 @@ bool ContourGraph::ReprojectPointOutsidePolygons(Point3D& point, const float& fr
     return is_inside_poly;
 }
 
+void ContourGraph::AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    NavEdge edge;
+    // force to form pair id1 < id2
+    if (node_ptr1->id < node_ptr2->id) edge = NavEdge(node_ptr1, node_ptr2);
+    else edge = NavEdge(node_ptr2, node_ptr1);
 
-bool ContourGraph::IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-    if (FARUtil::IsNodeInLocalRange(node_ptr1) || FARUtil::IsNodeInLocalRange(node_ptr2)) {
-        return true;
+    ContourGraph::global_contour_set_.insert(edge);
+    if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
+        ContourGraph::boundary_contour_set_.insert(edge);
     }
-    return false;
 }
 
-void ContourGraph::ExtractGlobalContours(const NodePtrStack& nav_graph) {
+void ContourGraph::DeleteContourFromSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    NavEdge edge;
+    // force to form pair id1 < id2
+    if (node_ptr1->id < node_ptr2->id) edge = NavEdge(node_ptr1, node_ptr2);
+    else edge = NavEdge(node_ptr2, node_ptr1);
+
+    ContourGraph::global_contour_set_.erase(edge);
+    ContourGraph::boundary_contour_set_.erase(edge);
+}
+
+void ContourGraph::ExtractGlobalContours() {
     ContourGraph::global_contour_.clear();
     ContourGraph::inactive_contour_.clear();
     ContourGraph::boundary_contour_.clear();
     ContourGraph::local_boundary_.clear();
-    const int N = nav_graph.size();
-    for (std::size_t i=0; i<N; i++) {
-        for (std::size_t j=0; j<N; j++) {
-            if (i == j || j > i) continue;
-            const NavNodePtr node_ptr1 = nav_graph[i];
-            const NavNodePtr node_ptr2 = nav_graph[j];
-            if (FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects)) {
-                ContourGraph::global_contour_.push_back({node_ptr1->position, node_ptr2->position});
-                if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
-                    ContourGraph::boundary_contour_.push_back({node_ptr1->position, node_ptr2->position});
-                    if (this->IsEdgeInLocalRange(node_ptr1, node_ptr2)) {
-                        ContourGraph::local_boundary_.push_back({node_ptr1->position, node_ptr2->position});
-                        bool is_new_invalid = false;
-                        if (!this->IsValidBoundary(node_ptr1, node_ptr2, is_new_invalid) && is_new_invalid) {
-                            node_ptr1->invalid_boundary.insert(node_ptr2->id);
-                            node_ptr2->invalid_boundary.insert(node_ptr1->id);
-                        }
-                    }
-                } else if (this->IsEdgeInLocalRange(node_ptr1, node_ptr2)) {
-                    if (!node_ptr1->is_active || !node_ptr2->is_active || !node_ptr1->is_near_nodes || !node_ptr2->is_near_nodes) {
-                        ContourGraph::inactive_contour_.push_back({node_ptr1->position, node_ptr2->position});
-                    }
-                }
-            }
+    for (const auto& edge : ContourGraph::global_contour_set_) {
+        ContourGraph::global_contour_.push_back({edge.first->position, edge.second->position});
+        if ((!edge.first->is_active || !edge.second->is_active) && IsEdgeInLocalRange(edge.first, edge.second)) {
+            ContourGraph::inactive_contour_.push_back({edge.first->position, edge.second->position});
         } 
+    }
+    for (const auto& edge : ContourGraph::boundary_contour_set_) {
+        ContourGraph::boundary_contour_.push_back({edge.first->position, edge.second->position});
+        if (IsEdgeInLocalRange(edge.first, edge.second)) {
+            ContourGraph::local_boundary_.push_back({edge.first->position, edge.second->position});
+            bool is_new_invalid = false;
+            if (!IsValidBoundary(edge.first, edge.second, is_new_invalid) && is_new_invalid) {
+                edge.first->invalid_boundary.insert(edge.second->id);
+                edge.second->invalid_boundary.insert(edge.first->id);
+            }
+        }
     }
 }
 
@@ -524,34 +662,46 @@ void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& g
     }
 }
 
-ConnectPair ContourGraph::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const float& dist) {
+ConnectPair ContourGraph::ReprojectEdge(const CTNodePtr& ctnode_ptr1, const NavNodePtr& node_ptr2, const float& dist) {
     ConnectPair edgeOut;
-    cv::Point2f node1_cv, node2_cv;
-    cv::Point2f dir1, dir2;
-    const float ndist = (node_ptr1->position - node_ptr2->position).norm_flat();
-    float ref_dist1, ref_dist2;
-    ref_dist1 = ref_dist2 = std::min(ndist*0.4f, dist);
-    // node 1
-    if (node_ptr1->is_contour_match && node_ptr1->ctnode->free_direct == node_ptr1->free_direct) { // node 1
-        const auto ctnode1 = node_ptr1->ctnode;
-        node1_cv = cv::Point2f(ctnode1->position.x, ctnode1->position.y);
-        dir1 = NodeProjectDir(ctnode1);
-    } else {
-        node1_cv = cv::Point2f(node_ptr1->position.x, node_ptr1->position.y);
-        dir1 = NodeProjectDir(node_ptr1);
-    }
-    edgeOut.start_p = node1_cv + ref_dist1 * dir1;
-    // node 2
-    if (node_ptr2->is_contour_match && node_ptr2->ctnode->free_direct == node_ptr2->free_direct) { // node 2
-        const auto ctnode2 = node_ptr2->ctnode;
-        node2_cv = cv::Point2f(ctnode2->position.x, ctnode2->position.y);
-        dir2 = NodeProjectDir(ctnode2);
-    } else {
-        node2_cv = cv::Point2f(node_ptr2->position.x, node_ptr2->position.y);
-        dir2 = NodeProjectDir(node_ptr2);
-    }
-    edgeOut.end_p = node2_cv + ref_dist2 * dir2;
+    const float ndist = (ctnode_ptr1->position - node_ptr2->position).norm_flat();
+    const float ref_dist = std::min(ndist*0.4f, dist);
+
+    edgeOut.start_p = ProjectNode(ctnode_ptr1, ref_dist); // node 1
+    edgeOut.end_p   = ProjectNode(node_ptr2, ref_dist); // // node 2
+
     return edgeOut;
 }
+
+ConnectPair ContourGraph::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const float& dist) {
+    ConnectPair edgeOut;
+    const float ndist = (node_ptr1->position - node_ptr2->position).norm_flat();
+    const float ref_dist = std::min(ndist*0.4f, dist);
+    // node 1
+    if (node_ptr1->is_near_nodes && node_ptr1->is_contour_match && node_ptr1->ctnode->free_direct == node_ptr1->free_direct) { // node 1
+        const auto ctnode1 = node_ptr1->ctnode;
+        edgeOut.start_p = ProjectNode(ctnode1, ref_dist); // node 1
+    } else {
+        edgeOut.start_p = ProjectNode(node_ptr1, ref_dist); // node 1
+    }
+    // node 2
+    if (node_ptr2->is_near_nodes && node_ptr2->is_contour_match && node_ptr2->ctnode->free_direct == node_ptr2->free_direct) { // node 2
+        const auto ctnode2 = node_ptr2->ctnode;
+        edgeOut.end_p = ProjectNode(ctnode2, ref_dist); // node 1
+    } else {
+        edgeOut.end_p = ProjectNode(node_ptr2, ref_dist);
+    }
+    return edgeOut;
+}
+
+void ContourGraph::ResetCurrentContour() {
+    this->ClearContourGraph();
+    // clear contour sets
+    ContourGraph::global_contour_set_.clear();
+    ContourGraph::boundary_contour_set_.clear();
+
+    odom_node_ptr_ = NULL;
+    is_robot_inside_poly_ = false;
+}   
 
 

@@ -45,7 +45,8 @@ private:
     ros::Subscriber odom_sub_, terrain_sub_, terrain_local_sub_, scan_sub_, waypoint_sub_;
     ros::Subscriber read_command_sub_, save_command_sub_; // only use for terminal formatting
     ros::Publisher  goal_pub_, runtime_pub_;
-    ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_, scan_grid_debug_, new_PCL_pub_;
+    ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_;
+    ros::Publisher  scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
     ros::Publisher  boundary_pub_;
 
     ros::Timer planning_event_;
@@ -64,8 +65,9 @@ private:
     PointCloudPtr temp_obs_ptr_;
     PointCloudPtr temp_free_ptr_;
     PointCloudPtr temp_cloud_ptr_;
-    PointCloudPtr local_terrain_ptr_;
     PointCloudPtr scan_grid_ptr_;
+    PointCloudPtr local_terrain_ptr_;
+    PointCloudPtr terrain_height_ptr_;
 
     NavNodePtr odom_node_ptr_ = NULL;
     NodePtrStack new_nodes_;

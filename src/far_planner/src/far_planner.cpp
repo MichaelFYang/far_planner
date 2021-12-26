@@ -34,6 +34,7 @@ void FARMaster::Init() {
   surround_obs_debug_  = nh.advertise<sensor_msgs::PointCloud2>("/FAR_obs_debug",1);
   scan_grid_debug_     = nh.advertise<sensor_msgs::PointCloud2>("/FAR_scanGrid_debug",1);
   new_PCL_pub_         = nh.advertise<sensor_msgs::PointCloud2>("/FAR_new_debug",1);
+  terrain_height_pub_  = nh.advertise<sensor_msgs::PointCloud2>("/FAR_terrain_height_debug",1);
 
   this->LoadROSParams();
 
@@ -62,12 +63,13 @@ void FARMaster::Init() {
   is_stop_update_     = false;
 
   // allocate memory to pointers
-  new_vertices_ptr_  = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_obs_ptr_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_free_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_cloud_ptr_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  scan_grid_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  local_terrain_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  new_vertices_ptr_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_obs_ptr_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_free_ptr_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_cloud_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  scan_grid_ptr_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  local_terrain_ptr_  = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  terrain_height_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 
   // init global utility cloud
   FARUtil::stack_new_cloud_->clear();
@@ -104,6 +106,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   graph_manager_.ResetCurrentGraph();
   map_handler_.ResetGripMapCloud();
   graph_planner_.ResetPlannerInternalValues();
+  contour_graph_.ResetCurrentContour();
   /* Reset clouds */
   FARUtil::surround_obs_cloud_->clear();
   FARUtil::surround_free_cloud_->clear();
@@ -143,7 +146,6 @@ void FARMaster::Loop() {
       loop_rate.sleep();
       continue;
     }
-    this->ClearTempMemory();
     map_handler_.UpdateRobotPosition(odom_node_ptr_->position);
     /* Extract Vertices and new nodes */
     FARUtil::Timer.start_time("Total V-Graph Update");
@@ -154,14 +156,16 @@ void FARMaster::Loop() {
       std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
     }
     near_nav_graph_ = graph_manager_.GetNearNavGraph();
-    contour_graph_.MatchContourWithNavGraph(near_nav_graph_, new_ctnodes_);
+    map_handler_.AjustCTNodeHeight(ContourGraph::contour_graph_); // adjust local contour nodes height
+    map_handler_.AdjustNodesHeight(near_nav_graph_); // adjust near nodes height
+    contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
     if (master_params_.is_visual_opencv) {
       FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
       cv::Mat cloud_img = contour_detector_.GetCloudImgMat();
       contour_detector_.ShowCornerImage(cloud_img, new_vertices_ptr_);
     }
-
     /* update planner graph */
+    new_nodes_.clear();
     if (!is_stop_update_ && graph_manager_.ExtractGraphNodes(new_ctnodes_)) {
       new_nodes_ = graph_manager_.GetNewNodes();
     }
@@ -181,7 +185,7 @@ void FARMaster::Loop() {
       if (!FARUtil::IsDebug) printf("\033[2K");
       std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
     }
-    contour_graph_.ExtractGlobalContours(nav_graph_);
+    contour_graph_.ExtractGlobalContours();
     /* Publish local boundary */
     this->LocalBoundaryHandler(ContourGraph::local_boundary_);
     /* Planner Graph Update */
@@ -195,6 +199,7 @@ void FARMaster::Loop() {
       planner_viz_.VizPoint3D(last_internav_ptr->position, "last_nav_node", VizColor::MAGNA, 1.0);
     }
     planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
+    planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
     planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
     planner_viz_.VizGraph(nav_graph_);
     planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
@@ -364,10 +369,12 @@ void FARMaster::LoadROSParams() {
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
   // map handler params
-  nh.param<float>(map_prefix + "ceil_length",         map_params_.ceil_length, 5.0);
-  nh.param<float>(map_prefix + "ceil_height",         map_params_.ceil_height, 2.0);
-  nh.param<float>(map_prefix + "map_grid_max_length", map_params_.grid_max_length, 5000.0);
-  nh.param<float>(map_prefix + "map_grad_max_height", map_params_.grid_max_height, 100.0);
+  nh.param<float>(map_prefix + "ceil_length",           map_params_.ceil_length, 5.0);
+  nh.param<float>(map_prefix + "ceil_height",           map_params_.ceil_height, 2.0);
+  nh.param<float>(map_prefix + "map_grid_max_length",   map_params_.grid_max_length, 5000.0);
+  nh.param<float>(map_prefix + "map_grad_max_height",   map_params_.grid_max_height, 100.0);
+  nh.param<float>(map_prefix + "terrain_search_radius", map_params_.search_radius, 1.0);
+  nh.param<float>(map_prefix + "terrain_voxel_dim",     map_params_.height_voxel_dim, 0.5);
   map_params_.sensor_range = master_params_.sensor_range;
 
   // graph planner params
@@ -375,7 +382,7 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(planner_prefix + "goal_adjust_radius",   gp_params_.adjust_radius, 10.0);
   nh.param<int>(planner_prefix   + "free_counter_thred",   gp_params_.free_thred, 5);
   nh.param<int>(planner_prefix   + "reach_goal_vote_size", gp_params_.votes_size, 5);
-  nh.param<float>(planner_prefix + "path_momentum_ratio",  gp_params_.momentum_dist, 1.0);
+  nh.param<float>(planner_prefix + "move_momentum_dist",   gp_params_.momentum_dist, 0.5);
   nh.param<int>(planner_prefix   + "path_momentum_thred",  gp_params_.momentum_thred, 5);
   nh.param<int>(planner_prefix   + "clear_inflate_size",   gp_params_.clear_inflate_size, 3);
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
@@ -397,7 +404,7 @@ void FARMaster::LoadROSParams() {
   graph_params_.filter_dirs_margin = graph_params_.filter_dirs_margin / 180.0 * M_PI;
   graph_params_.sensor_range       = master_params_.sensor_range;
 
-    // graph messager params
+  // graph messager params
   nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
   msger_parmas_.frame_id    = master_params_.world_frame;
   msger_parmas_.votes_size  = graph_params_.votes_size;
@@ -419,15 +426,18 @@ void FARMaster::LoadROSParams() {
   FARUtil::kVizRatio      = master_params_.viz_ratio;
   FARUtil::kTolerZ        = map_params_.ceil_height * 1.5f;
   FARUtil::kCellLength    = map_params_.ceil_length;
-  FARUtil::kAcceptAlign   = FARUtil::kAcceptAlign / 180.0 * M_PI;
-  FARUtil::kAngleNoise    = FARUtil::kAngleNoise  / 180.0 * M_PI; 
+  FARUtil::kAcceptAlign   = FARUtil::kAcceptAlign / 180.0f * M_PI;
+  FARUtil::kAngleNoise    = FARUtil::kAngleNoise  / 180.0f * M_PI; 
   FARUtil::robot_dim      = master_params_.robot_dim;
   FARUtil::IsStaticEnv    = master_params_.is_static_env;
   FARUtil::IsDebug        = master_params_.is_debug_output;
   FARUtil::vehicle_height = master_params_.vehicle_height;
   FARUtil::kLeafSize      = master_params_.voxel_dim;
   FARUtil::kNearDist      = graph_params_.near_dist;
+  FARUtil::kMatchDist     = graph_params_.margin_dist;
   FARUtil::kSensorRange   = master_params_.sensor_range;
+  FARUtil::kMarginDist    = master_params_.sensor_range - FARUtil::kMatchDist;
+  FARUtil::kMarginHeight  = FARUtil::kTolerZ - master_params_.voxel_dim;
   FARUtil::kTerrainRange  = master_params_.terrain_range;
 
   // scan handler params
@@ -448,7 +458,6 @@ void FARMaster::LoadROSParams() {
   // contour graph params
   nh.param<float>(contour_prefix + "around_distance",       cg_params_.kAroundDist, 0.75);
   nh.param<float>(contour_prefix + "pillar_perimeter_dist", cg_params_.kPillarPerimeter, 3.0);
-  cg_params_.kMatchDist = graph_params_.margin_dist;
 }
 
 void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
@@ -545,8 +554,8 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
     map_handler_.UpdateFreeCloudGrid(temp_free_ptr_);
     // extract new points
     FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,
-                                    FARUtil::surround_obs_cloud_,
-                                    FARUtil::cur_new_cloud_);
+                                     FARUtil::surround_obs_cloud_,
+                                     FARUtil::cur_new_cloud_);
   } else { // stop env update
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
@@ -554,6 +563,8 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   // extract surround cloud
   map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
   map_handler_.GetSurroundFreeCloud(FARUtil::surround_free_cloud_);
+  // update terrain height map
+  map_handler_.UpdateTerrainHeightGrid(FARUtil::surround_free_cloud_, terrain_height_ptr_);
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
   if (!master_params_.is_static_env && !is_stop_update_) {
@@ -583,6 +594,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   planner_viz_.VizPointCloud(dynamic_obs_pub_, FARUtil::cur_dyobs_cloud_);
   planner_viz_.VizPointCloud(surround_free_debug_, FARUtil::surround_free_cloud_);
   planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
+  planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
   // visualize map grid
   PointStack neighbor_centers, occupancy_centers;
   map_handler_.GetNeighborCeilsCenters(neighbor_centers);
@@ -648,6 +660,8 @@ float   FARUtil::kNavClearDist;
 float   FARUtil::kCellLength;
 float   FARUtil::kNewPIThred;
 float   FARUtil::kSensorRange;
+float   FARUtil::kMarginDist;
+float   FARUtil::kMarginHeight;
 float   FARUtil::kTerrainRange;
 float   FARUtil::kFreeZ;
 float   FARUtil::kVizRatio;
@@ -655,6 +669,7 @@ double  FARUtil::systemStartTime;
 float   FARUtil::kObsDecayTime;
 float   FARUtil::kNewDecayTime;
 float   FARUtil::kNearDist;
+float   FARUtil::kMatchDist;
 float   FARUtil::kProjectDist;
 int     FARUtil::kDyObsThred;
 int     FARUtil::KNewPointC;
@@ -665,17 +680,22 @@ bool    FARUtil::IsDebug;
 TimeMeasure FARUtil::Timer;
 
 /* Global Graph */
+DynamicGraphParams DynamicGraph::dg_params_;
 NodePtrStack DynamicGraph::globalGraphNodes_;
 std::size_t  DynamicGraph::id_tracker_;
 std::unordered_map<std::size_t, NavNodePtr> DynamicGraph::idx_node_map_;
+std::unordered_map<NavNodePtr, int> DynamicGraph::out_contour_nodes_map_;
 
 /* init static contour graph values */
-CTNodeStack  ContourGraph::contour_graph_;
+CTNodeStack ContourGraph::polys_ctnodes_;
+CTNodeStack ContourGraph::contour_graph_;
 PolygonStack ContourGraph::contour_polygons_;
 std::vector<PointPair> ContourGraph::global_contour_;
 std::vector<PointPair> ContourGraph::inactive_contour_;
 std::vector<PointPair> ContourGraph::boundary_contour_;
 std::vector<PointPair> ContourGraph::local_boundary_;
+std::unordered_set<NavEdge, boost::hash<NavEdge>> ContourGraph::global_contour_set_;
+std::unordered_set<NavEdge, boost::hash<NavEdge>> ContourGraph::boundary_contour_set_;
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "far_planner_node");

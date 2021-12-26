@@ -24,7 +24,7 @@ void ContourDetector::Init(const ContourDetectParams& params) {
     odom_node_ptr_ = NULL;
     refined_contours_.clear(), refined_hierarchy_.clear();
     DIST_LIMIT = cd_params_.kRatio * 1.5f;
-    ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign);
+    ALIGN_ANGLE_COS = cos(FARUtil::kAcceptAlign / 2.0f);
     VOXEL_DIM_INV = 1.0f / cd_params_.voxel_dim;
 }
 
@@ -80,7 +80,7 @@ void ContourDetector::ConvertContoursToRealWorld(const std::vector<CVPointStack>
                                                  std::vector<PointStack>& realWorld_contours)
 {
     const std::size_t C_N = ori_contours.size();
-    realWorld_contours.resize(C_N);
+    realWorld_contours.clear(), realWorld_contours.resize(C_N);
     for (std::size_t i=0; i<C_N; i++) {
         const CVPointStack cv_contour = ori_contours[i];
         this->ConvertCVToPoint3DVector(cv_contour, realWorld_contours[i], true);
@@ -138,10 +138,14 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
         for (std::size_t j=0; j<c_size; j++) {
             cv::Point2f p = c[j]; 
             if (refined_idx < 1 || FARUtil::PixelDistance(contoursInOut[i][refined_idx-1], p) > DIST_LIMIT) {
+                /** Reduce wall nodes */
+                RemoveWallConnection(contoursInOut[i], p, refined_idx);
                 contoursInOut[i][refined_idx] = p;
                 refined_idx ++;
             }
         }
+        /** Reduce wall nodes */
+        RemoveWallConnection(contoursInOut[i], contoursInOut[i][0], refined_idx);
         contoursInOut[i].resize(refined_idx);
         if (refined_idx > 1 && FARUtil::PixelDistance(contoursInOut[i].front(), contoursInOut[i].back()) < DIST_LIMIT) {
             contoursInOut[i].pop_back();

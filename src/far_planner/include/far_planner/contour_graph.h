@@ -39,7 +39,6 @@ struct ContourGraphParams {
     ContourGraphParams() = default;
     float kAroundDist;
     float kPillarPerimeter;
-    float kMatchDist;
 };
 
 class ContourGraph {
@@ -60,17 +59,18 @@ public:
                             const std::vector<std::vector<Point3D>>& filtered_contours);
 
     /* Match current contour with global navigation nodes */
-    void MatchContourWithNavGraph(const NodePtrStack& nav_graph,
+    void MatchContourWithNavGraph(const NodePtrStack& global_nodes,
+                                  const NodePtrStack& near_nodes,
                                   CTNodeStack& new_convex_vertices);
 
-    void ExtractGlobalContours(const NodePtrStack& nav_graph);
+    void ExtractGlobalContours();
 
-    bool IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+    static void MatchOutrangeContourNodes(const NodePtrStack& near_nodes, const NodePtrStack& outrange_nodes);
 
-    bool IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, bool& is_new);
-
+    static bool IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNodePtr& outNode_ptr, CTNodePtr& matched_ctnode);
+    
     static bool IsNavNodesConnectFromContour(const NavNodePtr& node_ptr1, 
-                                          const NavNodePtr& node_ptr2);
+                                             const NavNodePtr& node_ptr2);
 
     static bool IsCTNodesConnectFromContour(const CTNodePtr& ctnode1, 
                                             const CTNodePtr& ctnode2);
@@ -91,15 +91,27 @@ public:
 
     static bool ReprojectPointOutsidePolygons(Point3D& point, const float& free_radius);
 
+    static void AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+
+    static void DeleteContourFromSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+
     bool IsPointInVetexAngleRestriction(const CTNodePtr& ctnode, const Point3D end_p);
+
+    void ResetCurrentContour();
 
 private:
 
+    static CTNodeStack polys_ctnodes_;
     static PolygonStack contour_polygons_;
     ContourGraphParams ctgraph_params_;
     float ALIGN_ANGLE_COS;
     NavNodePtr odom_node_ptr_ = NULL;
     bool is_robot_inside_poly_ = false;
+
+    // global contour set
+    static std::unordered_set<NavEdge, boost::hash<NavEdge>> global_contour_set_;
+    static std::unordered_set<NavEdge, boost::hash<NavEdge>> boundary_contour_set_;
+
     
     /* static private functions */
     inline void AddCTNodeToGraph(const CTNodePtr& ctnode_ptr) {
@@ -142,16 +154,47 @@ private:
         return project_dir;
     }
 
+    template <typename NodeType>
+    static inline cv::Point2f ProjectNode(const NodeType& node, const float& dist) {
+        const cv::Point2f node_cv = cv::Point2f(node->position.x, node->position.y);
+        const cv::Point2f dir = NodeProjectDir(node);
+        return node_cv + dist * dir;
+    }
+
+    /**
+     * @brief extract necessary ctnodes that are essential for contour construction
+     */
+    void EnclosePolygonsCheck();
+
+    CTNodePtr FirstMatchedCTNode(const CTNodePtr& ctnode_ptr);
+
     void UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& global_free_p);
 
-    static inline ConnectPair ReprojectEdge(const NavNodePtr& node1, const NavNodePtr& node2, const float& dist);
+    static bool IsCTNodesConnectWithinOrder(const CTNodePtr& ctnode1, const CTNodePtr& ctnode2,
+                                            CTNodePtr& block_vertex);
+
+    static ConnectPair ReprojectEdge(const NavNodePtr& node1, const NavNodePtr& node2, const float& dist);
+
+    static ConnectPair ReprojectEdge(const CTNodePtr& node1, const NavNodePtr& node2, const float& dist);
 
     static bool IsEdgeCollidePoly(const PointStack& poly, const ConnectPair& edge);
 
     static bool IsEdgeCollideSegment(const PointPair& line, const ConnectPair& edge);
 
+    static bool IsMatchLineConnectFreePolygon(const CTNodePtr& matched_ctnode, 
+                                              const NavNodePtr& matched_navnode);
+
+    static bool IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, bool& is_new);
+
     inline static bool IsNeedGlobalCheck(const Point3D& p1, const Point3D& p2) {
         if (!FARUtil::IsPointInLocalRange(p1) || !FARUtil::IsPointInLocalRange(p2)) {
+            return true;
+        }
+        return false;
+    }
+
+    inline static bool IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (FARUtil::IsNodeInLocalRange(node_ptr1) || FARUtil::IsNodeInLocalRange(node_ptr2)) {
             return true;
         }
         return false;
@@ -165,6 +208,7 @@ private:
     }
 
     inline void ClearContourGraph() {
+        ContourGraph::polys_ctnodes_.clear();
         ContourGraph::contour_graph_.clear();
         ContourGraph::contour_polygons_.clear(); 
     }
@@ -175,7 +219,7 @@ private:
 
     void CreatePolygon(const PointStack& poly_points, PolygonPtr& poly_ptr);
 
-    NavNodePtr NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, const NodePtrStack& nav_graph);
+    NavNodePtr NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, const NodePtrStack& near_nodes);
 
     void AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr);
     

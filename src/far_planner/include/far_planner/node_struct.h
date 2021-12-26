@@ -31,7 +31,6 @@ struct Polygon
   Polygon() = default;
   std::size_t N;
   std::vector<Point3D> vertices;
-  bool is_visiable;
   bool is_robot_inside;
   bool is_pillar;
 };
@@ -44,6 +43,8 @@ struct CTNode
     CTNode() = default;
     Point3D position;
     bool is_global_match;
+    bool is_ground_associated;
+    bool is_contour_necessary;
     std::size_t nav_node_id;
     NodeFreeDirect free_direct;
 
@@ -63,8 +64,6 @@ struct NavNode
     NavNode() = default;
     std::size_t id;
     Point3D position;
-    // z axis adjust
-    float near_odom_dist;
     PointPair surf_dirs;
     std::deque<Point3D> pos_filter_vec;
     std::deque<PointPair> surf_dirs_vec;
@@ -84,12 +83,12 @@ struct NavNode
     std::unordered_set<std::size_t> invalid_boundary;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
     std::vector<std::shared_ptr<NavNode>> contour_connects;
-    std::unordered_map<int, std::deque<int>> contour_votes;
-    std::unordered_map<int, std::deque<int>> edge_votes;
+    std::unordered_map<std::size_t, std::deque<int>> contour_votes;
+    std::unordered_map<std::size_t, std::deque<int>> edge_votes;
     std::vector<std::shared_ptr<NavNode>> potential_contours;
     std::vector<std::shared_ptr<NavNode>> potential_edges;
     std::vector<std::shared_ptr<NavNode>> trajectory_connects;
-    std::unordered_map<int, int> trajectory_votes; 
+    std::unordered_map<std::size_t, std::size_t> trajectory_votes; 
     NodeType node_type; 
     NodeFreeDirect free_direct;
     // planner members
@@ -103,6 +102,7 @@ struct NavNode
 };
 
 typedef std::shared_ptr<NavNode> NavNodePtr;
+typedef std::pair<NavNodePtr, NavNodePtr> NavEdge;
 
 struct nodeptr_equal
 {
@@ -116,7 +116,7 @@ struct nodeptr_hash
 {
   std::size_t operator() (const NavNodePtr& n_ptr) const
   {
-    return std::hash<int>()(n_ptr->id);
+    return std::hash<std::size_t>()(n_ptr->id);
   }
 };
 

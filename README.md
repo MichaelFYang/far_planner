@@ -80,6 +80,3 @@ FAR planner settings are kept in default.yaml in the 'src/far_planner/config' fo
 
 [Fan Yang](https://github.com/MichaelFYang) (michael.yfan24@gmail.com)
 
-## Credit
-
-[Eigen](https://gitlab.com/libeigen/eigen): a lightweight C++ template library for linear algebra.

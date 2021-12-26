@@ -133,7 +133,7 @@ inline void GoalReset() {
     is_origin_free_ = false;
     is_goal_in_freespace_ = false;
     if (goal_node_ptr_ != NULL) {
-        if (!is_use_internav_goal_) DynamicGraph::ClearNavNodeInGraph(goal_node_ptr_);
+        if (!is_use_internav_goal_) DynamicGraph::ClearGoalNodeInGraph(goal_node_ptr_);
         else goal_node_ptr_->is_goal = false;
     }
     goal_node_ptr_ = NULL;

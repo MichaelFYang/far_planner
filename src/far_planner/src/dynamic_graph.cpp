@@ -16,10 +16,8 @@ void DynamicGraph::Init(const ros::NodeHandle& nh, const DynamicGraphParams& par
     wide_near_nodes_.clear();
     CONNECT_ANGLE_COS = cos(dg_params_.kConnectAngleThred);
     NOISE_ANGLE_COS = cos(FARUtil::kAngleNoise);
-    ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign);
     TRAJ_DIST       = dg_params_.sensor_range / dg_params_.traj_interval_ratio;
-    MARGIN_DIST     = dg_params_.sensor_range - dg_params_.margin_dist;
-    id_tracker_     = 0;
+    id_tracker_     = 1;
     last_connect_pos_ = Point3D(0,0,0);
     /* Initialize Terrian Planner */
     tp_params_.world_frame  = FARUtil::worldFrameId;
@@ -123,16 +121,14 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
             }     
         }
     }
+    this->ClearMergedNodesInGraph();
     // check-add connections to odom node with wider near nodes
     NodePtrStack codom_check_list = wide_near_nodes_;
     codom_check_list.insert(codom_check_list.end(), new_nodes.begin(), new_nodes.end());
     for (const auto& conode_ptr : codom_check_list) {
-        if (conode_ptr->is_odom || conode_ptr->is_merged) continue;
+        if (conode_ptr->is_odom) continue;
         if (this->IsValidConnect(odom_node_ptr_, conode_ptr, false)) {
             this->AddEdge(odom_node_ptr_, conode_ptr);
-            if (conode_ptr->is_contour_match) {
-                conode_ptr->ctnode->poly_ptr->is_visiable = true;
-            }
         } else {
             this->EraseEdge(conode_ptr, odom_node_ptr_);
         }
@@ -146,36 +142,43 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
             if (new_node_ptr->is_navpoint) this->UpdateCurInterNavNode(new_node_ptr);
             if (new_node_ptr->ctnode != NULL) new_node_ptr->ctnode->is_global_match = true;
         }
-        // Adjust Z axis coordinate if for Ground only navigation
-        for (const auto& node_ptr : near_nav_nodes_) {
-            if (!FARUtil::IsFreeNavNode(node_ptr) && this->IsVisibleNode(node_ptr)) {
-                this->AdjustNavNodeZAxis(node_ptr);
-            }
-        }
+        // connect outrange contour nodes
+        ContourGraph::MatchOutrangeContourNodes(near_nav_nodes_, out_contour_nodes_);
         // reconnect between near nodes
         NodePtrStack outside_break_nodes;
         for (std::size_t i=0; i<near_nav_nodes_.size(); i++) {
-            if (near_nav_nodes_[i]->is_merged || near_nav_nodes_[i]->is_odom) continue;
+            const NavNodePtr nav_ptr1 = near_nav_nodes_[i];
+            if (nav_ptr1->is_odom) continue;
             // re-evaluate nodes which are not in near
-            const NodePtrStack copy_connect_nodes = near_nav_nodes_[i]->connect_nodes;
+            const NodePtrStack copy_connect_nodes = nav_ptr1->connect_nodes;
             for (const auto& cnode : copy_connect_nodes) {
-                if (cnode->is_odom || cnode->is_near_nodes || FARUtil::IsOutsideGoal(cnode) || FARUtil::IsTypeInStack(cnode, near_nav_nodes_[i]->contour_connects)) continue;
+                if (cnode->is_odom || cnode->is_near_nodes || FARUtil::IsOutsideGoal(cnode) || FARUtil::IsTypeInStack(cnode, nav_ptr1->contour_connects)) continue;
                 //TODO: Delete outrange contour conncetions that cross layer
-                if (this->IsValidConnect(near_nav_nodes_[i], cnode, false)) {
-                    this->AddEdge(near_nav_nodes_[i], cnode);
+                if (this->IsValidConnect(nav_ptr1, cnode, false)) {
+                    this->AddEdge(nav_ptr1, cnode);
                 } else {
-                    this->EraseEdge(near_nav_nodes_[i], cnode);
+                    this->EraseEdge(nav_ptr1, cnode);
                     outside_break_nodes.push_back(cnode);
                 } 
             }
             for (std::size_t j=0; j<near_nav_nodes_.size(); j++) {
-                if (i == j || j > i || near_nav_nodes_[j]->is_merged || near_nav_nodes_[j]->is_odom) continue;
-                if (this->IsValidConnect(near_nav_nodes_[i], near_nav_nodes_[j], true)) {
-                    this->AddEdge(near_nav_nodes_[i], near_nav_nodes_[j]);
+                const NavNodePtr nav_ptr2 = near_nav_nodes_[j];
+                if (i == j || j > i || nav_ptr2->is_odom) continue;
+                if (this->IsValidConnect(nav_ptr1, nav_ptr2, true)) {
+                    this->AddEdge(nav_ptr1, nav_ptr2);
                 } else {
-                    this->EraseEdge(near_nav_nodes_[i], near_nav_nodes_[j]);
+                    this->EraseEdge(nav_ptr1, nav_ptr2);
                 }
             }
+            for (const auto& oc_node_ptr : out_contour_nodes_) {
+                if (!oc_node_ptr->is_contour_match || !nav_ptr1->is_contour_match) continue;
+                if (ContourGraph::IsNavNodesConnectFromContour(nav_ptr1, oc_node_ptr)) {
+                    this->RecordContourEdge(nav_ptr1, oc_node_ptr);
+                } else {
+                    this->DeleteContourEdge(nav_ptr1, oc_node_ptr);
+                }
+            }
+            this->TopTwoContourConnector(nav_ptr1);
         }
         // update out range break nodes connects
         for (const auto& node_ptr : near_nav_nodes_) {
@@ -187,7 +190,6 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
                 }
             }
         }
-        this->ClearMergedNodesInGraph();
         // Analysisig frontier nodes
         for (const auto& cnode_ptr : near_nav_nodes_) {
             if (this->IsNodeFullyCovered(cnode_ptr)) {
@@ -209,24 +211,16 @@ bool DynamicGraph::IsValidConnect(const NavNodePtr& node_ptr1,
         if (dist < FARUtil::kNavClearDist) return true; 
     } 
     /* check contour connection from node1 to node2 */
-    bool is_connect = false;
     const float htoler = (node_ptr1->is_odom || node_ptr2->is_odom) ? FARUtil::kTolerZ * 2.0f : FARUtil::kTolerZ;
-    if (!is_connect && is_check_contour) {
-        if (this->IsBoundaryConnect(node_ptr1, node_ptr2) ||
-            (ContourGraph::IsNavNodesConnectFromContour(node_ptr1, node_ptr2) && this->IsInContourDirConstraint(node_ptr1, node_ptr2))) 
+    if (is_check_contour) {
+        if (this->IsBoundaryConnect(node_ptr1, node_ptr2) || ContourGraph::IsNavNodesConnectFromContour(node_ptr1, node_ptr2))
         {
             this->RecordContourEdge(node_ptr1, node_ptr2);
         } else if ((node_ptr1->is_contour_match && node_ptr2->is_contour_match) || !this->IsSameLevelConnct(node_ptr1, node_ptr2, htoler)){
             this->DeleteContourEdge(node_ptr1, node_ptr2);
         }
     }
-    this->TopTwoContourConnector(node_ptr1, node_ptr2);
-    if (FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects)) {
-        if (this->IsConvexConnect(node_ptr1, node_ptr2)) {
-            this->RecordPolygonEdge(node_ptr1, node_ptr2, dg_params_.votes_size);
-        }
-        is_connect = true;
-    }
+    bool is_connect = FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects);
     /* check polygon connections */
     if (!is_connect) {
         bool is_valid_edge = false;
@@ -366,7 +360,7 @@ bool DynamicGraph::IsAShorterConnectInDir(const NavNodePtr& node_ptr_from, const
         if (is_cover_connect && cnode->is_frontier) continue;
         if (FARUtil::IsTypeInStack(cnode, node_ptr_from->contour_connects)) continue;
         ref_diff = cnode->position - node_ptr_from->position;
-        if (cnode->is_odom || cnode->is_merged || ref_diff.norm() < FARUtil::kEpsilon) continue;
+        if (cnode->is_odom || ref_diff.norm() < FARUtil::kEpsilon) continue;
         ref_dir = ref_diff.normalize();
         if ((connect_dir * ref_dir) > CONNECT_ANGLE_COS && dist > ref_diff.norm()) {
             return true;
@@ -446,28 +440,25 @@ void DynamicGraph::ReEvaluateConvexity(const NavNodePtr& node_ptr) {
     }
 }
 
-void DynamicGraph::TopTwoContourConnector(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-    const auto it1 = node_ptr1->contour_votes.find(node_ptr2->id);
-    const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
-    if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) return;
-    const int it1c = std::accumulate(it1->second.begin(), it1->second.end(), 0);
-    const int it2c = std::accumulate(it2->second.begin(), it2->second.end(), 0);
-
-    const bool is_valid_2to1 = FARUtil::VoteRankInVotes(it1c, node_ptr1->contour_votes) > 1 ? false : true;
-    const bool is_valid_1to2 = FARUtil::VoteRankInVotes(it2c, node_ptr2->contour_votes) > 1 ? false : true;
-
-    if (FARUtil::IsVoteTrue(it1->second) && is_valid_2to1 && is_valid_1to2) {
-        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects) &&
-            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects))
-        {
-            // connect contours
-            node_ptr1->contour_connects.push_back(node_ptr2);
-            node_ptr2->contour_connects.push_back(node_ptr1);
+void DynamicGraph::TopTwoContourConnector(const NavNodePtr& node_ptr) {
+    std::vector<int> votesc;
+    for (const auto& vote : node_ptr->contour_votes) {
+        if (FARUtil::IsVoteTrue(vote.second, false)) {
+            votesc.push_back(std::accumulate(vote.second.begin(), vote.second.end(), 0));
         }
-    } else {
-        // delete contour connection
-        FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->contour_connects);
-        FARUtil::EraseNodeFromStack(node_ptr1, node_ptr2->contour_connects);
+    }
+    std::sort(votesc.begin(), votesc.end(), std::greater<int>());
+    for (const auto& cnode_ptr : node_ptr->potential_contours) {
+        const auto it = node_ptr->contour_votes.find(cnode_ptr->id);
+        // DEBUG
+        if (it == node_ptr->contour_votes.end()) ROS_ERROR("DG: contour potential node matching error");
+        const int itc = std::accumulate(it->second.begin(), it->second.end(), 0);
+        if (FARUtil::VoteRankInVotes(itc, votesc) < 2 && FARUtil::IsVoteTrue(it->second, false)) {
+            DynamicGraph::AddContourConnect(node_ptr, cnode_ptr);
+            this->AddEdge(node_ptr, cnode_ptr);
+        } else if (DynamicGraph::DeleteContourConnect(node_ptr, cnode_ptr)) {
+            this->EraseEdge(node_ptr, cnode_ptr);
+        }
     }
 }
 
@@ -584,12 +575,7 @@ void DynamicGraph::FillContourConnect(const NavNodePtr& node_ptr1,
             node_ptr2->potential_contours.push_back(node_ptr1);
         }
         // Add contours
-        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects) &&
-            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects))
-        {
-            node_ptr1->contour_connects.push_back(node_ptr2);
-            node_ptr2->contour_connects.push_back(node_ptr1);
-        }   
+        DynamicGraph::AddContourConnect(node_ptr1, node_ptr2);
     }
 }
 
@@ -736,8 +722,7 @@ bool DynamicGraph::ReEvaluateCorner(const NavNodePtr node_ptr) {
     }
 
     if (!node_ptr->is_contour_match) {
-        const float ndist = (node_ptr->position - odom_node_ptr_->position).norm();
-        if (ndist < MARGIN_DIST) return false;
+        if (FARUtil::IsPointInMarginRange(node_ptr->position)) return false;
         else return true;
     }
     else if (node_ptr->is_finalized) return true;

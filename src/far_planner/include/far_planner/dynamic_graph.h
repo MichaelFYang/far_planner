@@ -30,15 +30,18 @@ private:
     NavNodePtr cur_internav_ptr_  = NULL;
     NavNodePtr last_internav_ptr_ = NULL;
     NodePtrStack new_nodes_;
-    DynamicGraphParams dg_params_;
-    NodePtrStack near_nav_nodes_, wide_near_nodes_, internav_near_nodes_, surround_internav_nodes_;
-    float CONNECT_ANGLE_COS, NOISE_ANGLE_COS, ALIGN_ANGLE_COS, TRAJ_DIST, MARGIN_DIST;
+    NodePtrStack near_nav_nodes_, wide_near_nodes_;
+    NodePtrStack internav_near_nodes_, surround_internav_nodes_;
+    NodePtrStack out_contour_nodes_;
+    float CONNECT_ANGLE_COS, NOISE_ANGLE_COS, TRAJ_DIST;
     bool is_bridge_internav_ = false;
     Point3D last_connect_pos_;
 
+    static DynamicGraphParams dg_params_;
     static std::size_t id_tracker_; // Global unique id start from "0" [per robot]
     static NodePtrStack globalGraphNodes_;
     static std::unordered_map<std::size_t, NavNodePtr> idx_node_map_;
+    static std::unordered_map<NavNodePtr, int> out_contour_nodes_map_;
 
     TerrainPlanner terrain_planner_;
     TerrainPlannerParams tp_params_;
@@ -86,7 +89,7 @@ private:
 
     void DeleteContourEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
-    void TopTwoContourConnector(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+    void TopTwoContourConnector(const NavNodePtr& node_ptr);
 
     void UpdateGlobalNearNodes();
 
@@ -218,34 +221,15 @@ private:
         return false;
     }
 
+    static inline void AddNodeToOutrangeContourMap(const NavNodePtr& node_ptr) {
+        const auto it = out_contour_nodes_map_.find(node_ptr);
+        if (it != out_contour_nodes_map_.end()) it->second = dg_params_.finalize_thred;
+        else out_contour_nodes_map_.insert({node_ptr, dg_params_.finalize_thred});
+    }
+
     static inline bool IsNodeDirectConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         if (FARUtil::IsFreeNavNode(node_ptr1) || FARUtil::IsFreeNavNode(node_ptr2)) return true;
         if (node_ptr1->is_contour_match || node_ptr2->is_contour_match) return true;
-        return false;
-    }
-
-    inline void RedirectContourConnect(const NavNodePtr& node_ptr) {
-        if (node_ptr->contour_connects.empty()) return;
-        const int N = node_ptr->contour_votes.size();
-        for (std::size_t i=0; i<N; i++) {
-            if (node_ptr->contour_connects[i]->is_merged) continue; 
-            for (std::size_t j=0; j<N; j++) {
-                if (i==j || j>i || node_ptr->contour_connects[j]->is_merged) continue;
-                const Point3D dir1 = (node_ptr->contour_connects[i]->position - node_ptr->position).normalize();
-                const Point3D dir2 = (node_ptr->contour_connects[j]->position - node_ptr->position).normalize(); 
-                if (dir1 * dir2 < 0.0) {
-                    this->RecordContourEdge(node_ptr->contour_connects[i], node_ptr->contour_connects[j]);
-                }
-            }
-        }
-    }
-
-    inline bool IsVisibleNode(const NavNodePtr& node_ptr) {
-        if ((node_ptr->is_contour_match && node_ptr->ctnode->poly_ptr->is_visiable) || 
-            FARUtil::IsTypeInStack(node_ptr, odom_node_ptr_->connect_nodes))
-        {
-            return true;
-        }
         return false;
     }
 
@@ -256,17 +240,6 @@ private:
         node_ptr->ctnode = ctnode_ptr;
         node_ptr->free_direct = ctnode_ptr->free_direct;
         UpdateNodeSurfDirs(node_ptr, ctnode_ptr->surf_dirs);
-    }
-
-    inline void AdjustNavNodeZAxis(const NavNodePtr& node_ptr) {
-        const float dist = (node_ptr->position - odom_node_ptr_->position).norm();
-        if (dist < node_ptr->near_odom_dist) {
-            node_ptr->near_odom_dist = dist;
-            node_ptr->position.z = odom_node_ptr_->position.z;
-            for (std::size_t i=0; i<node_ptr->pos_filter_vec.size(); i++) {
-                node_ptr->pos_filter_vec[i].z = odom_node_ptr_->position.z;
-            }
-        }
     }
 
     inline bool IsBoundaryConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
@@ -288,10 +261,29 @@ private:
     }
 
     inline bool IsAValidNewNode(const CTNodePtr ctnode_ptr) {
-        if (FARUtil::IsPointNearNewPoints(ctnode_ptr->position, true)) {
+        if (ctnode_ptr->is_contour_necessary || FARUtil::IsPointNearNewPoints(ctnode_ptr->position, true)) {
             return true;
         }
         return false;
+    }
+
+    static inline void AddContourConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects) &&
+            !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects))
+        {
+            node_ptr1->contour_connects.push_back(node_ptr2);
+            node_ptr2->contour_connects.push_back(node_ptr1);
+            ContourGraph::AddContourToSets(node_ptr1, node_ptr2);
+        }
+    }
+
+    static inline bool DeleteContourConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects)) return false;
+        
+        FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->contour_connects);
+        FARUtil::EraseNodeFromStack(node_ptr1, node_ptr2->contour_connects);
+        ContourGraph::DeleteContourFromSets(node_ptr1, node_ptr2);
+        return true;
     }
 
     static inline void ClearTrajectoryConnectInGraph(const NavNodePtr& node_ptr) {
@@ -303,7 +295,7 @@ private:
         node_ptr->trajectory_votes.clear();
     }
 
-    static inline void ResetConnectedContourPairs(const NavNodePtr& node_ptr) {
+    static inline void ResetBlockedContourPairs(const NavNodePtr& node_ptr) {
         if (node_ptr->potential_contours.empty()) return;
         const std::size_t N = node_ptr->potential_contours.size();
         for (std::size_t i=0; i<N; i++) {
@@ -314,10 +306,7 @@ private:
                 const auto it1 = cnode1->contour_votes.find(cnode2->id);
                 if (it1 != cnode1->contour_votes.end()) { // reset contour votes in between 
                     const auto it2 = cnode2->contour_votes.find(cnode1->id);
-                    if (FARUtil::IsVoteTrue(it1->second)) {
-                        it1->second.clear(), it1->second.push_back(1);
-                        it2->second.clear(), it2->second.push_back(1);
-                    } else {
+                    if (!FARUtil::IsVoteTrue(it1->second)) {
                         it1->second.clear(), it1->second.push_back(0);
                         it2->second.clear(), it2->second.push_back(0);
                     }
@@ -326,14 +315,18 @@ private:
         }
     }
 
-    static inline void ClearContourConnectionInGraph(const NavNodePtr& node_ptr) {
+    inline void ClearContourConnectionInGraph(const NavNodePtr& node_ptr) {
         // reset connected contour pairs if exists
-        ResetConnectedContourPairs(node_ptr);
-        // this->RedirectContourConnect(node_ptr);
-        for (const auto& ct_cnode_ptr : node_ptr->contour_connects) {
+        ResetBlockedContourPairs(node_ptr);
+        for (const auto& ct_cnode_ptr : node_ptr->contour_connects) { 
             FARUtil::EraseNodeFromStack(node_ptr, ct_cnode_ptr->contour_connects);
         }
         for (const auto& pt_cnode_ptr : node_ptr->potential_contours) {
+            if (!pt_cnode_ptr->is_near_nodes) {
+                AddNodeToOutrangeContourMap(pt_cnode_ptr);
+                // DEBUG
+                if (pt_cnode_ptr->is_merged) ROS_ERROR("DG: Non-near nodes should not be merged.");
+            }
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_contours);
             pt_cnode_ptr->contour_votes.erase(node_ptr->id);
         }
@@ -343,10 +336,11 @@ private:
     }
 
     static inline bool IsMergedNode(const NavNodePtr& node_ptr) {
-        if (FARUtil::IsStaticNode(node_ptr)) return false;
-        if (node_ptr->is_merged) {
-            return true;
+        if (FARUtil::IsStaticNode(node_ptr)) {
+            node_ptr->is_merged = false;
+            return false;
         }
+        if (node_ptr->is_merged) return true;
         return false;
     }
 
@@ -399,6 +393,16 @@ private:
                 ClearContourConnectionInGraph(node_ptr);
                 ClearTrajectoryConnectInGraph(node_ptr);
                 RemoveNodeIdFromMap(node_ptr);
+            }
+        }
+        // clean outrange contour nodes 
+        out_contour_nodes_.clear();
+        for (auto it = out_contour_nodes_map_.begin(); it != out_contour_nodes_map_.end();) {
+            it->second --;
+            if (it->second <= 0) it = out_contour_nodes_map_.erase(it);
+            else {
+                out_contour_nodes_.push_back(it->first);
+                ++ it;
             }
         }
         const auto new_end = std::remove_if(globalGraphNodes_.begin(), globalGraphNodes_.end(), IsMergedNode);
@@ -489,7 +493,6 @@ public:
         node_ptr->trajectory_votes.clear();
         node_ptr->free_direct = (is_odom || is_navpoint) ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
         InitNodePosition(node_ptr, point);
-        node_ptr->near_odom_dist = FARUtil::kINF;
         // Assign Global Unique ID
         AssignGlobalNodeID(node_ptr);
     }
@@ -509,9 +512,10 @@ public:
         node_ptr->potential_edges.clear();
     }
 
-    static inline void ClearNavNodeInGraph(const NavNodePtr& node_ptr) {
+    static inline void ClearGoalNodeInGraph(const NavNodePtr& node_ptr) {
         ClearNodeConnectInGraph(node_ptr);
-        ClearContourConnectionInGraph(node_ptr);
+        //DEBUG
+        if (!node_ptr->contour_connects.empty()) ROS_ERROR("DG: Goal node should not have contour connections.");
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 
@@ -574,16 +578,19 @@ public:
         wide_near_nodes_.clear(); 
         internav_near_nodes_.clear();
         surround_internav_nodes_.clear();
+        out_contour_nodes_.clear();
+        out_contour_nodes_map_.clear();
         new_nodes_.clear();
         globalGraphNodes_.clear();
     }
 
     /* Get Internal Values */
-    const NavNodePtr GetOdomNode() const { return odom_node_ptr_;};
-    const NodePtrStack& GetNavGraph() const { return globalGraphNodes_;};
-    const NodePtrStack& GetNearNavGraph() const { return near_nav_nodes_;};
-    const NodePtrStack& GetNewNodes() const { return new_nodes_;};
-    const NavNodePtr& GetLastInterNavNode() const { return last_internav_ptr_;};
+    const NavNodePtr    GetOdomNode()         const { return odom_node_ptr_;};
+    const NodePtrStack& GetNavGraph()         const { return globalGraphNodes_;};
+    const NodePtrStack& GetNearNavGraph()     const { return near_nav_nodes_;};
+    const NodePtrStack& GetOutContourNodes()  const { return out_contour_nodes_;};
+    const NodePtrStack& GetNewNodes()         const { return new_nodes_;};
+    const NavNodePtr&   GetLastInterNavNode() const { return last_internav_ptr_;};
 
 
 };

@@ -181,16 +181,9 @@ private:
     {
         cv::Point2f diff_p1 = first_p - mid_p;
         cv::Point2f diff_p2 = add_p - mid_p;
-        const float vec1_len = std::hypotf(diff_p1.x, diff_p1.y);
-        const float vec2_len = std::hypotf(diff_p2.x, diff_p2.y);
-        diff_p1 /= vec1_len;
-        diff_p2 /= vec2_len;
-        const float dot_value = diff_p1.dot(diff_p2);
-        if (dot_value >= 1.0 || dot_value <= -1.0) return true;
-        if (dot_value < ALIGN_ANGLE_COS) return true;
-        const cv::Point2f diff_fa = add_p - first_p;
-        const float height = sin(acos(dot_value)) * vec1_len * vec2_len / std::hypotf(diff_fa.x, diff_fa.y);
-        if (height < DIST_LIMIT) return true;
+        diff_p1 /= std::hypotf(diff_p1.x, diff_p1.y);
+        diff_p2 /= std::hypotf(diff_p2.x, diff_p2.y);
+        if (abs(diff_p1.dot(diff_p2)) > ALIGN_ANGLE_COS) return true;
         return false;
     }
 

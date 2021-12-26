@@ -600,9 +600,9 @@ float FARUtil::PixelDistance(const cv::Point2f& pre_p, const cv::Point2f& cur_p)
 }
 
 float FARUtil::VerticalDistToLine(const Point3D& start_p, 
-                                 const Point3D& end_p, 
-                                 const Point3D& cur_p,
-                                 const bool& is_segment_restrict) 
+                                  const Point3D& end_p, 
+                                  const Point3D& cur_p,
+                                  const bool& is_segment_restrict) 
 {
   const Point3D line_dir = end_p - start_p;
   const Point3D diff_p  = cur_p - start_p;
@@ -810,15 +810,9 @@ bool FARUtil::IsVoteTrue(const std::deque<int>& votes, const bool& is_balance) {
   return false;
 }
 
-int FARUtil::VoteRankInVotes(const int& c, const std::unordered_map<int, std::deque<int>>& votes) {
+int FARUtil::VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes) {
   int idx = 0;
-  std::vector<int> votesc;
-  votesc.clear();
-  for (const auto& vote : votes) {
-      votesc.push_back(std::accumulate(vote.second.begin(), vote.second.end(), 0));
-  }
-  std::sort(votesc.begin(), votesc.end(), std::greater<int>());
-  while (idx < votesc.size() && c < votesc[idx]) {
+  while (idx < ordered_votes.size() && c < ordered_votes[idx]) {
       idx ++;
   }
   return idx;
@@ -838,6 +832,13 @@ bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {
 
 bool FARUtil::IsPointInLocalRange(const Point3D& p) {
   if (FARUtil::IsPointInToleratedHeight(p) && (p - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
+      return true;
+  }
+  return false;
+}
+
+bool FARUtil::IsPointInMarginRange(const Point3D& p) {
+  if (FARUtil::IsPointInToleratedHeight(p, FARUtil::kMarginHeight) && (p - FARUtil::odom_pos).norm() < FARUtil::kMarginDist) {
       return true;
   }
   return false;
@@ -929,4 +930,16 @@ void FARUtil::SortEdgesClockWise(const Point3D& center, std::vector<PointPair>& 
   for (auto& edge : edges) {
     FARUtil::ClockwiseTwoPoints(center, edge);
   }
+}
+
+float FARUtil::LineMatchPercentage(const PointPair& line1, const PointPair& line2) {
+  const float ds = (line1.first - line2.first).norm_flat();
+  const float theta = acos((line1.second - line1.first).norm_flat_dot(line2.second - line2.first));
+  const float contour_ds = (line2.second - line2.first).norm_flat();
+  if (theta > FARUtil::kAcceptAlign || ds > FARUtil::kNearDist) return 0.0f;
+  float match_ds = contour_ds;
+  if (theta > FARUtil::kEpsilon) {
+    match_ds = std::min(match_ds, (FARUtil::kNearDist - ds) / tan(theta));
+  }
+  return match_ds / contour_ds;
 }

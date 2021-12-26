@@ -9,6 +9,7 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
+#include <boost/functional/hash.hpp>
 /*Internal Library*/
 #include "point_struct.h"
 #include "node_struct.h"
@@ -83,9 +84,12 @@ public:
     static float kLeafSize;
     static float kNavClearDist;
     static float kNearDist;
+    static float kMatchDist;
     static float kProjectDist;
     static float kNewPIThred;
     static float kSensorRange;
+    static float kMarginDist;
+    static float kMarginHeight;
     static float kTerrainRange;
     static float kFreeZ;
     static float kObsDecayTime;
@@ -253,7 +257,7 @@ public:
 
     static bool IsVoteTrue(const std::deque<int>& votes, const bool& is_balance=true);
 
-    static int VoteRankInVotes(const int& c, const std::unordered_map<int, std::deque<int>>& votes);
+    static int VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes);
 
     static bool IsDirsConverage(const PointPair& cur_directs,
                                 const PointPair& update_directs);
@@ -323,6 +327,8 @@ public:
                              const Point3D& cur_p,
                              const float& radius);
 
+    static float LineMatchPercentage(const PointPair& line1, const PointPair& line2);
+
     static Point3D ContourSurfDirs(const Point3D& end_p, 
                                    const Point3D& start_p, 
                                    const Point3D& center_p,
@@ -331,6 +337,8 @@ public:
     static bool IsOutReachNode(const NavNodePtr& node_ptr);
 
     static bool IsPointInLocalRange(const Point3D& p);
+
+    static bool IsPointInMarginRange(const Point3D& p);
 
     static bool IsNodeInLocalRange(const NavNodePtr& node_ptr) {
         return IsPointInLocalRange(node_ptr->position);

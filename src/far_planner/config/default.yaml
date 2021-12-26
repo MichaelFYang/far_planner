@@ -20,9 +20,11 @@ GraphMsger/robot_id                     : 1  # graph from robot id "0" is extrac
 
 # Map Handler Params
 MapHandler/ceil_length                  : 10.0    # Unit: meter
-MapHandler/ceil_height                  : 1.0     # Unit: meter
+MapHandler/ceil_height                  : 1.25    # Unit: meter
 MapHandler/map_grid_max_length          : 2000.0  # Unit: meter
-MapHandler/map_grad_max_height          : 100.0   # Unit: meter 
+MapHandler/map_grad_max_height          : 100.0   # Unit: meter
+MapHandler/terrain_search_radius        : 1.5     # Unit: meter
+MapHandler/terrain_voxel_dim            : 0.5     # Unit: meter
 
 # Scan Handler Params
 ScanHandler/inflate_scan_size           : 2
@@ -65,8 +67,8 @@ GPlanner/converge_distance              : 0.5  # Unit: meter
 GPlanner/goal_adjust_radius             : 2.0  # Unit: meter
 GPlanner/free_counter_thred             : 7
 GPlanner/reach_goal_vote_size           : 5
-GPlanner/move_momentum_dist             : 0.75 # Unit: meter
-GPlanner/path_momentum_thred            : 9
+GPlanner/move_momentum_dist             : 0.5  # Unit: meter
+GPlanner/path_momentum_thred            : 5
 GPlanner/clear_inflate_size             : 3
 
 # Contour Graph Params

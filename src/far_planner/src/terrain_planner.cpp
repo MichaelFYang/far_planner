@@ -12,7 +12,7 @@
 void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams& params) {
     nh_ = nh;
     tp_params_ = params;
-    row_num_ = std::ceil((tp_params_.local_range+tp_params_.radius)*2.0/tp_params_.voxel_size) + 1;
+    row_num_ = std::ceil((tp_params_.local_range+tp_params_.radius)*2.0f/tp_params_.voxel_size) + 1;
     col_num_ = row_num_;
     TerrainNodePtr init_terrain_node_ptr = NULL;
     Eigen::Vector3i grid_size(row_num_, col_num_, 1);
@@ -30,9 +30,9 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
     if (node_ptr == NULL) return;
     center_node_prt_ = node_ptr, center_pos_ = node_ptr->position;
     Eigen::Vector3d grid_origin;
-    grid_origin.x() = center_pos_.x - (tp_params_.voxel_size * row_num_) / 2.0;
-    grid_origin.y() = center_pos_.y - (tp_params_.voxel_size * col_num_) / 2.0;
-    grid_origin.z() = center_pos_.z - (tp_params_.voxel_size * 1.0) / 2.0;
+    grid_origin.x() = center_pos_.x - (tp_params_.voxel_size * row_num_) / 2.0f;
+    grid_origin.y() = center_pos_.y - (tp_params_.voxel_size * col_num_) / 2.0f;
+    grid_origin.z() = center_pos_.z - (tp_params_.voxel_size * 1.0f) / 2.0f;
     terrain_grids_->SetOrigin(grid_origin);
     is_grids_init_ = true;
     this->ResetGridsPositions();

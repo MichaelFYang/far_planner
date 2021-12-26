@@ -75,17 +75,20 @@ void DPVisualizer::VizPath(const PointStack& global_path, const bool& is_free_na
 void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph) 
 {
     MarkerArray contour_marker_array;
-    Marker contour_vertex_marker, vertex_matched_marker, contour_marker, contour_surf_marker, contour_helper_marker;
-    contour_vertex_marker.type  = Marker::SPHERE_LIST;
-    vertex_matched_marker.type  = Marker::SPHERE_LIST;
+    Marker contour_vertex_marker, vertex_matched_marker, necessary_vertex_marker;
+    Marker contour_marker, contour_surf_marker, contour_helper_marker;
+    contour_vertex_marker.type    = Marker::SPHERE_LIST;
+    vertex_matched_marker.type    = Marker::SPHERE_LIST;
+    necessary_vertex_marker.type  = Marker::SPHERE_LIST;
     contour_marker.type         = Marker::LINE_LIST;
     contour_surf_marker.type    = Marker::LINE_LIST;
     contour_helper_marker.type  = Marker::CUBE_LIST;
-    this->SetMarker(VizColor::EMERALD, "polygon_vertex", 0.5f, 0.5f, contour_vertex_marker);
-    this->SetMarker(VizColor::RED,     "matched_vertex", 0.5f, 0.5f, vertex_matched_marker);
-    this->SetMarker(VizColor::MAGNA,   "contour",        0.1f, 0.25f, contour_marker);
-    this->SetMarker(VizColor::BLUE,    "vertex_angle",   0.15f, 0.75f, contour_surf_marker);
-    this->SetMarker(VizColor::BLUE,    "angle_direct",   0.25f, 0.75f, contour_helper_marker);
+    this->SetMarker(VizColor::EMERALD, "polygon_vertex",   0.5f, 0.5f,   contour_vertex_marker);
+    this->SetMarker(VizColor::RED,     "matched_vertex",   0.5f, 0.5f,   vertex_matched_marker);
+    this->SetMarker(VizColor::GREEN,   "necessary_vertex", 0.5f, 0.5f,   necessary_vertex_marker);
+    this->SetMarker(VizColor::MAGNA,   "contour",          0.1f, 0.25f,  contour_marker);
+    this->SetMarker(VizColor::BLUE,    "vertex_angle",     0.15f, 0.75f, contour_surf_marker);
+    this->SetMarker(VizColor::BLUE,    "angle_direct",     0.25f, 0.75f, contour_helper_marker);
 
     auto Draw_Contour = [&](const CTNodePtr& ctnode_ptr) {
         geometry_msgs::Point geo_vertex, geo_connect;
@@ -93,6 +96,9 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
         contour_vertex_marker.points.push_back(geo_vertex);
         if (ctnode_ptr->is_global_match) {
             vertex_matched_marker.points.push_back(geo_vertex);
+        }
+        if (ctnode_ptr->is_contour_necessary) {
+            necessary_vertex_marker.points.push_back(geo_vertex);
         }
         if (ctnode_ptr->front == NULL || ctnode_ptr->back == NULL) return;
         contour_marker.points.push_back(geo_vertex);
@@ -130,6 +136,7 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
     }
     contour_marker_array.markers.push_back(contour_vertex_marker);
     contour_marker_array.markers.push_back(vertex_matched_marker);
+    contour_marker_array.markers.push_back(necessary_vertex_marker);
     contour_marker_array.markers.push_back(contour_marker);
     contour_marker_array.markers.push_back(contour_surf_marker);
     contour_marker_array.markers.push_back(contour_helper_marker);
