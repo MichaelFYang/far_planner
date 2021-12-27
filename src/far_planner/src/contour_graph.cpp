@@ -567,10 +567,9 @@ bool ContourGraph::ReprojectPointOutsidePolygons(Point3D& point, const float& fr
 }
 
 void ContourGraph::AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-    NavEdge edge;
+    NavEdge edge(node_ptr1, node_ptr2);
     // force to form pair id1 < id2
-    if (node_ptr1->id < node_ptr2->id) edge = NavEdge(node_ptr1, node_ptr2);
-    else edge = NavEdge(node_ptr2, node_ptr1);
+    if (node_ptr1->id > node_ptr2->id) edge = NavEdge(node_ptr2, node_ptr1);
 
     ContourGraph::global_contour_set_.insert(edge);
     if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
@@ -579,13 +578,14 @@ void ContourGraph::AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePt
 }
 
 void ContourGraph::DeleteContourFromSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-    NavEdge edge;
+    NavEdge edge(node_ptr1, node_ptr2);
     // force to form pair id1 < id2
-    if (node_ptr1->id < node_ptr2->id) edge = NavEdge(node_ptr1, node_ptr2);
-    else edge = NavEdge(node_ptr2, node_ptr1);
+    if (node_ptr1->id > node_ptr2->id) edge = NavEdge(node_ptr2, node_ptr1);
 
     ContourGraph::global_contour_set_.erase(edge);
-    ContourGraph::boundary_contour_set_.erase(edge);
+    if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
+        ContourGraph::boundary_contour_set_.erase(edge);
+    }
 }
 
 void ContourGraph::ExtractGlobalContours() {

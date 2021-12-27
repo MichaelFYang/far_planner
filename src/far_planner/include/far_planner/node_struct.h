@@ -112,6 +112,14 @@ struct nodeptr_equal
   }
 };
 
+struct navedge_hash
+{
+  std::size_t operator() (const NavEdge& nav_edge) const
+  {
+    return boost::hash<std::pair<std::size_t, std::size_t>>()({nav_edge.first->id, nav_edge.second->id});
+  }
+};
+
 struct nodeptr_hash
 {
   std::size_t operator() (const NavNodePtr& n_ptr) const

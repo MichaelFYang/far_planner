@@ -694,8 +694,8 @@ std::vector<PointPair> ContourGraph::global_contour_;
 std::vector<PointPair> ContourGraph::inactive_contour_;
 std::vector<PointPair> ContourGraph::boundary_contour_;
 std::vector<PointPair> ContourGraph::local_boundary_;
-std::unordered_set<NavEdge, boost::hash<NavEdge>> ContourGraph::global_contour_set_;
-std::unordered_set<NavEdge, boost::hash<NavEdge>> ContourGraph::boundary_contour_set_;
+std::unordered_set<NavEdge, navedge_hash> ContourGraph::global_contour_set_;
+std::unordered_set<NavEdge, navedge_hash> ContourGraph::boundary_contour_set_;
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "far_planner_node");

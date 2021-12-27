@@ -109,8 +109,8 @@ private:
     bool is_robot_inside_poly_ = false;
 
     // global contour set
-    static std::unordered_set<NavEdge, boost::hash<NavEdge>> global_contour_set_;
-    static std::unordered_set<NavEdge, boost::hash<NavEdge>> boundary_contour_set_;
+    static std::unordered_set<NavEdge, navedge_hash> global_contour_set_;
+    static std::unordered_set<NavEdge, navedge_hash> boundary_contour_set_;
 
     
     /* static private functions */
