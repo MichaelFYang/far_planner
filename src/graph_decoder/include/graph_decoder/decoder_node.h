@@ -48,11 +48,15 @@ struct NavNode {
     Point3D position;
     NodeFreeDirect free_direct;
     PointPair surf_dirs;
+    bool is_covered;
     bool is_frontier;
     bool is_navpoint;
     bool is_boundary;
     std::vector<std::size_t> connect_idxs;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
+
+    std::vector<std::size_t> poly_idxs;
+    std::vector<std::shared_ptr<NavNode>> poly_connects;
 
     std::vector<std::size_t> contour_idxs;
     std::vector<std::shared_ptr<NavNode>> contour_connects;

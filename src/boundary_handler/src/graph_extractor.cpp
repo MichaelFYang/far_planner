@@ -271,11 +271,13 @@ void GraphExtractor::CreateNavNode(const Point3D& p, NavNodePtr& node_ptr) {
     // assign global id
     node_ptr->id = id_, id_ ++;
     node_ptr->free_direct = NodeFreeDirect::UNKNOW;
+    node_ptr->is_covered  = true;
     node_ptr->is_frontier = false;
     node_ptr->is_navpoint = false;
     node_ptr->is_boundary = true;
     // clear connection stacks
     node_ptr->connect_idxs.clear(), node_ptr->connect_nodes.clear();
+    node_ptr->poly_idxs.clear(), node_ptr->poly_connects.clear();
     node_ptr->contour_idxs.clear(), node_ptr->contour_connects.clear();
     node_ptr->traj_idxs.clear(), node_ptr->traj_connects.clear();
 
@@ -290,6 +292,7 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
         msg_node.position    = ToGeoMsgP(node_ptr->position);
         msg_node.id          = node_ptr->id;
         msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
+        msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
         msg_node.surface_dirs.clear();
@@ -299,6 +302,10 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
         msg_node.connect_nodes.clear();
         for (const auto& cid : node_ptr->connect_idxs) {
             msg_node.connect_nodes.push_back(cid);
+        }
+        msg_node.poly_connects.clear();
+        for (const auto& cid : node_ptr->poly_idxs) {
+            msg_node.poly_connects.push_back(cid);
         }
         msg_node.contour_connects.clear();
         for (const auto& cid : node_ptr->contour_idxs) {
@@ -424,10 +431,15 @@ void GraphExtractor::SaveVGraph(const NodePtrStack& graphIn) {
         OutputPoint3D(node_ptr->position);
         OutputPoint3D(node_ptr->surf_dirs.first);
         OutputPoint3D(node_ptr->surf_dirs.second);
+        graph_file << std::to_string(static_cast<int>(node_ptr->is_covered))  << " ";
         graph_file << std::to_string(static_cast<int>(node_ptr->is_frontier)) << " ";
         graph_file << std::to_string(static_cast<int>(node_ptr->is_navpoint)) << " ";
         graph_file << std::to_string(static_cast<int>(node_ptr->is_boundary)) << " ";
         for (const auto& cidx : node_ptr->connect_idxs) {
+            graph_file << std::to_string(cidx) << " ";
+        }
+        graph_file << "|" << " ";
+        for (const auto& cidx : node_ptr->poly_idxs) {
             graph_file << std::to_string(cidx) << " ";
         } 
         graph_file << "|" << " ";
@@ -456,24 +468,30 @@ void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {
 
 void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
     MarkerArray graph_marker_array;
-    Marker nav_node_marker, covered_node_marker, internav_node_marker, edge_marker, contour_edge_marker, free_edge_marker, trajectory_edge_marker,
-           corner_surf_marker, corner_helper_marker;
+    Marker nav_node_marker, covered_node_marker, internav_node_marker, frontier_node_marker, edge_marker, poly_edge_marker, 
+           contour_edge_marker, free_edge_marker, traj_edge_marker, boundary_edge_marker, corner_surf_marker, corner_helper_marker;
     nav_node_marker.type       = Marker::SPHERE_LIST;
     covered_node_marker.type   = Marker::SPHERE_LIST;
     internav_node_marker.type  = Marker::SPHERE_LIST;
+    frontier_node_marker.type  = Marker::SPHERE_LIST;
     edge_marker.type           = Marker::LINE_LIST;
+    poly_edge_marker.type      = Marker::LINE_LIST;
     free_edge_marker.type      = Marker::LINE_LIST;
+    boundary_edge_marker.type  = Marker::LINE_LIST;
     contour_edge_marker.type   = Marker::LINE_LIST;
-    trajectory_edge_marker.type = Marker::LINE_LIST;
+    traj_edge_marker.type      = Marker::LINE_LIST;
     corner_surf_marker.type    = Marker::LINE_LIST;
     corner_helper_marker.type  = Marker::CUBE_LIST;
     this->SetMarker(VizColor::WHITE,   "global_vertex",     0.5f,  0.5f,  nav_node_marker);
     this->SetMarker(VizColor::BLUE,    "freespace_vertex",  0.5f,  0.8f,  covered_node_marker);
     this->SetMarker(VizColor::YELLOW,  "trajectory_vertex", 0.5f,  0.8f,  internav_node_marker);
-    this->SetMarker(VizColor::EMERALD, "global_vgraph",     0.1f,  0.2f,  edge_marker);
+    this->SetMarker(VizColor::ORANGE,  "frontier_vertex",   0.5f,  0.8f,  frontier_node_marker);
+    this->SetMarker(VizColor::WHITE,   "global_vgraph",     0.1f,  0.2f,  edge_marker);
     this->SetMarker(VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.2f,  free_edge_marker);
+    this->SetMarker(VizColor::EMERALD, "visibility_edge",   0.1f,  0.2f,  poly_edge_marker);
     this->SetMarker(VizColor::RED,     "polygon_edge",      0.15f, 0.2f,  contour_edge_marker);
-    this->SetMarker(VizColor::GREEN,   "trajectory_edge",   0.1f,  0.5f,  trajectory_edge_marker);
+    this->SetMarker(VizColor::GREEN,   "trajectory_edge",   0.1f,  0.5f,  traj_edge_marker);
+    this->SetMarker(VizColor::ORANGE,  "boundary_edge",     0.2f,  0.25f, boundary_edge_marker);
     this->SetMarker(VizColor::YELLOW,  "vertex_angle",      0.15f, 0.75f, corner_surf_marker);
     this->SetMarker(VizColor::YELLOW,  "angle_direct",      0.25f, 0.75f, corner_helper_marker);
     /* Lambda Function */
@@ -481,11 +499,15 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
         geometry_msgs::Point p1, p2;
         p1 = ToGeoMsgP(node_ptr->position);
         for (const auto& cnode : node_ptr->connect_nodes) {
-            if (IsTypeInStack(cnode, node_ptr->contour_connects)) continue;
             p2 = ToGeoMsgP(cnode->position);
             edge_marker.points.push_back(p1);
             edge_marker.points.push_back(p2);
-            if (!node_ptr->is_frontier && !cnode->is_frontier) {
+        }
+        for (const auto& cnode : node_ptr->poly_connects) {
+            p2 = ToGeoMsgP(cnode->position);
+            poly_edge_marker.points.push_back(p1);
+            poly_edge_marker.points.push_back(p2);
+            if (node_ptr->is_covered && cnode->is_covered) {
                 free_edge_marker.points.push_back(p1);
                 free_edge_marker.points.push_back(p2);
             }
@@ -495,13 +517,17 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
             p2 = ToGeoMsgP(ct_cnode->position);
             contour_edge_marker.points.push_back(p1);
             contour_edge_marker.points.push_back(p2);
+            if (node_ptr->is_boundary && ct_cnode->is_boundary) {
+                boundary_edge_marker.points.push_back(p1);
+                boundary_edge_marker.points.push_back(p2);
+            }
         }
         // inter navigation trajectory connections
         if (node_ptr->is_navpoint) {
             for (const auto& tj_cnode : node_ptr->traj_connects) {
                 p2 = ToGeoMsgP(tj_cnode->position);
-                trajectory_edge_marker.points.push_back(p1);
-                trajectory_edge_marker.points.push_back(p2);
+                traj_edge_marker.points.push_back(p1);
+                traj_edge_marker.points.push_back(p2);
             }
         }
     };
@@ -534,8 +560,11 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
         if (nav_node_ptr->is_navpoint) {
             internav_node_marker.points.push_back(cpoint);
         }
-        if (!nav_node_ptr->is_frontier) {
+        if (nav_node_ptr->is_covered) {
             covered_node_marker.points.push_back(cpoint);
+        }
+        if (nav_node_ptr->is_frontier) {
+            frontier_node_marker.points.push_back(cpoint);
         }
         Draw_Edge(nav_node_ptr);
         Draw_Surf_Dir(nav_node_ptr);
@@ -545,10 +574,13 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
     graph_marker_array.markers.push_back(nav_node_marker);
     graph_marker_array.markers.push_back(covered_node_marker);
     graph_marker_array.markers.push_back(internav_node_marker);
+    graph_marker_array.markers.push_back(frontier_node_marker);
     graph_marker_array.markers.push_back(edge_marker);
+    graph_marker_array.markers.push_back(poly_edge_marker);
+    graph_marker_array.markers.push_back(boundary_edge_marker);
     graph_marker_array.markers.push_back(free_edge_marker);
     graph_marker_array.markers.push_back(contour_edge_marker);
-    graph_marker_array.markers.push_back(trajectory_edge_marker);
+    graph_marker_array.markers.push_back(traj_edge_marker);
     graph_marker_array.markers.push_back(corner_surf_marker);
     graph_marker_array.markers.push_back(corner_helper_marker);
     graph_viz_pub_.publish(graph_marker_array);

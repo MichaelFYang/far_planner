@@ -19,6 +19,7 @@ void GraphMsger::Init(const ros::NodeHandle& nh, const GraphMsgerParams& params)
     global_graph_.clear();
     nodes_cloud_ptr_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     kdtree_graph_cloud_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
+    kdtree_graph_cloud_->setSortedResults(false);
 }
 
 void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
@@ -31,6 +32,7 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         msg_node.position    = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         msg_node.id          = node_ptr->id;
         msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
+        msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
         msg_node.is_boundary = node_ptr->is_boundary;
@@ -42,6 +44,11 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         for (const auto& cnode_ptr : node_ptr->connect_nodes) {
             if (!IsEncodeType(cnode_ptr)) continue;
             msg_node.connect_nodes.push_back(cnode_ptr->id);
+        }
+        msg_node.poly_connects.clear();
+        for (const auto& cnode_ptr : node_ptr->poly_connects) {
+            if (!IsEncodeType(cnode_ptr)) continue;
+            msg_node.poly_connects.push_back(cnode_ptr->id);
         }
         msg_node.contour_connects.clear();
         for (const auto& cnode_ptr : node_ptr->contour_connects) {
@@ -106,14 +113,21 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
         nodeIdx_idx_map.insert({node.id, i});
     }
     // Assign connections with fully connection votes
-    std::vector<std::size_t> connect_idxs, contour_idxs, traj_idxs;
+    std::vector<std::size_t> connect_idxs, poly_idxs, contour_idxs, traj_idxs;
     for (std::size_t i=0; i<graph_msg.nodes.size(); i++) {
         const auto node = graph_msg.nodes[i];
         const NavNodePtr node_ptr = decoded_nodes[i];
-        ExtractConnectIdxs(node, connect_idxs, contour_idxs, traj_idxs);
-        // polygon connections
+        ExtractConnectIdxs(node, connect_idxs, poly_idxs, contour_idxs, traj_idxs);
+        // graph connections
         NavNodePtr cnode_ptr = NULL;
         for (const auto& cid : connect_idxs) {
+            cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
+            if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
+                DynamicGraph::AddEdge(node_ptr, cnode_ptr);
+            }
+        }
+        // poly connections
+        for (const auto& cid : poly_idxs) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
             if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillPolygonEdgeConnect(node_ptr, cnode_ptr, gm_params_.votes_size);
@@ -154,14 +168,18 @@ NavNodePtr GraphMsger::NearestNodePtrOnGraph(const Point3D p, const float radius
 
 void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr) {
     const Point3D p = Point3D(vnode.position.x, vnode.position.y, vnode.position.z);
+    const bool is_covered  = vnode.is_covered  == 0 ? false : true;
     const bool is_frontier = vnode.is_frontier == 0 ? false : true;
     const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
     const bool is_boundary = vnode.is_boundary == 0 ? false : true;
     DynamicGraph::CreateNavNodeFromPoint(p, node_ptr, false, is_navpoint, false, is_boundary);
     node_ptr->is_active = is_boundary ? true : false;
     /* Assign relative values */
+    node_ptr->is_covered  = is_covered;
     node_ptr->is_frontier = is_frontier;
+    DynamicGraph::FillFrontierVotes(node_ptr, is_frontier);
     // positions
+    node_ptr->is_finalized = true;
     const std::deque<Point3D> pos_queue(gm_params_.pool_size, p);
     node_ptr->pos_filter_vec = pos_queue;
     const PointPair surf_pair = {Point3D(vnode.surface_dirs[0].x, vnode.surface_dirs[0].y, vnode.surface_dirs[0].z),
@@ -175,13 +193,17 @@ void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, N
 
 void GraphMsger::ExtractConnectIdxs(const visibility_graph_msg::Node& node,
                                     IdxStack& connect_idxs,
+                                    IdxStack& poly_idxs,
                                     IdxStack& contour_idxs,
                                     IdxStack& traj_idxs)
 {
-    connect_idxs.clear(), contour_idxs.clear(), traj_idxs.clear();
+    connect_idxs.clear(), poly_idxs.clear(), contour_idxs.clear(), traj_idxs.clear();
     for (const auto& cid : node.connect_nodes) {
         connect_idxs.push_back((std::size_t)cid);
     }
+    for (const auto& cid : node.poly_connects) {
+        poly_idxs.push_back((std::size_t)cid);
+    }    
     for (const auto& cid : node.contour_connects) {
         contour_idxs.push_back((std::size_t)cid);
     }

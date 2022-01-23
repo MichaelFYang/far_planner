@@ -37,7 +37,6 @@ struct HeightPair
 
 struct ContourGraphParams {
     ContourGraphParams() = default;
-    float kAroundDist;
     float kPillarPerimeter;
 };
 
@@ -87,6 +86,7 @@ public:
 
     static bool IsPointsConnectFreePolygon(const ConnectPair& cedge,
                                            const ConnectPair& bd_cedge,
+                                           const HeightPair h_pair,
                                            const bool& is_global_check);
 
     static bool ReprojectPointOutsidePolygons(Point3D& point, const float& free_radius);
@@ -94,6 +94,12 @@ public:
     static void AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     static void DeleteContourFromSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+
+    static inline void RemoveOutrangeContourNodes(const NodePtrStack& outrange_nodes) {
+        for (const auto& node_ptr : outrange_nodes) {
+            RemoveMatchWithNavNode(node_ptr);
+        }
+    }
 
     bool IsPointInVetexAngleRestriction(const CTNodePtr& ctnode, const Point3D end_p);
 
@@ -140,6 +146,24 @@ private:
         }
     }
 
+    template <typename NodeType1, typename NodeType2>
+    static inline bool IsInMatchHeight(const NodeType1& node_ptr1, const NodeType2& node_ptr2) {
+        if (abs(node_ptr1->position.z - node_ptr2->position.z) < FARUtil::kMarginHeight) {
+            return true;
+        }
+        return false;
+    }
+
+    static inline bool IsEdgeOverlapInHeight(const HeightPair& cur_hpair, HeightPair ref_hpair, const bool is_extend=true) {
+        if (is_extend) {
+            ref_hpair.minH -= FARUtil::kTolerZ, ref_hpair.maxH += FARUtil::kTolerZ;
+        }
+        if (cur_hpair.maxH < ref_hpair.minH || cur_hpair.minH > ref_hpair.maxH) {
+            return false;
+        }
+        return true;
+    }
+
     template <typename NodeType>
     static inline cv::Point2f NodeProjectDir(const NodeType& node) {
         cv::Point2f project_dir(0,0);
@@ -161,6 +185,22 @@ private:
         return node_cv + dist * dir;
     }
 
+    static inline void MatchCTNodeWithNavNode(const CTNodePtr& ctnode_ptr, const NavNodePtr& node_ptr) {
+        if (ctnode_ptr == NULL || node_ptr == NULL) return;
+        ctnode_ptr->is_global_match = true;
+        ctnode_ptr->nav_node_id = node_ptr->id;
+        node_ptr->ctnode = ctnode_ptr;
+        node_ptr->is_contour_match = true;
+    }
+
+    static inline void RemoveMatchWithNavNode(const NavNodePtr& node_ptr) {
+        if (!node_ptr->is_contour_match) return;
+        node_ptr->ctnode->is_global_match = false;
+        node_ptr->ctnode->nav_node_id = 0;
+        node_ptr->ctnode = NULL;
+        node_ptr->is_contour_match = false;
+    }
+
     /**
      * @brief extract necessary ctnodes that are essential for contour construction
      */
@@ -173,7 +213,7 @@ private:
     static bool IsCTNodesConnectWithinOrder(const CTNodePtr& ctnode1, const CTNodePtr& ctnode2,
                                             CTNodePtr& block_vertex);
 
-    static ConnectPair ReprojectEdge(const NavNodePtr& node1, const NavNodePtr& node2, const float& dist);
+    static ConnectPair ReprojectEdge(const NavNodePtr& node1, const NavNodePtr& node2, const float& dist, const bool& is_global_check);
 
     static ConnectPair ReprojectEdge(const CTNodePtr& node1, const NavNodePtr& node2, const float& dist);
 
@@ -201,7 +241,7 @@ private:
     }
 
     static inline bool IsOverlapRange(const HeightPair& hpair, const HeightPair& hpairRef) {
-        if (hpair.maxH > hpairRef.minH - FARUtil::kTolerZ || hpair.minH < hpairRef.maxH + FARUtil::kTolerZ) {
+        if (hpair.maxH > hpairRef.minH - FARUtil::kMarginHeight || hpair.minH < hpairRef.maxH + FARUtil::kMarginHeight) {
             return true;
         }
         return false;
@@ -213,7 +253,7 @@ private:
         ContourGraph::contour_polygons_.clear(); 
     }
 
-    bool IsAPillarPolygon(const PointStack& vertex_points);
+    bool IsAPillarPolygon(const PointStack& vertex_points, float& perimeter);
 
     void CreateCTNode(const Point3D& pos, CTNodePtr& ctnode_ptr, const PolygonPtr& poly_ptr, const bool& is_pillar);
 

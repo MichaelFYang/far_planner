@@ -73,6 +73,7 @@ public:
     static const float  kINF;
     static bool  IsStaticEnv;
     static bool  IsDebug;
+    static bool  IsMultiLayer;
     static Point3D robot_pos;
     static Point3D odom_pos;
     static Point3D map_origin;
@@ -82,6 +83,7 @@ public:
     static float kCellLength;
     static float vehicle_height;
     static float kLeafSize;
+    static float kHeightVoxel;
     static float kNavClearDist;
     static float kNearDist;
     static float kMatchDist;
@@ -160,6 +162,8 @@ public:
 
     static void FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_size);
 
+    static void FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size);
+
     static void TransformPCLFrame(const std::string& from_frame_id,
                                   const std::string& to_frame_id,
                                   const tf::TransformListener* tf_listener,
@@ -174,7 +178,7 @@ public:
     
     static void RemoveNanInfPoints(const PointCloudPtr& cloudInOut);
 
-    static bool IsPointNearNewPoints(const Point3D& p, const bool& is_creation = false);
+    static bool IsPointNearNewPoints(const Point3D& p, const bool& is_creation=false);
 
     static bool IsPointVisiableFromNode(const Point3D& p, const NavNodePtr& node_ptr);
 
@@ -208,9 +212,7 @@ public:
     static void SetDifference(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& diff);
 
     template <typename Point>
-    static bool IsPointInToleratedHeight(const Point& p,
-                                         const float& height=FARUtil::kTolerZ) 
-    {
+    static bool IsPointInToleratedHeight(const Point& p, const float& height=FARUtil::kTolerZ) {
         if (abs(p.z - FARUtil::robot_pos.z) < height) return true;
         return false;
     };
@@ -244,9 +246,6 @@ public:
 
     static bool IsInCoverageDirPairs(const Point3D& diff_p,
                                      const NavNodePtr& node_ptr);
-
-    static bool IsInFreeDirofNode(const Point3D& diff_p,
-                                  const NavNodePtr& node_ptr);
 
     static bool IsInContourDirPairs(const Point3D& diff_p,
                                     const PointPair& surf_dirs);
@@ -297,7 +296,26 @@ public:
 
     static Point3D SurfTopoDirect(const PointPair& dirs);
 
-    static Point3D AveragePoints(const PointStack& point_stack);
+    template <typename NodeType1, typename NodeType2>
+    static inline bool IsAtSameLayer(const NodeType1& node_ptr1, const NodeType2& node_ptr2, const bool& is_large=false) {
+        if (FARUtil::IsMultiLayer && abs(node_ptr1->position.z - node_ptr2->position.z) > FARUtil::kTolerZ) {
+            return false;
+        }
+        return true;
+    }
+
+    template <typename T_vec>
+    static Point3D AveragePoints(const T_vec& point_stack) {
+        Point3D mean_p(0,0,0);
+        if (point_stack.empty()) {
+            ROS_WARN("FARUtil: Averaging points fails, stack is empty");
+            return mean_p;
+        }
+        for (const auto& pos : point_stack) {
+            mean_p = mean_p + pos;
+        }
+        return mean_p / (float)point_stack.size();
+    }
 
     static PointPair AverageDirs(const std::vector<PointPair>& dirs_stack);
 
@@ -336,12 +354,12 @@ public:
 
     static bool IsOutReachNode(const NavNodePtr& node_ptr);
 
-    static bool IsPointInLocalRange(const Point3D& p);
+    static bool IsPointInLocalRange(const Point3D& p, const bool& is_large_h=false);
 
     static bool IsPointInMarginRange(const Point3D& p);
 
-    static bool IsNodeInLocalRange(const NavNodePtr& node_ptr) {
-        return IsPointInLocalRange(node_ptr->position);
+    static bool IsNodeInLocalRange(const NavNodePtr& node_ptr, const bool& is_large_h=false) {
+        return IsPointInLocalRange(node_ptr->position, is_large_h);
     }
 
     static bool IsFreeNavNode(const NavNodePtr& node_ptr) {

@@ -63,13 +63,20 @@ void FARMaster::Init() {
   is_stop_update_     = false;
 
   // allocate memory to pointers
-  new_vertices_ptr_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_obs_ptr_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_free_ptr_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  temp_cloud_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  scan_grid_ptr_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  local_terrain_ptr_  = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-  terrain_height_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  new_vertices_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_obs_ptr_         = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_free_ptr_        = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  temp_cloud_ptr_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  scan_grid_ptr_        = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  local_terrain_ptr_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  terrain_height_ptr_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  viewpoint_around_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+  kdtree_viewpoint_obs_cloud_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
+
+  // set kdtree sorted value
+  FARUtil::kdtree_new_cloud_->setSortedResults(false);
+  FARUtil::kdtree_filter_cloud_->setSortedResults(false);
+  kdtree_viewpoint_obs_cloud_->setSortedResults(false);
 
   // init global utility cloud
   FARUtil::stack_new_cloud_->clear();
@@ -85,7 +92,6 @@ void FARMaster::Init() {
 
   robot_pos_   = Point3D(0,0,0);
   nav_heading_ = Point3D(0,0,0);
-  nav_goal_    = Point3D(0,0,0);
   goal_waypoint_stamped_.header.frame_id = master_params_.world_frame;
   printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
   std::cout<<std::endl;
@@ -118,7 +124,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   goal_waypoint_stamped_.header.stamp = ros::Time::now();
   goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(robot_pos_);
   goal_pub_.publish(goal_waypoint_stamped_);
-  PointStack empty_path;
+  NodePtrStack empty_path;
   planner_viz_.VizPath(empty_path);
 }
 
@@ -139,14 +145,13 @@ void FARMaster::Loop() {
       continue;
     }
     /* add main process after this line */
-    graph_manager_.UpdateOdom(robot_pos_);
+    graph_manager_.UpdateRobotPosition(robot_pos_);
     odom_node_ptr_ = graph_manager_.GetOdomNode();
     if (odom_node_ptr_ == NULL) {
       ROS_WARN("FAR: Waiting for Odometry...");
       loop_rate.sleep();
       continue;
     }
-    map_handler_.UpdateRobotPosition(odom_node_ptr_->position);
     /* Extract Vertices and new nodes */
     FARUtil::Timer.start_time("Total V-Graph Update");
     contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
@@ -155,9 +160,13 @@ void FARMaster::Loop() {
       if (!FARUtil::IsDebug) printf("\033[2K");
       std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
     }
+    // Adjust heights with terrain
+    map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
+    map_handler_.AdjustNodesHeight(nav_graph_);
+    // Truncate for local range nodes
+    graph_manager_.UpdateGlobalNearNodes();
     near_nav_graph_ = graph_manager_.GetNearNavGraph();
-    map_handler_.AjustCTNodeHeight(ContourGraph::contour_graph_); // adjust local contour nodes height
-    map_handler_.AdjustNodesHeight(near_nav_graph_); // adjust near nodes height
+    // Match near nav nodes with contour
     contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
     if (master_params_.is_visual_opencv) {
       FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
@@ -241,7 +250,7 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     map_handler_.GetCloudOfPoint(ori_p, goal_obs, CloudType::OBS_CLOUD, true);
     map_handler_.GetCloudOfPoint(ori_p, goal_free, CloudType::FREE_CLOUD, true);
     graph_planner_.UpdateFreeTerrainGrid(ori_p, goal_obs, goal_free);
-    graph_planner_.ReEvaluateGoalPosition(goal_ptr);
+    graph_planner_.ReEvaluateGoalPosition(goal_ptr, !master_params_.is_multi_layer);
 
     // Adding goal into v-graph
     FARUtil::Timer.start_time("Adding Goal to V-Graph");
@@ -255,16 +264,18 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     graph_planner_.UpdateGraphTraverability(odom_node_ptr_, goal_ptr);
 
     // Construct path to gaol and publish waypoint
-    PointStack global_path;
-    Point3D last_nav_goal, current_free_goal;
+    NodePtrStack global_path;
+    Point3D current_free_goal;
+    NavNodePtr last_nav_ptr = nav_node_ptr_;
     bool is_planning_fails = false;
-    last_nav_goal = nav_goal_;
     goal_waypoint_stamped_.header.stamp = ros::Time::now();
     bool is_current_free_nav = false;
-    if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_goal_, current_free_goal, is_planning_fails, is_current_free_nav)) {
-      Point3D waypoint = nav_goal_;
-      if ((waypoint - current_free_goal).norm() > FARUtil::kEpsilon) {
-        waypoint = this->ProjectNavWaypoint(waypoint, last_nav_goal);
+    if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_current_free_nav) && nav_node_ptr_ != NULL) {
+      Point3D waypoint = nav_node_ptr_->position;
+      if (!nav_node_ptr_->is_goal) {
+        waypoint = this->ProjectNavWaypoint(nav_node_ptr_, last_nav_ptr);
+      } else if (master_params_.is_viewpoint_extend) {
+        planner_viz_.VizViewpointExtend(goal_ptr, goal_ptr->position);
       }
       goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(waypoint);
       goal_pub_.publish(goal_waypoint_stamped_);
@@ -311,14 +322,23 @@ void FARMaster::LocalBoundaryHandler(const std::vector<PointPair>& local_boundar
 }
 
 
-Point3D FARMaster::ProjectNavWaypoint(const Point3D& nav_waypoint, const Point3D& last_waypoint) {
-  const bool is_momentum = (last_waypoint - nav_waypoint).norm() < FARUtil::kEpsilon ? true : false; // momentum heading if same goal
-  Point3D waypoint = nav_waypoint;
-  const float dist = master_params_.waypoint_project_dist;
-  const Point3D diff_p = nav_waypoint - robot_pos_;
+Point3D FARMaster::ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr) {
+  bool is_momentum = false;
+  if (last_point_ptr == nav_node_ptr || (last_point_ptr != NULL && (last_point_ptr->position - nav_node_ptr_->position).norm() < FARUtil::kNearDist)) {
+    is_momentum = true;
+  }
+  Point3D waypoint = nav_node_ptr->position;
+  float free_dist = master_params_.waypoint_project_dist;
+  const Point3D extend_p = this->ExtendViewpointOnObsCloud(nav_node_ptr_, FARUtil::surround_obs_cloud_, free_dist);
+  free_dist = std::max(free_dist, master_params_.robot_dim * 2.5f);
+  if (master_params_.is_viewpoint_extend) {
+    waypoint = extend_p;
+    planner_viz_.VizViewpointExtend(nav_node_ptr_, waypoint);
+  }
+  const Point3D diff_p = waypoint - robot_pos_;
   Point3D new_heading;
   if (is_momentum && nav_heading_.norm() > FARUtil::kEpsilon) {
-    const float hdist = dist / 2.0f;
+    const float hdist = free_dist / 2.0f;
     const float ratio = std::min(hdist, diff_p.norm()) / hdist;
     new_heading = diff_p.normalize() * ratio + nav_heading_ * (1.0f - ratio);
   } else {
@@ -332,11 +352,51 @@ Point3D FARMaster::ProjectNavWaypoint(const Point3D& nav_waypoint, const Point3D
     new_heading = temp_heading;
   }
   nav_heading_ = new_heading.normalize();
-  if (diff_p.norm() < dist) {
-    waypoint = nav_waypoint + nav_heading_ * (dist - diff_p.norm());
+  if (diff_p.norm() < free_dist) {
+    waypoint = waypoint + nav_heading_ * (free_dist - diff_p.norm());
   }
   return waypoint;
 }
+
+Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist) {
+  if (nav_node_ptr_->free_direct != NodeFreeDirect::CONVEX || obsCloudIn->empty()) return nav_node_ptr_->position;
+  FARUtil::CropPCLCloud(obsCloudIn, viewpoint_around_ptr_, nav_node_ptr_->position, free_dist + FARUtil::kNearDist);
+  float maxR = std::min((nav_node_ptr_->position - robot_pos_).norm(), free_dist) - FARUtil::kNearDist;
+  maxR = std::max(maxR, 0.0f);
+  bool is_wall = false;
+  const Point3D direct = -FARUtil::SurfTopoDirect(nav_node_ptr_->surf_dirs, is_wall);
+  if (!is_wall) {
+    Point3D waypoint = nav_node_ptr_->position;
+    if (viewpoint_around_ptr_->empty()) {
+      waypoint = waypoint + direct * maxR;
+    } else {
+      kdtree_viewpoint_obs_cloud_->setInputCloud(viewpoint_around_ptr_);
+      const int N_Thred = (int)std::floor(FARUtil::kNearDist / FARUtil::kLeafSize);
+      const float R = FARUtil::kNearDist / 2.0f + FARUtil::kLeafSize;
+      // ray tracing
+      Point3D start_p = waypoint + direct * FARUtil::kNearDist;
+      float ray_dist  = FARUtil::kNearDist; 
+      bool is_occupied = FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_) > N_Thred;
+      waypoint = start_p;
+      while (!is_occupied && ray_dist < free_dist) {
+        start_p = start_p + direct * FARUtil::kNearDist;
+        ray_dist += FARUtil::kNearDist;
+        is_occupied = FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_) > N_Thred;
+        if (ray_dist < maxR) {
+          waypoint = start_p;
+        }
+      }
+      if (is_occupied) {
+        waypoint = (nav_node_ptr_->position + waypoint - direct * FARUtil::kNearDist) / 2.0f;
+        waypoint.z = nav_node_ptr_->position.z;
+        free_dist = ray_dist - FARUtil::kNearDist;
+      }
+      return waypoint;
+    }
+  }
+  return nav_node_ptr_->position;
+}
+
 
 void FARMaster::LoadROSParams() {
   const std::string master_prefix   = "/far_planner/";
@@ -353,13 +413,15 @@ void FARMaster::LoadROSParams() {
   // master params
   nh.param<float>(master_prefix + "main_run_freq",         master_params_.main_run_freq, 5.0);
   nh.param<float>(master_prefix + "voxel_dim",             master_params_.voxel_dim, 0.2);
-  nh.param<float>(master_prefix + "robot_dim",             master_params_.robot_dim, 0.5);
+  nh.param<float>(master_prefix + "robot_dim",             master_params_.robot_dim, 0.8);
   nh.param<float>(master_prefix + "vehicle_height",        master_params_.vehicle_height, 0.75);
   nh.param<float>(master_prefix + "sensor_range",          master_params_.sensor_range, 50.0);
   nh.param<float>(master_prefix + "terrain_range",         master_params_.terrain_range, 15.0);
   nh.param<float>(master_prefix + "near_boundary_range",   master_params_.boundary_range, 5.0);
   nh.param<float>(master_prefix + "waypoint_project_dist", master_params_.waypoint_project_dist, 5.0);
   nh.param<float>(master_prefix + "visualize_ratio",       master_params_.viz_ratio, 1.0);
+  nh.param<bool>(master_prefix  + "is_viewpoint_extend",   master_params_.is_viewpoint_extend, true);
+  nh.param<bool>(master_prefix  + "is_multi_layer",        master_params_.is_multi_layer, false);
   nh.param<bool>(master_prefix  + "is_opencv_visual",      master_params_.is_visual_opencv, true);
   nh.param<bool>(master_prefix  + "is_static_env",         master_params_.is_static_env, true);
   nh.param<bool>(master_prefix  + "is_pub_boundary",       master_params_.is_pub_boundary, true);
@@ -373,7 +435,6 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(map_prefix + "ceil_height",           map_params_.ceil_height, 2.0);
   nh.param<float>(map_prefix + "map_grid_max_length",   map_params_.grid_max_length, 5000.0);
   nh.param<float>(map_prefix + "map_grad_max_height",   map_params_.grid_max_height, 100.0);
-  nh.param<float>(map_prefix + "terrain_search_radius", map_params_.search_radius, 1.0);
   nh.param<float>(map_prefix + "terrain_voxel_dim",     map_params_.height_voxel_dim, 0.5);
   map_params_.sensor_range = master_params_.sensor_range;
 
@@ -382,27 +443,59 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(planner_prefix + "goal_adjust_radius",   gp_params_.adjust_radius, 10.0);
   nh.param<int>(planner_prefix   + "free_counter_thred",   gp_params_.free_thred, 5);
   nh.param<int>(planner_prefix   + "reach_goal_vote_size", gp_params_.votes_size, 5);
-  nh.param<float>(planner_prefix + "move_momentum_dist",   gp_params_.momentum_dist, 0.5);
   nh.param<int>(planner_prefix   + "path_momentum_thred",  gp_params_.momentum_thred, 5);
   nh.param<int>(planner_prefix   + "clear_inflate_size",   gp_params_.clear_inflate_size, 3);
+  gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
 
+  // utility params
+  nh.param<float>(utility_prefix + "angle_noise",            FARUtil::kAngleNoise, 15.0);
+  nh.param<float>(utility_prefix + "accept_max_align_angle", FARUtil::kAcceptAlign, 15.0);
+  nh.param<float>(utility_prefix + "new_intensity_thred",    FARUtil::kNewPIThred, 2.0);
+  nh.param<float>(utility_prefix + "nav_clear_dist",         FARUtil::kNavClearDist, 0.5);
+  nh.param<float>(utility_prefix + "terrain_free_Z",         FARUtil::kFreeZ, 0.1);
+  nh.param<int>(utility_prefix   + "dyosb_update_thred",     FARUtil::kDyObsThred, 4);
+  nh.param<int>(utility_prefix   + "new_point_counter",      FARUtil::KNewPointC, 10);
+  nh.param<float>(utility_prefix + "dynamic_obs_dacay_time", FARUtil::kObsDecayTime, 10.0);
+  nh.param<float>(utility_prefix + "new_points_decay_time",  FARUtil::kNewDecayTime, 2.0);
+  FARUtil::kLeafSize      = master_params_.voxel_dim;
+  FARUtil::kNearDist      = master_params_.robot_dim;
+  FARUtil::kHeightVoxel   = map_params_.height_voxel_dim;
+  FARUtil::kMatchDist     = master_params_.robot_dim * 2.0f;
+  FARUtil::kNavClearDist  = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
+  FARUtil::kProjectDist   = master_params_.voxel_dim * 2.0f;
+  FARUtil::worldFrameId   = master_params_.world_frame;
+  FARUtil::kVizRatio      = master_params_.viz_ratio;
+  FARUtil::kTolerZ        = map_params_.ceil_height * 2.0f;
+  FARUtil::kCellLength    = map_params_.ceil_length;
+  FARUtil::kAcceptAlign   = FARUtil::kAcceptAlign / 180.0f * M_PI;
+  FARUtil::kAngleNoise    = FARUtil::kAngleNoise  / 180.0f * M_PI; 
+  FARUtil::robot_dim      = master_params_.robot_dim;
+  FARUtil::IsStaticEnv    = master_params_.is_static_env;
+  FARUtil::IsDebug        = master_params_.is_debug_output;
+  FARUtil::IsMultiLayer   = master_params_.is_multi_layer;
+  FARUtil::vehicle_height = master_params_.vehicle_height;
+  FARUtil::kSensorRange   = master_params_.sensor_range;
+  FARUtil::kMarginDist    = master_params_.sensor_range - FARUtil::kMatchDist;
+  FARUtil::kMarginHeight  = FARUtil::kTolerZ - FARUtil::kHeightVoxel;
+  FARUtil::kTerrainRange  = master_params_.terrain_range;
+
+  // contour graph params
+  cg_params_.kPillarPerimeter = master_params_.robot_dim * 4.0f;
+
   // dynamic graph params
-  nh.param<float>(graph_prefix  + "node_near_dist",            graph_params_.near_dist, 1.0);
-  nh.param<float>(graph_prefix  + "match_margin_dist",         graph_params_.margin_dist, 1.5);
-  nh.param<float>(graph_prefix  + "move_thred",                graph_params_.move_thred, 0.25);
   nh.param<int>(graph_prefix    + "connect_votes_size",        graph_params_.votes_size, 10);
   nh.param<float>(graph_prefix  + "trajectory_interval_ratio", graph_params_.traj_interval_ratio, 2.0);
   nh.param<int>(graph_prefix    + "terrain_inflate_size",      graph_params_.terrain_inflate, 2);
   nh.param<int>(graph_prefix    + "clear_dumper_thred",        graph_params_.dumper_thred, 3);
   nh.param<int>(graph_prefix    + "node_finalize_thred",       graph_params_.finalize_thred, 3);
   nh.param<int>(graph_prefix    + "filter_pool_size",          graph_params_.pool_size, 12);
-  nh.param<float>(graph_prefix  + "connect_angle_thred",       graph_params_.kConnectAngleThred, 10);
-  nh.param<float>(graph_prefix  + "pos_filter_margin",         graph_params_.filter_pos_margin, 0.5);
+  nh.param<float>(graph_prefix  + "connect_angle_thred",       graph_params_.kConnectAngleThred, 10.0);
   nh.param<float>(graph_prefix  + "dirs_filter_margin",        graph_params_.filter_dirs_margin, 10.0);
-  graph_params_.kConnectAngleThred = graph_params_.kConnectAngleThred / 180.0 * M_PI;
-  graph_params_.filter_dirs_margin = graph_params_.filter_dirs_margin / 180.0 * M_PI;
-  graph_params_.sensor_range       = master_params_.sensor_range;
+  graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
+  graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
+  graph_params_.kConnectAngleThred       = FARUtil::kAcceptAlign;
+  graph_params_.frontier_perimeter_thred = FARUtil::kMatchDist * 4.0f;
 
   // graph messager params
   nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
@@ -410,35 +503,6 @@ void FARMaster::LoadROSParams() {
   msger_parmas_.votes_size  = graph_params_.votes_size;
   msger_parmas_.pool_size   = graph_params_.pool_size;
   msger_parmas_.dist_margin = graph_params_.filter_pos_margin;
-
-  // utility params
-  nh.param<float>(utility_prefix + "angle_noise",            FARUtil::kAngleNoise, 15.0);
-  nh.param<float>(utility_prefix + "accept_max_align_angle", FARUtil::kAcceptAlign, 15.0);
-  nh.param<float>(utility_prefix + "new_intensity_thred",    FARUtil::kNewPIThred, 2.0);
-  nh.param<float>(utility_prefix + "nav_clear_dist",         FARUtil::kNavClearDist, 0.5);
-  nh.param<float>(utility_prefix + "edge_project_dist",      FARUtil::kProjectDist, 0.4);
-  nh.param<float>(utility_prefix + "terrain_free_Z",         FARUtil::kFreeZ, 0.1);
-  nh.param<int>(utility_prefix   + "dyosb_update_thred",     FARUtil::kDyObsThred, 4);
-  nh.param<int>(utility_prefix   + "new_point_counter",      FARUtil::KNewPointC, 10);
-  nh.param<float>(utility_prefix + "dynamic_obs_dacay_time", FARUtil::kObsDecayTime, 10.0);
-  nh.param<float>(utility_prefix + "new_points_decay_time",  FARUtil::kNewDecayTime, 2.0);
-  FARUtil::worldFrameId   = master_params_.world_frame;
-  FARUtil::kVizRatio      = master_params_.viz_ratio;
-  FARUtil::kTolerZ        = map_params_.ceil_height * 1.5f;
-  FARUtil::kCellLength    = map_params_.ceil_length;
-  FARUtil::kAcceptAlign   = FARUtil::kAcceptAlign / 180.0f * M_PI;
-  FARUtil::kAngleNoise    = FARUtil::kAngleNoise  / 180.0f * M_PI; 
-  FARUtil::robot_dim      = master_params_.robot_dim;
-  FARUtil::IsStaticEnv    = master_params_.is_static_env;
-  FARUtil::IsDebug        = master_params_.is_debug_output;
-  FARUtil::vehicle_height = master_params_.vehicle_height;
-  FARUtil::kLeafSize      = master_params_.voxel_dim;
-  FARUtil::kNearDist      = graph_params_.near_dist;
-  FARUtil::kMatchDist     = graph_params_.margin_dist;
-  FARUtil::kSensorRange   = master_params_.sensor_range;
-  FARUtil::kMarginDist    = master_params_.sensor_range - FARUtil::kMatchDist;
-  FARUtil::kMarginHeight  = FARUtil::kTolerZ - master_params_.voxel_dim;
-  FARUtil::kTerrainRange  = master_params_.terrain_range;
 
   // scan handler params
   nh.param<int>(scan_prefix + "inflate_scan_size", scan_params_.inflate_size, 2);
@@ -448,16 +512,12 @@ void FARMaster::LoadROSParams() {
 
   // contour detector params
   nh.param<float>(cdetect_prefix       + "resize_ratio",       cdetect_params_.kRatio, 5.0);
-  nh.param<int>(cdetect_prefix         + "img_blur_size",      cdetect_params_.kBlurSize, 10);
   nh.param<int>(cdetect_prefix         + "filter_count_value", cdetect_params_.kThredValue, 6);
   nh.param<bool>(cdetect_prefix        + "is_save_img",        cdetect_params_.is_save_img, false);
   nh.param<std::string>(cdetect_prefix + "img_folder_path",    cdetect_params_.img_path, "");
+  cdetect_params_.kBlurSize    = (int)std::round(master_params_.robot_dim / 2.0f / master_params_.voxel_dim);
   cdetect_params_.sensor_range = master_params_.sensor_range;
   cdetect_params_.voxel_dim    = master_params_.voxel_dim;
-
-  // contour graph params
-  nh.param<float>(contour_prefix + "around_distance",       cg_params_.kAroundDist, 0.75);
-  nh.param<float>(contour_prefix + "pillar_perimeter_dist", cg_params_.kPillarPerimeter, 3.0);
 }
 
 void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
@@ -541,6 +601,8 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
 
 void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   if (!is_odom_init_) return;
+  // update map grid robot center
+  map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) {
     this->PrcocessCloud(pc, temp_cloud_ptr_);
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
@@ -560,11 +622,11 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
   }
-  // extract surround cloud
-  map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
+  // extract surround free cloud & update terrain height
   map_handler_.GetSurroundFreeCloud(FARUtil::surround_free_cloud_);
-  // update terrain height map
   map_handler_.UpdateTerrainHeightGrid(FARUtil::surround_free_cloud_, terrain_height_ptr_);
+  // update surround obs cloud
+  map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
   if (!master_params_.is_static_env && !is_stop_update_) {
@@ -608,8 +670,8 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
 }
 
 void FARMaster::ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn, 
-                                         const PointCloudPtr& obsCloudIn, 
-                                         const PointCloudPtr& dyObsCloudOut)
+                                          const PointCloudPtr& obsCloudIn, 
+                                          const PointCloudPtr& dyObsCloudOut)
 {
   scan_handler_.ReInitGrids();
   scan_handler_.SetCurrentScanCloud(scanCloudIn);
@@ -656,6 +718,7 @@ Point3D FARUtil::free_odom_p;
 float   FARUtil::robot_dim;
 float   FARUtil::vehicle_height;
 float   FARUtil::kLeafSize;
+float   FARUtil::kHeightVoxel;
 float   FARUtil::kNavClearDist;
 float   FARUtil::kCellLength;
 float   FARUtil::kNewPIThred;
@@ -677,6 +740,7 @@ float   FARUtil::kTolerZ;
 float   FARUtil::kAcceptAlign;
 bool    FARUtil::IsStaticEnv;
 bool    FARUtil::IsDebug;
+bool    FARUtil::IsMultiLayer;
 TimeMeasure FARUtil::Timer;
 
 /* Global Graph */
@@ -696,6 +760,15 @@ std::vector<PointPair> ContourGraph::boundary_contour_;
 std::vector<PointPair> ContourGraph::local_boundary_;
 std::unordered_set<NavEdge, navedge_hash> ContourGraph::global_contour_set_;
 std::unordered_set<NavEdge, navedge_hash> ContourGraph::boundary_contour_set_;
+
+/* init terrain map values */
+PointKdTreePtr MapHandler::kdtree_terrain_clould_;
+std::vector<int> MapHandler::terrain_grid_occupy_list_;
+std::vector<int> MapHandler::terrain_grid_traverse_list_;
+std::unordered_set<int> MapHandler::neighbor_obs_indices_;
+std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_obs_cloud_grid_;
+std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_grid_;
+
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "far_planner_node");

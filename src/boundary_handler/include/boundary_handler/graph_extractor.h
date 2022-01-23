@@ -62,11 +62,15 @@ struct NavNode {
     PointPair surf_dirs;
     PolygonPtr poly_ptr;
 
+    bool is_covered;
     bool is_frontier;
     bool is_navpoint;
     bool is_boundary;
     std::vector<std::size_t> connect_idxs;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
+
+    std::vector<std::size_t> poly_idxs;
+    std::vector<std::shared_ptr<NavNode>> poly_connects;
 
     std::vector<std::size_t> contour_idxs;
     std::vector<std::shared_ptr<NavNode>> contour_connects;
@@ -196,11 +200,20 @@ private:
 
     inline void ConnectVEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         if (node_ptr1 == node_ptr2) return;
-        if (this->IsTypeInStack(node_ptr2->id, node_ptr1->connect_idxs)) return;
-        node_ptr1->connect_idxs.push_back(node_ptr2->id);
-        node_ptr2->connect_idxs.push_back(node_ptr1->id);
-        node_ptr1->connect_nodes.push_back(node_ptr2);
-        node_ptr2->connect_nodes.push_back(node_ptr1);
+        // poly connects
+        if (!this->IsTypeInStack(node_ptr2->id, node_ptr1->poly_idxs)) {
+            node_ptr1->poly_idxs.push_back(node_ptr2->id);
+            node_ptr2->poly_idxs.push_back(node_ptr1->id);
+            node_ptr1->poly_connects.push_back(node_ptr2);
+            node_ptr2->poly_connects.push_back(node_ptr1);
+        }
+        // graph connects
+        if (!this->IsTypeInStack(node_ptr2->id, node_ptr1->connect_idxs)) {
+            node_ptr1->connect_idxs.push_back(node_ptr2->id);
+            node_ptr2->connect_idxs.push_back(node_ptr1->id);
+            node_ptr1->connect_nodes.push_back(node_ptr2);
+            node_ptr2->connect_nodes.push_back(node_ptr1);
+        }
     }
 
     inline void ResetGraph(NodePtrStack& graphOut) {

@@ -4,6 +4,7 @@
 #include "utility.h"
 #include "contour_graph.h"
 #include "terrain_planner.h"
+#include "map_handler.h"
 
 
 struct DynamicGraphParams {
@@ -13,14 +14,11 @@ struct DynamicGraphParams {
     int   pool_size;
     int   votes_size;
     int   terrain_inflate;
-    float near_dist;
-    float sensor_range;
-    float margin_dist;
-    float move_thred;
     float traj_interval_ratio;
     float kConnectAngleThred;
     float filter_pos_margin;
     float filter_dirs_margin;
+    float frontier_perimeter_thred;
 };
 
 class DynamicGraph {  
@@ -60,6 +58,8 @@ private:
     bool IsInContourDirConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     bool IsInterNavpointNecessary();
+
+    bool IsFrontierNode(const NavNodePtr& node_ptr);
     
     void ReEvaluateConvexity(const NavNodePtr& node_ptr);
 
@@ -85,13 +85,11 @@ private:
 
     bool ReEvaluateCorner(const NavNodePtr node_ptr);
 
-    void RecordContourEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+    void RecordContourVote(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
-    void DeleteContourEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
+    void DeleteContourVote(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     void TopTwoContourConnector(const NavNodePtr& node_ptr);
-
-    void UpdateGlobalNearNodes();
 
     bool IsNodeFullyCovered(const NavNodePtr& node_ptr);
 
@@ -189,7 +187,7 @@ private:
 
     inline void ReduceDumperCounter(const NavNodePtr& node_ptr) {
         if (FARUtil::IsStaticNode(node_ptr)) return;
-        node_ptr->clear_dumper_count = node_ptr->clear_dumper_count - 2;
+        node_ptr->clear_dumper_count --;
         if (node_ptr->clear_dumper_count < 0) {
             node_ptr->clear_dumper_count = 0;
         }
@@ -198,21 +196,19 @@ private:
     inline bool IsInternavInRange(const NavNodePtr& cur_inter_ptr) {
         if (cur_inter_ptr == NULL) return false;
         const float dist_thred = TRAJ_DIST;
-        const float height_thred = FARUtil::kTolerZ/1.25f;
+        const float height_thred = FARUtil::kMarginHeight;
         if (cur_inter_ptr->fgscore > dist_thred || !FARUtil::IsPointInToleratedHeight(cur_inter_ptr->position, height_thred)) {
             return false;
         }
         return true;
     }
 
-    static inline bool IsPolygonEdgeVoteTrue(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    inline bool IsPolygonEdgeVoteTrue(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         const auto it1 = node_ptr1->edge_votes.find(node_ptr2->id);
         const auto it2 = node_ptr2->edge_votes.find(node_ptr1->id);
         if (it1 != node_ptr1->edge_votes.end() && it2 != node_ptr2->edge_votes.end()) {
             if (FARUtil::IsVoteTrue(it1->second)) {
-                if (FARUtil::IsDebug) {
-                    if (!FARUtil::IsVoteTrue(it2->second)) ROS_ERROR_THROTTLE(1.0, "DG: Polygon edge vote result are not matched.");
-                }
+                if (FARUtil::IsDebug && !FARUtil::IsVoteTrue(it2->second)) ROS_ERROR_THROTTLE(1.0, "DG: Polygon edge vote result are not matched.");
                 if (IsNodeDirectConnect(node_ptr1, node_ptr2) || it1->second.size() > 2) {
                     return true;
                 }
@@ -221,16 +217,16 @@ private:
         return false;
     }
 
-    static inline void AddNodeToOutrangeContourMap(const NavNodePtr& node_ptr) {
-        const auto it = out_contour_nodes_map_.find(node_ptr);
-        if (it != out_contour_nodes_map_.end()) it->second = dg_params_.finalize_thred;
-        else out_contour_nodes_map_.insert({node_ptr, dg_params_.finalize_thred});
-    }
-
-    static inline bool IsNodeDirectConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+    inline bool IsNodeDirectConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         if (FARUtil::IsFreeNavNode(node_ptr1) || FARUtil::IsFreeNavNode(node_ptr2)) return true;
         if (node_ptr1->is_contour_match || node_ptr2->is_contour_match) return true;
         return false;
+    }
+
+    inline void AddNodeToOutrangeContourMap(const NavNodePtr& node_ptr) {
+        const auto it = out_contour_nodes_map_.find(node_ptr);
+        if (it != out_contour_nodes_map_.end()) it->second = dg_params_.finalize_thred;
+        else out_contour_nodes_map_.insert({node_ptr, dg_params_.finalize_thred});
     }
 
     /* Create new navigation node, and return a shared pointer to it */
@@ -251,18 +247,14 @@ private:
         return false;
     }
 
-    inline bool IsConvexConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-        if (node_ptr1->free_direct != NodeFreeDirect::CONCAVE && 
-            node_ptr2->free_direct != NodeFreeDirect::CONCAVE)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    inline bool IsAValidNewNode(const CTNodePtr ctnode_ptr) {
-        if (ctnode_ptr->is_contour_necessary || FARUtil::IsPointNearNewPoints(ctnode_ptr->position, true)) {
-            return true;
+    inline bool IsAValidNewNode(const CTNodePtr ctnode_ptr, bool& is_near_new) {
+        is_near_new = FARUtil::IsPointNearNewPoints(ctnode_ptr->position, true);
+        if (ctnode_ptr->is_contour_necessary || is_near_new) {
+            if (MapHandler::IsPointInObsNeighbor(ctnode_ptr->position) && IsPointOnTerrain(ctnode_ptr->position)) {
+                return true;
+            } else if (ctnode_ptr->is_contour_necessary) {
+                ctnode_ptr->is_contour_necessary = false;
+            }
         }
         return false;
     }
@@ -296,17 +288,17 @@ private:
     }
 
     static inline void ResetBlockedContourPairs(const NavNodePtr& node_ptr) {
-        if (node_ptr->potential_contours.empty()) return;
-        const std::size_t N = node_ptr->potential_contours.size();
+        if (node_ptr->contour_connects.empty()) return;
+        const std::size_t N = node_ptr->contour_connects.size();
         for (std::size_t i=0; i<N; i++) {
             for (std::size_t j=0; j<N; j++) {
                 if (i == j || j > i) continue;
-                const NavNodePtr cnode1 = node_ptr->potential_contours[i];
-                const NavNodePtr cnode2 = node_ptr->potential_contours[j];
+                const NavNodePtr cnode1 = node_ptr->contour_connects[i];
+                const NavNodePtr cnode2 = node_ptr->contour_connects[j];
                 const auto it1 = cnode1->contour_votes.find(cnode2->id);
-                if (it1 != cnode1->contour_votes.end()) { // reset contour votes in between 
-                    const auto it2 = cnode2->contour_votes.find(cnode1->id);
-                    if (!FARUtil::IsVoteTrue(it1->second)) {
+                if (it1 != cnode1->contour_votes.end()) {
+                    if (!FARUtil::IsVoteTrue(it1->second, false)) {
+                        const auto it2 = cnode2->contour_votes.find(cnode1->id);
                         it1->second.clear(), it1->second.push_back(0);
                         it2->second.clear(), it2->second.push_back(0);
                     }
@@ -322,13 +314,12 @@ private:
             FARUtil::EraseNodeFromStack(node_ptr, ct_cnode_ptr->contour_connects);
         }
         for (const auto& pt_cnode_ptr : node_ptr->potential_contours) {
-            if (!pt_cnode_ptr->is_near_nodes) {
+            const auto it = pt_cnode_ptr->contour_votes.find(node_ptr->id);
+            if (!pt_cnode_ptr->is_near_nodes && FARUtil::IsVoteTrue(it->second, false)) {
                 AddNodeToOutrangeContourMap(pt_cnode_ptr);
-                // DEBUG
-                if (pt_cnode_ptr->is_merged) ROS_ERROR("DG: Non-near nodes should not be merged.");
             }
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_contours);
-            pt_cnode_ptr->contour_votes.erase(node_ptr->id);
+            pt_cnode_ptr->contour_votes.erase(it);
         }
         node_ptr->contour_connects.clear();
         node_ptr->contour_votes.clear();
@@ -385,29 +376,38 @@ private:
         ResetPolygonVotes(node_ptr);
     }
 
+    inline void ClearNodeFromInternalStack(const NavNodePtr& node_ptr) {
+        FARUtil::EraseNodeFromStack(node_ptr, near_nav_nodes_);
+        FARUtil::EraseNodeFromStack(node_ptr, wide_near_nodes_);
+        if (node_ptr->is_navpoint) {
+            FARUtil::EraseNodeFromStack(node_ptr, internav_near_nodes_);
+            FARUtil::EraseNodeFromStack(node_ptr, surround_internav_nodes_);
+        }
+    }
+
     /* Clear nodes in global graph which is marked as merge */
     inline void ClearMergedNodesInGraph() {
-        for (const auto& node_ptr : globalGraphNodes_) {
-            if (IsMergedNode(node_ptr)) {
-                ClearNodeConnectInGraph(node_ptr);
-                ClearContourConnectionInGraph(node_ptr);
-                ClearTrajectoryConnectInGraph(node_ptr);
-                RemoveNodeIdFromMap(node_ptr);
+        // remove nodes
+        for (auto it = globalGraphNodes_.begin(); it != globalGraphNodes_.end(); it ++) {
+            if (IsMergedNode(*it)) {
+                ClearNodeConnectInGraph(*it);
+                ClearContourConnectionInGraph(*it);
+                ClearTrajectoryConnectInGraph(*it);
+                RemoveNodeIdFromMap(*it);
+                ClearNodeFromInternalStack(*it);
+                globalGraphNodes_.erase(it--);
             }
         }
         // clean outrange contour nodes 
         out_contour_nodes_.clear();
         for (auto it = out_contour_nodes_map_.begin(); it != out_contour_nodes_map_.end();) {
             it->second --;
-            if (it->second <= 0) it = out_contour_nodes_map_.erase(it);
+            if (it->second <= 0 || it->first->is_near_nodes || IsMergedNode(it->first)) it = out_contour_nodes_map_.erase(it);
             else {
                 out_contour_nodes_.push_back(it->first);
                 ++ it;
             }
         }
-        const auto new_end = std::remove_if(globalGraphNodes_.begin(), globalGraphNodes_.end(), IsMergedNode);
-        globalGraphNodes_.resize(new_end - globalGraphNodes_.begin());
-        UpdateGlobalNearNodes();
     }
 
 public:
@@ -420,7 +420,7 @@ public:
      *  Updtae robot pos and odom node 
      *  @param robot_pos current robot position in world frame
     */
-    void UpdateOdom(const Point3D& robot_pos);
+    void UpdateRobotPosition(const Point3D& robot_pos);
     
     /**
      * Extract Navigation Nodes from Vertices Detected -> Update [new_nodes_] internally.
@@ -441,14 +441,20 @@ public:
                         const bool& is_freeze_vgraph,
                         NodePtrStack& clear_node);
 
+
+    /**
+     *  Updtae local in range nods stack: near nodes, wide near nodes etc.,
+    */
+    void UpdateGlobalNearNodes();
+
     /* Static Functions */
 
-    static void DeletePolygonEdge(const NavNodePtr& node_ptr1, 
+    static void DeletePolygonVote(const NavNodePtr& node_ptr1, 
                                   const NavNodePtr& node_ptr2, 
                                   const int& queue_size,
                                   const bool& is_reset=false);
 
-    static void RecordPolygonEdge(const NavNodePtr& node_ptr1, 
+    static void RecordPolygonVote(const NavNodePtr& node_ptr1, 
                                   const NavNodePtr& node_ptr2, 
                                   const int& queue_size,
                                   const bool& is_reset=false);
@@ -462,7 +468,50 @@ public:
                                    const int& queue_size);
 
     static void FillTrajConnect(const NavNodePtr& node_ptr1,
-                               const NavNodePtr& node_ptr2);
+                                const NavNodePtr& node_ptr2);
+
+    static inline void FillFrontierVotes(const NavNodePtr& node_ptr, const bool& is_frontier) {
+        if (is_frontier) {
+            std::deque<int> vote_queue(dg_params_.finalize_thred, 1);
+            node_ptr->frontier_votes = vote_queue;
+        }
+    } 
+
+    static inline bool IsPointOnTerrain(const Point3D& p) {
+        bool UNUSE_match = false;
+        const float terrain_h = MapHandler::TerrainHeightOfPoint(p, UNUSE_match, true);
+        if (abs(p.z - terrain_h - FARUtil::vehicle_height) < FARUtil::kTolerZ) {
+            return true;
+        }
+        return false;
+    }
+
+    static inline bool IsConvexConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1->free_direct != NodeFreeDirect::CONCAVE && node_ptr2->free_direct != NodeFreeDirect::CONCAVE) {
+            return true;
+        }
+        return false;
+    }
+
+    static inline bool IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const bool& is_contour) {
+        Point3D mid_p = (node_ptr1->position + node_ptr2->position) / 2.0f;
+        if (!is_contour) {
+            const Point3D diff_p = node_ptr2->position - node_ptr1->position;
+            if (diff_p.norm() > FARUtil::kMatchDist && abs(diff_p.z) / std::hypotf(diff_p.x, diff_p.y) > 1) {
+                return false; // slope is too steep > 45 degree
+            }
+        } else {
+            mid_p.z = (node_ptr1->ctnode->position.z + node_ptr2->ctnode->position.z) / 2.0f; 
+        }
+        bool is_match;
+        float minH, maxH;
+        const float avg_h = MapHandler::NearestHeightOfRadius(mid_p, FARUtil::kMatchDist, minH, maxH, is_match);
+        if (!is_match && is_contour) return false;
+        if (is_match && (maxH - minH > FARUtil::kMarginHeight || abs(avg_h + FARUtil::vehicle_height - mid_p.z) > FARUtil::kTolerZ / 2.0f)) {
+            return false;
+        }
+        return true;
+    }
 
     static inline void CreateNavNodeFromPoint(const Point3D& point, NavNodePtr& node_ptr, const bool& is_odom, 
                                               const bool& is_navpoint=false, const bool& is_goal=false, const bool& is_boundary=false) 
@@ -472,20 +521,24 @@ public:
         node_ptr->surf_dirs_vec.clear();
         node_ptr->ctnode = NULL;
         node_ptr->is_active = true;
+        node_ptr->is_block_frontier = false;
         node_ptr->is_contour_match = false;
         node_ptr->is_odom = is_odom;  
         node_ptr->is_near_nodes = true;
         node_ptr->is_wide_near = true;
         node_ptr->is_merged = false;
-        node_ptr->is_frontier = (is_odom || is_navpoint || is_goal) ? false : true;
+        node_ptr->is_covered  = (is_odom || is_navpoint || is_goal) ? true : false;
+        node_ptr->is_frontier = false;
         node_ptr->is_finalized = is_navpoint ? true : false;
         node_ptr->is_traversable = is_odom;
         node_ptr->is_navpoint = is_navpoint;
         node_ptr->is_boundary = is_boundary;
         node_ptr->is_goal = is_goal;
         node_ptr->clear_dumper_count = 0;
+        node_ptr->frontier_votes.clear();
         node_ptr->invalid_boundary.clear();
         node_ptr->connect_nodes.clear();
+        node_ptr->poly_connects.clear();
         node_ptr->contour_connects.clear();
         node_ptr->contour_votes.clear();
         node_ptr->potential_contours.clear();
@@ -503,11 +556,15 @@ public:
         for (const auto& cnode_ptr: node_ptr->connect_nodes) {
             FARUtil::EraseNodeFromStack(node_ptr, cnode_ptr->connect_nodes);
         }
+        for (const auto& pnode_ptr: node_ptr->poly_connects) {
+            FARUtil::EraseNodeFromStack(node_ptr, pnode_ptr->poly_connects);
+        }
         for (const auto& pt_cnode_ptr : node_ptr->potential_edges) {
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_edges);
             pt_cnode_ptr->edge_votes.erase(node_ptr->id);
         }
         node_ptr->connect_nodes.clear();
+        node_ptr->poly_connects.clear();
         node_ptr->edge_votes.clear();
         node_ptr->potential_edges.clear();
     }
@@ -519,13 +576,6 @@ public:
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 
-    static inline bool IsSameLevelConnct(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const float& toler) {
-        if (abs(node_ptr2->position.z - node_ptr1->position.z) < toler) {
-            return true;
-        }
-        return false;
-    }
-
     /* Add new navigation node to global graph */
     static inline void AddNodeToGraph(const NavNodePtr& node_ptr) {
         if (node_ptr != NULL) {
@@ -533,6 +583,23 @@ public:
         } else if (FARUtil::IsDebug) {
             ROS_WARN_THROTTLE(1.0, "DG: exist new node pointer is NULL, fails to add into graph");
         }
+    }
+
+    static inline void AddPolyEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1 == node_ptr2) return;
+        if (!FARUtil::IsTypeInStack(node_ptr2, node_ptr1->poly_connects) &&
+            !FARUtil::IsTypeInStack(node_ptr1, node_ptr2->poly_connects)) 
+        {
+            node_ptr1->poly_connects.push_back(node_ptr2);
+            node_ptr2->poly_connects.push_back(node_ptr1);
+        }
+    }
+
+    static inline void ErasePolyEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        // clear node2 in node1's connection
+        FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->poly_connects);
+        // clear node1 in node2's connection 
+        FARUtil::EraseNodeFromStack(node_ptr1, node_ptr2->poly_connects);
     }
 
     /* Add edge for given two navigation nodes */

@@ -10,9 +10,9 @@
 
 /***************************************************************************************/
 
-const char INIT_BIT  = char(0); // 0000
-const char OBS_BIT   = char(1); // 0001
-const char FREE_BIT  = char(2); // 0010
+const char INIT_BIT = char(0); // 0000
+const char OBS_BIT  = char(1); // 0001
+const char FREE_BIT = char(2); // 0010
 
 
 void GraphPlanner::Init(const ros::NodeHandle& nh, const GraphPlannerParams& params) {
@@ -55,7 +55,17 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         current->is_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
             if (close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
-            const float temp_gscore = current->gscore + this->EulerCost(current, neighbor);
+            float edist = this->EulerCost(current, neighbor);
+            if (neighbor == goal_ptr && edist > FARUtil::kEpsilon && !FARUtil::IsAtSameLayer(neighbor, current)) { // check for multi layer traverse cost
+                const Point3D diff_p = neighbor->position - current->position;
+                float factor = std::hypotf(diff_p.x, diff_p.y) / edist;
+                if (factor > FARUtil::kEpsilon) {
+                    edist /= factor;
+                } else {
+                    continue;
+                }
+            }
+            const float temp_gscore = current->gscore + edist;
             if (temp_gscore < neighbor->gscore) {
                 neighbor->parent = current;
                 neighbor->gscore = temp_gscore;
@@ -80,7 +90,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         close_set.insert(current->id);
         current->is_free_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (neighbor->is_frontier || close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
+            if (!neighbor->is_covered || close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
             const float e_dist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && (!is_goal_in_freespace_ || e_dist > FARUtil::kTerrainRange)) continue;
             const float temp_fgscore = current->fgscore + e_dist;
@@ -103,25 +113,26 @@ void GraphPlanner::UpdateGoalNavNodeConnects(const NavNodePtr& goal_ptr)
         if (node_ptr == goal_ptr) continue;
         if (this->IsValidConnectToGoal(node_ptr, goal_ptr)) {
             const bool is_directly_connect = node_ptr->is_odom ? true : false;
-            DynamicGraph::RecordPolygonEdge(node_ptr, goal_ptr, gp_params_.votes_size, is_directly_connect);
+            DynamicGraph::RecordPolygonVote(node_ptr, goal_ptr, gp_params_.votes_size, is_directly_connect);
         } else {
-            DynamicGraph::DeletePolygonEdge(node_ptr, goal_ptr, gp_params_.votes_size);
+            DynamicGraph::DeletePolygonVote(node_ptr, goal_ptr, gp_params_.votes_size);
         }
         const auto it = goal_ptr->edge_votes.find(node_ptr->id);
         if (it != goal_ptr->edge_votes.end() && FARUtil::IsVoteTrue(it->second, false)) {
-            DynamicGraph::AddEdge(node_ptr, goal_ptr);
+            DynamicGraph::AddPolyEdge(node_ptr, goal_ptr), DynamicGraph::AddEdge(node_ptr, goal_ptr);
             node_ptr->is_block_to_goal = false;
         } else {
-            DynamicGraph::EraseEdge(node_ptr, goal_ptr);
+            DynamicGraph::ErasePolyEdge(node_ptr, goal_ptr), DynamicGraph::EraseEdge(node_ptr, goal_ptr);
             node_ptr->is_block_to_goal = true;
         }
     }
 }
 
 bool GraphPlanner::IsValidConnectToGoal(const NavNodePtr& node_ptr, const NavNodePtr& goal_node_ptr) {
-    if (!node_ptr->is_block_to_goal || IsResetBlockStatus(node_ptr, goal_node_ptr)) {
+    if (node_ptr->is_traversable && (!node_ptr->is_block_to_goal || IsResetBlockStatus(node_ptr, goal_node_ptr))) {
         const Point3D diff_p = goal_node_ptr->position - node_ptr->position;
-        if (FARUtil::IsOutReducedDirs(diff_p, node_ptr) && ContourGraph::IsNavToGoalConnectFreePolygon(node_ptr, goal_node_ptr)) 
+        if (DynamicGraph::IsConvexConnect(node_ptr, goal_node_ptr) && (!FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr) || FARUtil::IsOutReducedDirs(diff_p, node_ptr)) && 
+            ContourGraph::IsNavToGoalConnectFreePolygon(node_ptr, goal_node_ptr)) 
         {
             return true;
         }
@@ -130,8 +141,8 @@ bool GraphPlanner::IsValidConnectToGoal(const NavNodePtr& node_ptr, const NavNod
 }
 
 bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
-                              PointStack& global_path,
-                              Point3D& _nav_goal,
+                              NodePtrStack& global_path,
+                              NavNodePtr& _nav_node_ptr,
                               Point3D& _goal_p,
                               bool& _is_fails,
                               bool& _is_free_nav) 
@@ -145,23 +156,24 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
     global_path.clear();
     _goal_p = goal_ptr->position;
     if (current_graph_.size() == 1) {
-        const Point3D diff_p = (_goal_p - odom_node_ptr_->position).normalize();
-        const Point3D next_goal = odom_node_ptr_->position + diff_p * 5.0;
         // update global path
-        global_path.push_back(odom_node_ptr_->position);
-        global_path.push_back(next_goal);
-        _nav_goal = this->NextNavWaypointFromPath(global_path, goal_ptr);
+        global_path.push_back(odom_node_ptr_);
+        global_path.push_back(goal_ptr);
+        _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
         _is_free_nav = is_free_nav_goal_;
         return true;       
     }
-    if ((odom_node_ptr_->position - _goal_p).norm_flat() < gp_params_.converge_dist || 
-        (odom_node_ptr_->position - origin_goal_pos_).norm_flat() < gp_params_.converge_dist)
+    if ((odom_node_ptr_->position - _goal_p).norm() < gp_params_.converge_dist || 
+        (odom_node_ptr_->position - origin_goal_pos_).norm() < gp_params_.converge_dist)
     {
         if (FARUtil::IsDebug) ROS_INFO("GP: *********** Goal Reached! ***********");
-        global_path.push_back(odom_node_ptr_->position);
-        if ((odom_node_ptr_->position - _goal_p).norm_flat() > gp_params_.converge_dist) _goal_p = origin_goal_pos_;
-        global_path.push_back(_goal_p);
-        _nav_goal = _goal_p;
+        global_path.push_back(odom_node_ptr_);
+        if ((odom_node_ptr_->position - _goal_p).norm() > gp_params_.converge_dist) {
+            _goal_p = origin_goal_pos_;
+            goal_ptr->position = _goal_p;   
+        }
+        global_path.push_back(goal_ptr);
+        _nav_node_ptr = goal_ptr;
         _is_free_nav = is_free_nav_goal_;
         this->GoalReset();
         is_goal_init_ = false;
@@ -188,26 +200,24 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
             const float cur_waypoint_dist = (odom_node_ptr_->position - next_waypoint_).norm();
             if (cur_waypoint_dist > gp_params_.adjust_radius) {
                 if ((odom_node_ptr_->position - last_planning_odom_).norm() < gp_params_.momentum_dist) { // movement momentum
-                    recorded_path_[0] = odom_node_ptr_->position;
                     global_path = recorded_path_;
-                    _nav_goal = this->NextNavWaypointFromPath(global_path, goal_ptr);
+                    _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
                     path_momentum_counter_ ++;
                     if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << " Over max: "<< gp_params_.momentum_thred);
                     return true;
                 }
             }
         }
-        PointStack cur_path;
+        NodePtrStack cur_path;
         if (this->ReconstructPath(goal_ptr, is_free_nav_goal_, cur_path)) {
-            _nav_goal = this->NextNavWaypointFromPath(cur_path, goal_ptr);
+            _nav_node_ptr = this->NextNavWaypointFromPath(cur_path, goal_ptr);
             if (is_global_path_init_ && path_momentum_counter_ < gp_params_.momentum_thred) { // momentum navigation
-                const float cur_waypoint_dist = (odom_node_ptr_->position - _nav_goal).norm();
+                const float cur_waypoint_dist = (odom_node_ptr_->position - _nav_node_ptr->position).norm();
                 if (last_waypoint_dist_ > gp_params_.adjust_radius && cur_waypoint_dist > gp_params_.adjust_radius) {
-                    const float heading_dot = (next_waypoint_ - last_planning_odom_).norm_dot(_nav_goal - odom_node_ptr_->position);
+                    const float heading_dot = (next_waypoint_ - last_planning_odom_).norm_dot(_nav_node_ptr->position - odom_node_ptr_->position);
                     if (heading_dot < 0.0f) { // consistant heading momentum
-                        recorded_path_[0] = odom_node_ptr_->position;
                         global_path = recorded_path_;
-                        _nav_goal = this->NextNavWaypointFromPath(global_path, goal_ptr);
+                        _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
                         path_momentum_counter_ ++;
                         if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
                         return true;
@@ -221,9 +231,8 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
         }
     } else { // no valid path found
         if (is_global_path_init_ && path_momentum_counter_ < gp_params_.momentum_thred) { // momentum go forward
-            recorded_path_[0] = odom_node_ptr_->position;
             global_path = recorded_path_;
-            _nav_goal = this->NextNavWaypointFromPath(global_path, goal_ptr);
+            _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
             path_momentum_counter_ ++;
             if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
             return true;
@@ -232,9 +241,9 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
                 if (FARUtil::IsDebug) ROS_WARN("GP: free navigation fails, auto swiching to attemptable navigation...");
                 if (is_global_path_init_) {
                     global_path = recorded_path_;
-                    _nav_goal = this->NextNavWaypointFromPath(global_path, goal_ptr);
+                    _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
                 } else {
-                    _nav_goal = _goal_p;
+                    _nav_node_ptr = goal_ptr;
                 }
                 is_free_nav_goal_ = false;
                 return true;
@@ -253,7 +262,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
 
 bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
                                    const bool& is_free_nav,
-                                   PointStack& global_path)
+                                   NodePtrStack& global_path)
 {
     if (goal_node_ptr == NULL || (!is_free_nav && goal_node_ptr->parent == NULL) || (is_free_nav && goal_node_ptr->free_parent == NULL)) {
         ROS_ERROR("GP: Critical! reconstruct path error: goal node or its parent equals to NULL.");
@@ -261,18 +270,18 @@ bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
     }
     global_path.clear();
     NavNodePtr check_ptr = goal_node_ptr;
-    global_path.push_back(check_ptr->position);
+    global_path.push_back(check_ptr);
     if (is_free_nav) {
         while (true) {
             const NavNodePtr parent_ptr = check_ptr->free_parent;
-            global_path.push_back(parent_ptr->position);
+            global_path.push_back(parent_ptr);
             if (parent_ptr->free_parent == NULL) break;
             check_ptr = parent_ptr;
         }
     } else {
         while (true) {
             const NavNodePtr parent_ptr = check_ptr->parent;
-            global_path.push_back(parent_ptr->position);
+            global_path.push_back(parent_ptr);
             if (parent_ptr->parent == NULL) break;
             check_ptr = parent_ptr;
         } 
@@ -281,24 +290,24 @@ bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
     return true;
 }
 
-Point3D GraphPlanner::NextNavWaypointFromPath(const PointStack& global_path, const NavNodePtr goal_ptr) {
+NavNodePtr GraphPlanner::NextNavWaypointFromPath(const NodePtrStack& global_path, const NavNodePtr goal_ptr) {
     if (global_path.size() < 2) {
         ROS_ERROR("GP: global path size less than 2.");
-        return goal_ptr->position;
+        return goal_ptr;
     }
-    Point3D nav_waypoint;
+    NavNodePtr nav_point_ptr;
     const std::size_t path_size = global_path.size();
     std::size_t nav_idx = 1;
-    nav_waypoint = global_path[nav_idx];
-    float dist = (nav_waypoint - odom_node_ptr_->position).norm();
+    nav_point_ptr = global_path[nav_idx];
+    float dist = (nav_point_ptr->position - odom_node_ptr_->position).norm();
     while (dist < gp_params_.converge_dist) {
         nav_idx ++;
         if (nav_idx < path_size) {
-            nav_waypoint = global_path[nav_idx];
-            dist = (nav_waypoint - odom_node_ptr_->position).norm();
+            nav_point_ptr = global_path[nav_idx];
+            dist = (nav_point_ptr->position - odom_node_ptr_->position).norm();
         } else break;
     }
-    return nav_waypoint;
+    return nav_point_ptr;
 }
 
 void GraphPlanner::UpdateGoal(const Point3D& goal) {
@@ -335,13 +344,12 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
     this->ResetFreeTerrainGridOrigin(origin_goal_pos_);
 }
 
-void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr)
+void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height)
 {
     if (is_use_internav_goal_) return; // return if using an exsiting internav node as goal
-    if (is_global_path_init_) { // use path to adjust goal height
-        if (recorded_path_.size() > 1) {
-            goal_ptr->position.z = (recorded_path_.end() - 2)->z;
-        }
+    if (is_adjust_height && is_global_path_init_ && recorded_path_.size() > 1) { // use path to adjust goal height
+        const auto it = recorded_path_.end() - 2;
+        goal_ptr->position.z = (*it)->position.z;
     }
     const Eigen::Vector3i ori_sub = free_terrain_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
     const Point3D ori_pos_height(origin_goal_pos_.x, origin_goal_pos_.y, goal_ptr->position.z);

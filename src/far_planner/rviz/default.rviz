@@ -313,7 +313,7 @@ Visualization Manager:
         last_nav_node: false
         original_goal: false
         out_contour: false
-        waypoint: false
+        waypoint: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -335,10 +335,12 @@ Visualization Manager:
         global_vertex: false
         global_vgraph: false
         localrange_vertex: false
+        frontier_vertex: false
         odom_edge: false
+        visibility_edge : false
         polygon_edge: true
         to_goal_edge: false
-        trajectory_edge: false
+        trajectory_edge: true
         trajectory_vertex: false
         updating_vertex: false
         vertex_angle: false
@@ -481,7 +483,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
-    - Alpha: 0.125
+    - Alpha: 0.15
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -508,6 +510,14 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /viz_viewpoint_extend_topic
+      Name: ViewpointExtend
+      Namespaces:
+        {}
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:

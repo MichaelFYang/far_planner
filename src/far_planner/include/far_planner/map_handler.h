@@ -16,7 +16,6 @@ struct MapHandlerParams {
     float grid_max_length;
     float grid_max_height;
     // local terrain height map
-    float search_radius;
     float height_voxel_dim;
 };
 
@@ -31,9 +30,49 @@ public:
 
     void UpdateRobotPosition(const Point3D& odom_pos);
 
-    void AdjustNodesHeight(const NodePtrStack& nodes, const bool& is_vehicle_height=true);
+    void AdjustNodesHeight(const NodePtrStack& nodes);
 
-    void AjustCTNodeHeight(const CTNodeStack& ctnodes, const bool& is_vehicle_height=true);
+    void AdjustCTNodeHeight(const CTNodeStack& ctnodes);
+
+    static float TerrainHeightOfPoint(const Point3D& p, 
+                                      bool& is_matched, 
+                                      const bool& is_search, 
+                                      const bool& is_limited_search=false);
+
+    static bool IsPointInObsNeighbor(const Point3D& p);
+
+    /**
+     * @brief Calculate the terrain height of a given point and radius around it
+     * @param p A given position
+     * @param radius The radius distance around the given posiitn p
+     * @param minH[out] The mininal terrain height in the radius
+     * @param maxH[out] The maximal terrain height in the radius
+     * @param is_match[out] Whether or not find terrain association in radius
+     * @return The average terrain height
+     */
+    template <typename Position>
+    static inline float NearestHeightOfRadius(const Position& p, const float& radius, float& minH, float& maxH, bool& is_matched) {
+        std::vector<int> pIdxK;
+        std::vector<float> pdDistK;
+        PCLPoint pcl_p;
+        pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
+        minH = maxH = p.z;
+        is_matched = false;
+        if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) {
+            float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity;
+            minH = maxH = avgH;
+            for (int i=1; i<pIdxK.size(); i++) {
+                const float temp = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[i]].intensity;
+                if (temp < minH) minH = temp;
+                if (temp > maxH) maxH = temp;
+                avgH += temp;
+            }
+            avgH /= (float)pIdxK.size();
+            is_matched = true;
+            return avgH;
+        }
+        return p.z;
+    }
 
     /** Update global cloud grid with incoming clouds 
      * @param CloudIn incoming cloud ptr
@@ -83,24 +122,52 @@ public:
     void ResetGripMapCloud();
 
     /**
-     * @brief Clear the cell that the given point located
+     * @brief Clear the cells that from the robot position to the given position
      * @param point Give point location
      */
-    void ClearPointCell(const Point3D& point);
+    void ClearObsCellThroughPosition(const Point3D& point);
 
 private:
 
     MapHandlerParams map_params_;
     int row_num_, col_num_, level_num_, neighbor_Lnum_, neighbor_Hnum_, height_dim_;
-    Point3D neghbor_ceils_origin_;
     Eigen::Vector3i robot_cell_sub_;
     int INFLATE_N;
     bool is_init_ = false;
-    PointKdTreePtr kdtree_terrain_clould_;
+    PointCloudPtr flat_terrain_cloud_;
+    static PointKdTreePtr kdtree_terrain_clould_;
+
+    template <typename Position>
+    static inline float NearestHeightOfPoint(const Position& p, float& dist_square) {
+        // Find the nearest node in graph
+        std::vector<int> pIdxK(1);
+        std::vector<float> pdDistK(1);
+        PCLPoint pcl_p;
+        dist_square = FARUtil::kINF;
+        pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
+        if (kdtree_terrain_clould_->nearestKSearch(pcl_p, 1, pIdxK, pdDistK) > 0) {
+            pcl_p = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]];
+            dist_square = pdDistK[0];
+            return pcl_p.intensity;
+        }
+        return p.z;
+    }
 
     void SetTerrainHeightGridOrigin(const Point3D& robot_pos);
 
-    inline void Expansion2D(const Eigen::Vector3i& csub, std::vector<Eigen::Vector3i>& subs, const int& n=1) {
+    void TraversableAnalysis(const PointCloudPtr& terrainHeightOut);
+
+    inline void AssignFlatTerrainCloud(const PointCloudPtr& terrainRef, PointCloudPtr& terrainFlatOut) {
+        const int N = terrainRef->size();
+        terrainFlatOut->resize(N);
+        for (int i = 0; i<N; i++) {
+            PCLPoint pcl_p = terrainRef->points[i];
+            pcl_p.intensity = pcl_p.z, pcl_p.z = 0.0f;
+            terrainFlatOut->points[i] = pcl_p;
+        }
+    }
+
+    inline void Expansion2D(const Eigen::Vector3i& csub, std::vector<Eigen::Vector3i>& subs, const int& n) {
         subs.clear();
         for (int ix=-n; ix<=n; ix++) {
             for (int iy=-n; iy<=n; iy++) {
@@ -111,19 +178,22 @@ private:
         }
     }
 
-    float NearestHeightOfPoint(const Point3D& p);
+    void ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs);
 
-    std::vector<int> neighbor_indices_; // Surrounding neighbor cloud grid indices stack
+    std::unordered_set<int> neighbor_free_indices_; // surrounding free cloud grid indices stack
+    static std::unordered_set<int> neighbor_obs_indices_;  // surrounding obs cloud grid indices stack
 
     std::vector<int> global_visited_induces_;
     std::vector<int> util_obs_modified_list_;
     std::vector<int> util_free_modified_list_;
     std::vector<int> util_remove_check_list_;
-    std::vector<int> terrain_grid_occupy_list_;
+    static std::vector<int> terrain_grid_occupy_list_;
+    static std::vector<int> terrain_grid_traverse_list_;
+
     
-    std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
     std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
-    std::unique_ptr<grid_ns::Grid<float>> terrain_height_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_;
  
 };
 

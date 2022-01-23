@@ -23,6 +23,8 @@ struct FARMasterParams {
     float waypoint_project_dist;
     float main_run_freq;
     float viz_ratio;
+    bool  is_multi_layer;
+    bool  is_viewpoint_extend;
     bool  is_visual_opencv;
     bool  is_static_env;
     bool  is_pub_boundary;
@@ -52,7 +54,7 @@ private:
     ros::Timer planning_event_;
     std_msgs::Float32 runtimer_;
 
-    Point3D robot_pos_, robot_heading_, nav_heading_, nav_goal_;
+    Point3D robot_pos_, robot_heading_, nav_heading_;
 
     bool is_reset_env_, is_stop_update_;
 
@@ -69,7 +71,12 @@ private:
     PointCloudPtr local_terrain_ptr_;
     PointCloudPtr terrain_height_ptr_;
 
+    /* veiwpoint extension clouds */
+    PointCloudPtr  viewpoint_around_ptr_;
+    PointKdTreePtr kdtree_viewpoint_obs_cloud_;
+
     NavNodePtr odom_node_ptr_ = NULL;
+    NavNodePtr nav_node_ptr_  = NULL;
     NodePtrStack new_nodes_;
     NodePtrStack nav_graph_;
     NodePtrStack near_nav_graph_;
@@ -91,7 +98,7 @@ private:
     GraphMsger graph_msger_;
 
     /* ROS Params */
-    FARMasterParams      master_params_;
+    FARMasterParams     master_params_;
     ContourDetectParams cdetect_params_;
     DynamicGraphParams  graph_params_;
     GraphPlannerParams  gp_params_;
@@ -111,12 +118,14 @@ private:
     void PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
                        const PointCloudPtr& cloudOut);
 
-    Point3D ProjectNavWaypoint(const Point3D& nav_waypoint, const Point3D& last_waypoint);
+    Point3D ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr);
 
     /* Callback Functions */
     void OdomCallBack(const nav_msgs::OdometryConstPtr& msg);
     void TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
     void TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
+
+    Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
 
     inline void ResetGraphCallBack(const std_msgs::EmptyConstPtr& msg) {
         is_reset_env_ = true;

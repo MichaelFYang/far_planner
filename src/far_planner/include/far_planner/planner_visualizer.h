@@ -29,7 +29,7 @@ private:
     // Utility Cloud 
     PointCloudPtr point_cloud_ptr_;
     // rviz publisher 
-    ros::Publisher viz_node_pub_, viz_path_pub_, viz_graph_pub_, viz_contour_pub_, viz_map_pub_;
+    ros::Publisher viz_node_pub_, viz_path_pub_, viz_graph_pub_, viz_contour_pub_, viz_map_pub_, viz_view_extend;
 
 public:
     DPVisualizer() = default;
@@ -43,8 +43,10 @@ public:
                   const float scale=0.75f,
                   const float alpha=0.75f);
 
+    void VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point3D& extend_point);
+
     // True for non-attempts path
-    void VizPath(const PointStack& global_path, const bool& is_free_nav=false);
+    void VizPath(const NodePtrStack& global_path, const bool& is_free_nav=false);
 
     void VizMapGrids(const PointStack& neighbor_centers, 
                      const PointStack& occupancy_centers,

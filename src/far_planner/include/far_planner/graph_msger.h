@@ -29,8 +29,8 @@ private:
     ros::Publisher  graph_pub_;
     ros::Subscriber graph_sub_;
 
-    NodePtrStack global_graph_;
-    PointCloudPtr nodes_cloud_ptr_;
+    NodePtrStack   global_graph_;
+    PointCloudPtr  nodes_cloud_ptr_;
     PointKdTreePtr kdtree_graph_cloud_;
     
     void CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr);
@@ -73,6 +73,7 @@ private:
 
     void ExtractConnectIdxs(const visibility_graph_msg::Node& node,
                             IdxStack& connect_idxs,
+                            IdxStack& poly_idxs,
                             IdxStack& contour_idxs,
                             IdxStack& traj_idxs);
 

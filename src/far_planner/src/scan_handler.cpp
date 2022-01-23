@@ -46,7 +46,7 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
 
 void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn) {
     if (!is_grids_init_ || scanCloudIn->empty()) return;
-    const float H_RANGE = scan_params_.terrain_range / 2.0;
+    const float H_RANGE = scan_params_.terrain_range / 2.0f;
     for (const auto& point : scanCloudIn->points) {
         const float r = pcl::euclideanDistance(point, center_p_);
         const int L = r > H_RANGE ? scan_params_.inflate_size * 2 : scan_params_.inflate_size;

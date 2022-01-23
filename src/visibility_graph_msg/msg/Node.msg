@@ -3,9 +3,11 @@ uint32 id
 uint8 FreeType
 geometry_msgs/Point position
 geometry_msgs/Point[] surface_dirs
+bool is_covered
 bool is_frontier
 bool is_navpoint
 bool is_boundary
 uint32[] connect_nodes
+uint32[] poly_connects
 uint32[] contour_connects
 uint32[] trajectory_connects

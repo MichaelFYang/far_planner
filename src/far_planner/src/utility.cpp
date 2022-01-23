@@ -10,14 +10,20 @@
 
 /***************************************************************************************/
 
-void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_size) {
+void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size) {
   // filter point cloud with constant leaf size 0.2m
   pcl::PointCloud<PCLPoint> filter_rs_cloud;
   pcl::VoxelGrid<PCLPoint> vg;
   vg.setInputCloud(point_cloud);
-  vg.setLeafSize(leaf_size, leaf_size, leaf_size);
+  vg.setLeafSize(leaf_size.x(), leaf_size.y(), leaf_size.z());
   vg.filter(filter_rs_cloud);
   *point_cloud = filter_rs_cloud;
+}
+
+void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_size) {
+  // filter point cloud with constant leaf size 0.2m
+  const Eigen::Vector3d leaf(leaf_size, leaf_size, leaf_size);
+  FilterCloud(point_cloud, leaf);
 }
 
 void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut) {
@@ -239,8 +245,8 @@ bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
 }
 
 std::size_t FARUtil::PointInXCounter(const Point3D& p,
-                                    const float& radius,
-                                    const PointKdTreePtr& KdTree) 
+                                     const float& radius,
+                                     const PointKdTreePtr& KdTree) 
 {
   std::vector<int> pointSearchInd;
   std::vector<float> pointSearchSqDis;
@@ -277,7 +283,7 @@ int FARUtil::Mod(const int& a, const int& b) {
 }
 
 void FARUtil::EraseNodeFromStack(const NavNodePtr& node_ptr,
-                                NodePtrStack& node_stack) {
+                                 NodePtrStack& node_stack) {
   for (auto it = node_stack.begin(); it != node_stack.end(); it++) {
     if (*it  == node_ptr) {
       node_stack.erase(it--);
@@ -343,51 +349,23 @@ bool FARUtil::IsOutReducedDirs(const Point3D& diff_p,
   return true;
 }
 
-bool FARUtil::IsInCoverageDirPairs(const Point3D& diff_p,
-                                  const NavNodePtr& node_ptr) 
-{
+bool FARUtil::IsInCoverageDirPairs(const Point3D& diff_p, const NavNodePtr& node_ptr) {
   if (node_ptr->free_direct == NodeFreeDirect::PILLAR) return false;
   const Point3D norm_dir = diff_p.normalize_flat();
   const PointPair surf_dirs = node_ptr->surf_dirs;
   const float margin_angle_noise = FARUtil::MarginAngleNoise(diff_p.norm_flat(), 
                                                              FARUtil::kNearDist, 
-                                                             FARUtil::kAngleNoise);
+                                                             FARUtil::kAngleNoise * 2.0f);
   const float dot_value = FARUtil::NoiseCosValue(surf_dirs.first * surf_dirs.second, true, margin_angle_noise);
   if (node_ptr->free_direct == NodeFreeDirect::CONCAVE) {
-    if (norm_dir * surf_dirs.first > dot_value &&
-        norm_dir * surf_dirs.second > dot_value) {
+    if (norm_dir * surf_dirs.first > dot_value && norm_dir * surf_dirs.second > dot_value) {
       return true;
     }
   } else if (node_ptr->free_direct == NodeFreeDirect::CONVEX) {
-    if (norm_dir * (-surf_dirs.second) > dot_value &&
-      norm_dir * (-surf_dirs.first) > dot_value) {
+    if (norm_dir * (-surf_dirs.second) > dot_value && norm_dir * (-surf_dirs.first) > dot_value) {
       return true;
     }
   }
-  return false;
-}
-
-bool FARUtil::IsInFreeDirofNode(const Point3D& diff_p,
-                                const NavNodePtr& node_ptr)
-{
-  if (node_ptr->free_direct == NodeFreeDirect::PILLAR) return true;
-  const Point3D norm_dir = diff_p.normalize_flat();
-  const PointPair surf_dirs = node_ptr->surf_dirs;
-  const float margin_angle_noise = FARUtil::MarginAngleNoise(diff_p.norm_flat(), 
-                                                             FARUtil::kNearDist, 
-                                                             FARUtil::kAngleNoise);
-  float dot_thred;
-  if (node_ptr->free_direct == NodeFreeDirect::CONCAVE) {
-    dot_thred = FARUtil::NoiseCosValue(surf_dirs.first * surf_dirs.second, true, margin_angle_noise);
-  } else {
-    dot_thred = FARUtil::NoiseCosValue(surf_dirs.first * surf_dirs.second, false, margin_angle_noise);
-  }
-  bool is_in_dirs = false;
-  if (norm_dir * surf_dirs.first > dot_thred && norm_dir * surf_dirs.second > dot_thred) {
-    is_in_dirs = true;
-  }
-  if (node_ptr->free_direct == NodeFreeDirect::CONVEX && !is_in_dirs) return true;
-  if (node_ptr->free_direct == NodeFreeDirect::CONCAVE && is_in_dirs) return true;
   return false;
 }
 
@@ -670,7 +648,7 @@ Point3D FARUtil::RANSACPoisiton(const std::deque<Point3D>& pos_filter_stack, con
     PointStack temp_inlier_stack;
     temp_inlier_stack.clear();
     for (const auto& cp : pos_filter_stack) {
-      if ((p - cp).norm() < margin) {
+      if ((p - cp).norm_flat() < margin) {
         temp_inlier_stack.push_back(cp);
         temp_inlier_size ++;
       }
@@ -710,14 +688,6 @@ PointPair FARUtil::RANSACSurfDirs(const std::deque<PointPair>& surf_dirs_stack, 
     return pillar_dir;
   }
   return FARUtil::AverageDirs(inlier_stack);
-}
-
-Point3D FARUtil::AveragePoints(const PointStack& point_stack) {
-  Point3D mean_p(0,0,0);
-  for (const auto& pos : point_stack) {
-    mean_p = mean_p + pos;
-  }
-  return mean_p / (float)point_stack.size();
 }
 
 PointPair FARUtil::AverageDirs(const std::vector<PointPair>& dirs_stack) {
@@ -830,8 +800,9 @@ bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {
   return false;
 }
 
-bool FARUtil::IsPointInLocalRange(const Point3D& p) {
-  if (FARUtil::IsPointInToleratedHeight(p) && (p - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
+bool FARUtil::IsPointInLocalRange(const Point3D& p, const bool& is_large_h) {
+  const float H = is_large_h ? FARUtil::kTolerZ * 1.5f : FARUtil::kTolerZ;
+  if (FARUtil::IsPointInToleratedHeight(p, H) && (p - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
       return true;
   }
   return false;
@@ -936,10 +907,10 @@ float FARUtil::LineMatchPercentage(const PointPair& line1, const PointPair& line
   const float ds = (line1.first - line2.first).norm_flat();
   const float theta = acos((line1.second - line1.first).norm_flat_dot(line2.second - line2.first));
   const float contour_ds = (line2.second - line2.first).norm_flat();
-  if (theta > FARUtil::kAcceptAlign || ds > FARUtil::kNearDist) return 0.0f;
+  if (theta > FARUtil::kAcceptAlign || ds > FARUtil::kNavClearDist) return 0.0f;
   float match_ds = contour_ds;
   if (theta > FARUtil::kEpsilon) {
-    match_ds = std::min(match_ds, (FARUtil::kNearDist - ds) / tan(theta));
+    match_ds = std::min(match_ds, (FARUtil::kNavClearDist - ds) / tan(theta));
   }
   return match_ds / contour_ds;
 }

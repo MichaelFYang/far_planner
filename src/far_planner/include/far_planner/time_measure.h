@@ -1,7 +1,6 @@
 #ifndef TIME_MEASURE_H
 #define TIME_MEASURE_H
 
-#include <ros/console.h>
 #include <chrono>
 #include <unordered_map>
 #include <iostream>
@@ -24,15 +23,8 @@ public:
         const auto start_time = Clock::now();
         if (it == timer_stack_.end()) {
             timer_stack_.insert({timer_name, start_time});
-        } else {
-            if (is_reset) {
-                // DEBUG
-                // ROS_INFO_STREAM(timer_name<<" "<<"Timer reset.");
-                it->second = start_time;
-            } else {
-                // DEBUG
-                // ROS_INFO_STREAM("Timer of <"<<timer_name<<"> has already started.");
-            }
+        } else if (is_reset) {
+            it->second = start_time;
         }
     }
 
@@ -45,11 +37,8 @@ public:
             if (is_output) std::cout<<"    "<<timer_name<<" "<<"Time: "<<time_duration<<"ms"<<std::endl;
             timer_stack_.erase(it);
             return time_duration;
-        } else {
-            // DEBUG
-            // ROS_INFO_STREAM(timer_name<<" "<<"Timer has not start yet.");
-            return -1.0;
-        }
+        } 
+        return -1.0;
     }
 
     inline double record_time(const string& timer_name) {
@@ -58,14 +47,9 @@ public:
             const auto cur_time = Clock::now();
             const auto duration = duration_cast<microseconds>(cur_time - it->second);
             const double time_duration = duration.count() / 1000.0;
-            // DEBUG
-            // ROS_INFO_STREAM(timer_name<<" "<<"Time from start: "<<time_duration<<"ms");
             return time_duration;
-        } else {
-            // DENUG
-            // ROS_INFO_STREAM(timer_name<<" "<<"Timer has not start yet.");
-            return -1.0;
         }
+        return -1.0;
     }
 };
 

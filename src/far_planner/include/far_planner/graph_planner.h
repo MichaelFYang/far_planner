@@ -42,7 +42,7 @@ NodePtrStack current_graph_;
 bool is_free_nav_goal_;
 
 // momentum planning values
-PointStack recorded_path_;
+NodePtrStack recorded_path_;
 Point3D next_waypoint_;
 int path_momentum_counter_;
 bool is_global_path_init_;
@@ -57,7 +57,7 @@ float PriorityScore(const NavNodePtr& node_ptr);
 
 bool ReconstructPath(const NavNodePtr& goal_node_ptr,
                      const bool& is_free_nav,
-                     PointStack& global_path);
+                     NodePtrStack& global_path);
 
 bool IsNodeConnectInFree(const NavNodePtr& current_node,
                          const NavNodePtr& neighbor_node);
@@ -65,7 +65,7 @@ bool IsNodeConnectInFree(const NavNodePtr& current_node,
 bool IsValidConnectToGoal(const NavNodePtr& node_ptr, 
                           const NavNodePtr& goal_node_ptr);
 
-Point3D NextNavWaypointFromPath(const PointStack& global_path, const NavNodePtr goal_ptr);
+NavNodePtr NextNavWaypointFromPath(const NodePtrStack& global_path, const NavNodePtr goal_ptr);
 
 void AttemptStatusCallBack(const std_msgs::Bool& msg);
 
@@ -99,13 +99,13 @@ inline void InitNodesStates(const NodePtrStack& graph) {
     }
 }
 
-inline void RecordPathInfo(const PointStack& global_path) {
+inline void RecordPathInfo(const NodePtrStack& global_path) {
     if (global_path.size() < 2) {
         if (FARUtil::IsDebug) ROS_ERROR("GP: recording path for momontum fails, planning path is empty");
         return;
     }
     recorded_path_         = global_path;
-    next_waypoint_         = global_path[1];
+    next_waypoint_         = global_path[1]->position;
     last_waypoint_dist_    = (odom_node_ptr_->position - next_waypoint_).norm();
     is_global_path_init_   = true;
     path_momentum_counter_ = 0;
@@ -113,7 +113,7 @@ inline void RecordPathInfo(const PointStack& global_path) {
 }
 
 inline bool IsResetBlockStatus(const NavNodePtr& node_ptr, const NavNodePtr& goal_ptr) {
-    if (node_ptr->is_odom || (!node_ptr->is_finalized && node_ptr->is_near_nodes)) return true;
+    if (node_ptr->is_odom || (node_ptr->is_near_nodes && (!node_ptr->is_finalized || node_ptr->is_frontier))) return true;
     if (!FARUtil::IsStaticEnv && node_ptr->is_near_nodes) return true;
     const auto it = node_ptr->edge_votes.find(goal_ptr->id);
     if (node_ptr->is_near_nodes && it != node_ptr->edge_votes.end() && it->second.size() < gp_params_.votes_size) {
@@ -165,7 +165,7 @@ void UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr&
  * Generate path to goal based on traversibility result
  * @param goal_ptr current goal node
  * @param global_path(return) return the global path from odom node position
- * @param _nav_goal(return) current navigation waypoint
+ * @param _nav_node_ptr(return) current navigation waypoint
  * @param _goal_p(return) goal position after free space adjust 
  * @param _is_fails(return) whether the planner fails to find the path
  * @param _is_free_nav(return) the attemptable navigation status (True)->Non-attempts
@@ -173,11 +173,11 @@ void UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr&
 */
 
 bool PathToGoal(const NavNodePtr& goal_ptr,
-                PointStack& global_path,
-                Point3D& _nav_goal,
-                Point3D& _goal_p,
-                bool& _is_fails,
-                bool& _is_free_nav);
+                NodePtrStack& global_path,
+                NavNodePtr&   _nav_node_ptr,
+                Point3D&      _goal_p,
+                bool&         _is_fails,
+                bool&         _is_free_nav);
 
 /**
  * @brief Update connectivity between goal node and navigation graph
@@ -207,8 +207,9 @@ void UpdateFreeTerrainGrid(const Point3D& center,
 /**
  * @brief Adjust goal position based on terrain and polygons
  * @param goal_ptr current goal node pointer
+ * @param is_adjust_height whether or not adjust height of goal -> (False if multi layer planning)
  */
-void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr);
+void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height);
 
 /**
  * @brief Reset internal values and containers
@@ -235,11 +236,10 @@ inline void ResetPlannerInternalValues() {
 
 const NavNodePtr& GetGoalNodePtr() const { return goal_node_ptr_;};
 
-const Point3D GetOriginNodePos(const bool& is_adjusted_z) const {
+Point3D GetOriginNodePos(const bool& is_adjusted_z) const {
     if (goal_node_ptr_ == NULL) return Point3D(0,0,0);
-    if (!is_adjusted_z) {
-        return origin_goal_pos_;
-    } else {
+    if (!is_adjusted_z) return origin_goal_pos_;
+    else {
         return Point3D(origin_goal_pos_.x,
                        origin_goal_pos_.y,
                        goal_node_ptr_->position.z);
