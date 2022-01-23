@@ -70,7 +70,7 @@ roslaunch boundary_handler boundary_handler.launch
 FAR planner settings are kept in default.yaml in the 'src/far_planner/config' folder. For Matterport3D environments, the settings are in matterport.yaml in the same folder.
 - *is_static_env* (default: true) - set to false if the environment contains dynamic obstacles.
 - *is_attempt_autoswitch* (default: true) - set to false to turn off auto switch from non-attemptable navigation (for known environment) to attemptable navigation (for unknown environment).
-- *is_viewpoint_extend* (default: false) - set to true to extend visibility graph vertices away from objects to gain better viewpoints.
+- *is_viewpoint_extend* (default: true) - set to true to extend visibility graph vertices away from objects to gain better viewpoints.
 - *is_pub_boundary* (default: false) - set to true to send custom navigation boundaries to the local planner in the development environment.
 
 ## Reference

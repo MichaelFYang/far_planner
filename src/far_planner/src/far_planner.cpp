@@ -272,7 +272,7 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     bool is_current_free_nav = false;
     if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_current_free_nav) && nav_node_ptr_ != NULL) {
       Point3D waypoint = nav_node_ptr_->position;
-      if (!nav_node_ptr_->is_goal) {
+      if (nav_node_ptr_ != goal_ptr) {
         waypoint = this->ProjectNavWaypoint(nav_node_ptr_, last_nav_ptr);
       } else if (master_params_.is_viewpoint_extend) {
         planner_viz_.VizViewpointExtend(goal_ptr, goal_ptr->position);
