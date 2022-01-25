@@ -335,10 +335,9 @@ public:
 
     static PointPair RANSACSurfDirs(const std::deque<PointPair>& surf_dirs_stack, const float& margin, std::size_t& inlier_size);
     
-    static float VerticalDistToLine(const Point3D& start_p, 
-                                    const Point3D& end_p, 
-                                    const Point3D& cur_p, 
-                                    const bool& is_segment_restrict=false);
+    static float VerticalDistToLine2D(const Point3D& start_p, 
+                                      const Point3D& end_p, 
+                                      const Point3D& cur_p);
 
     static bool IsInCylinder(const Point3D& start_p, 
                              const Point3D& end_p, 

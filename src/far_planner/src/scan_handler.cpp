@@ -19,7 +19,7 @@ void ScanHandler::Init(const ScanHandlerParams& params) {
     row_num_ = std::ceil(scan_params_.terrain_range * 2.0f / scan_params_.voxel_size);
     if (row_num_ % 2 == 0) row_num_ ++;
     col_num_ = row_num_;
-    level_num_ = std::ceil(scan_params_.ceil_height / scan_params_.voxel_size);
+    level_num_ = std::ceil(scan_params_.ceil_height * 2.0f / scan_params_.voxel_size);
     if (level_num_ % 2 == 0) level_num_ ++;
     Eigen::Vector3i grid_size(row_num_, col_num_, level_num_);
     Eigen::Vector3d grid_origin(0,0,0);

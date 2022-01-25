@@ -29,7 +29,8 @@ private:
     // Utility Cloud 
     PointCloudPtr point_cloud_ptr_;
     // rviz publisher 
-    ros::Publisher viz_node_pub_, viz_path_pub_, viz_graph_pub_, viz_contour_pub_, viz_map_pub_, viz_view_extend;
+    ros::Publisher viz_node_pub_, viz_path_pub_, viz_poly_pub_, viz_graph_pub_;
+    ros::Publisher viz_contour_pub_, viz_map_pub_, viz_view_extend;
 
 public:
     DPVisualizer() = default;
@@ -42,6 +43,8 @@ public:
                   const VizColor& color,
                   const float scale=0.75f,
                   const float alpha=0.75f);
+
+    void VizGlobalPolygons(const std::vector<PointPair>& contour_pairs);
 
     void VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point3D& extend_point);
 

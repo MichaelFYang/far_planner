@@ -39,7 +39,7 @@ private:
     static std::size_t id_tracker_; // Global unique id start from "0" [per robot]
     static NodePtrStack globalGraphNodes_;
     static std::unordered_map<std::size_t, NavNodePtr> idx_node_map_;
-    static std::unordered_map<NavNodePtr, int> out_contour_nodes_map_;
+    static std::unordered_map<NavNodePtr, std::pair<int, std::unordered_set<NavNodePtr>>> out_contour_nodes_map_;
 
     TerrainPlanner terrain_planner_;
     TerrainPlannerParams tp_params_;
@@ -225,8 +225,12 @@ private:
 
     inline void AddNodeToOutrangeContourMap(const NavNodePtr& node_ptr) {
         const auto it = out_contour_nodes_map_.find(node_ptr);
-        if (it != out_contour_nodes_map_.end()) it->second = dg_params_.finalize_thred;
-        else out_contour_nodes_map_.insert({node_ptr, dg_params_.finalize_thred});
+        if (it != out_contour_nodes_map_.end()) it->second.first = dg_params_.finalize_thred;
+        else {
+            std::unordered_set<NavNodePtr> empty_set;
+            const auto init_pair = std::make_pair(dg_params_.finalize_thred, empty_set);
+            out_contour_nodes_map_.insert({node_ptr, init_pair});
+        }   
     }
 
     /* Create new navigation node, and return a shared pointer to it */
@@ -312,6 +316,7 @@ private:
         ResetBlockedContourPairs(node_ptr);
         for (const auto& ct_cnode_ptr : node_ptr->contour_connects) { 
             FARUtil::EraseNodeFromStack(node_ptr, ct_cnode_ptr->contour_connects);
+            ContourGraph::DeleteContourFromSets(ct_cnode_ptr, node_ptr);
         }
         for (const auto& pt_cnode_ptr : node_ptr->potential_contours) {
             const auto it = pt_cnode_ptr->contour_votes.find(node_ptr->id);
@@ -401,8 +406,8 @@ private:
         // clean outrange contour nodes 
         out_contour_nodes_.clear();
         for (auto it = out_contour_nodes_map_.begin(); it != out_contour_nodes_map_.end();) {
-            it->second --;
-            if (it->second <= 0 || it->first->is_near_nodes || IsMergedNode(it->first)) it = out_contour_nodes_map_.erase(it);
+            it->second.first --;
+            if (it->second.first <= 0 || it->first->is_near_nodes || IsMergedNode(it->first)) it = out_contour_nodes_map_.erase(it);
             else {
                 out_contour_nodes_.push_back(it->first);
                 ++ it;
@@ -500,8 +505,6 @@ public:
             if (diff_p.norm() > FARUtil::kMatchDist && abs(diff_p.z) / std::hypotf(diff_p.x, diff_p.y) > 1) {
                 return false; // slope is too steep > 45 degree
             }
-        } else {
-            mid_p.z = (node_ptr1->ctnode->position.z + node_ptr2->ctnode->position.z) / 2.0f; 
         }
         bool is_match;
         float minH, maxH;

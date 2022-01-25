@@ -242,26 +242,25 @@ CTNodePtr ContourGraph::FirstMatchedCTNode(const CTNodePtr& ctnode_ptr) {
     return NULL;
 }
 
-void ContourGraph::MatchOutrangeContourNodes(const NodePtrStack& near_nodes, const NodePtrStack& outrange_nodes) {
-    if (near_nodes.empty() || outrange_nodes.empty()) return;
-    for (const auto& oc_node_ptr : outrange_nodes) {
-        float min_dist = FARUtil::kINF;
-        CTNodePtr min_matched_ctnode = NULL;
-        for (const auto& node_ptr : near_nodes) {
-            if (!node_ptr->is_contour_match) continue;
-            CTNodePtr matched_ctnode = NULL;
-            if (IsContourLineMatch(node_ptr, oc_node_ptr, matched_ctnode)) {
-                const float dist = FARUtil::VerticalDistToLine(node_ptr->position, matched_ctnode->position, oc_node_ptr->position);
-                if (dist < min_dist) {
-                    min_dist = dist;
-                    min_matched_ctnode = matched_ctnode;
-                }
+NavNodePtr ContourGraph::MatchOutrangeNodeWithCTNode(const NavNodePtr& out_node_ptr, const NodePtrStack& near_nodes) {
+    if (near_nodes.empty()) return NULL;
+    float min_dist = FARUtil::kINF;
+    NavNodePtr min_matched_node = NULL;
+    for (const auto& node_ptr : near_nodes) {
+        if (!node_ptr->is_contour_match) continue;
+        CTNodePtr matched_ctnode = NULL;
+        if (IsContourLineMatch(node_ptr, out_node_ptr, matched_ctnode)) {
+            const float dist = FARUtil::VerticalDistToLine2D(node_ptr->position, matched_ctnode->position, out_node_ptr->position);
+            if (dist < min_dist) {
+                min_dist = dist;
+                min_matched_node = node_ptr;
             }
         }
-        if (min_dist < FARUtil::kNavClearDist) {
-            MatchCTNodeWithNavNode(min_matched_ctnode, oc_node_ptr);
-        }
     }
+    if (min_dist < FARUtil::kNavClearDist) {
+        return min_matched_node;
+    }
+    return NULL;
 }
 
 bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNodePtr& outNode_ptr, CTNodePtr& matched_ctnode) {
@@ -276,10 +275,10 @@ bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNod
            FARUtil::IsInCylinder(ctnode_ptr->position, next_ctnode->position, prev_ctnode->position, FARUtil::kNearDist)) 
     {
         if (!FARUtil::IsPointInMarginRange(next_ctnode->position) &&
-            (inNode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
+            (ctnode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
         {
-            const PointPair line2(inNode_ptr->position, next_ctnode->position);
-            if (FARUtil::LineMatchPercentage(line1, line2) > 0.95f) {
+            const PointPair line2(ctnode_ptr->position, next_ctnode->position);
+            if (FARUtil::LineMatchPercentage(line1, line2) > 0.99f) {
                 if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
                     matched_ctnode = next_ctnode;
                     return true;
@@ -296,10 +295,10 @@ bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNod
            FARUtil::IsInCylinder(ctnode_ptr->position, next_ctnode->position, prev_ctnode->position, FARUtil::kNearDist)) 
     {
         if (!FARUtil::IsPointInMarginRange(next_ctnode->position) && 
-            (inNode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
+            (ctnode_ptr->position - next_ctnode->position).norm_flat() > FARUtil::kNearDist) 
         {
-            const PointPair line2(inNode_ptr->position, next_ctnode->position);
-            if (FARUtil::LineMatchPercentage(line1, line2) > 0.95f) {
+            const PointPair line2(ctnode_ptr->position, next_ctnode->position);
+            if (FARUtil::LineMatchPercentage(line1, line2) > 0.99f) {
                 if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
                     matched_ctnode = next_ctnode;
                     return true;
@@ -340,7 +339,7 @@ void ContourGraph::EnclosePolygonsCheck() {
             }
             CTNodePtr block_vertex = NULL;
             if (!IsCTNodesConnectWithinOrder(pre_ctnode_ptr, cur_ctnode_ptr, block_vertex) && block_vertex != NULL) {
-                if (FARUtil::IsPointInMarginRange(block_vertex->position)) {
+                if (block_vertex->is_ground_associate && FARUtil::IsPointInMarginRange(block_vertex->position)) {
                     block_vertex->is_contour_necessary = true;
                 }
             }
@@ -423,6 +422,7 @@ void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_grap
     for (const auto& ctnode_ptr : contour_graph) {
         if (ctnode_ptr->free_direct == NodeFreeDirect::PILLAR || ctnode_ptr->poly_ptr->is_pillar) {
             ctnode_ptr->surf_dirs = {Point3D(0,0,-1), Point3D(0,0,-1)};
+            ctnode_ptr->poly_ptr->is_pillar = true;
             ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         } else {
             CTNodePtr next_ctnode;
@@ -504,14 +504,10 @@ bool ContourGraph::IsEdgeCollidePoly(const PointStack& poly, const ConnectPair& 
     return false;
 }
 
-void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) 
-{
-    if (ctnode_ptr->free_direct == NodeFreeDirect::PILLAR) return;
-    if (ctnode_ptr->surf_dirs.first  == Point3D(0,0,-1) || 
-        ctnode_ptr->surf_dirs.second == Point3D(0,0,-1) || 
-        ctnode_ptr->poly_ptr->is_pillar) 
-    {
+void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) {
+    if (ctnode_ptr->surf_dirs.first  == Point3D(0,0,-1) || ctnode_ptr->surf_dirs.second == Point3D(0,0,-1) || ctnode_ptr->poly_ptr->is_pillar) {
         ctnode_ptr->surf_dirs.first = Point3D(0,0,-1), ctnode_ptr->surf_dirs.second == Point3D(0,0,-1);
+        ctnode_ptr->poly_ptr->is_pillar = true;
         ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         return;
     }
@@ -678,14 +674,14 @@ ConnectPair ContourGraph::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNo
     const float ndist = (node_ptr1->position - node_ptr2->position).norm_flat();
     const float ref_dist = std::min(ndist*0.4f, dist);
     // node 1
-    if (!is_global_check && node_ptr1->is_near_nodes && node_ptr1->is_contour_match && node_ptr1->ctnode->free_direct == node_ptr1->free_direct) { // node 1
+    if (!is_global_check && node_ptr1->is_contour_match && node_ptr1->ctnode->free_direct == node_ptr1->free_direct) { // node 1
         const auto ctnode1 = node_ptr1->ctnode;
         edgeOut.start_p = ProjectNode(ctnode1, ref_dist); // node 1
     } else {
         edgeOut.start_p = ProjectNode(node_ptr1, ref_dist); // node 1
     }
     // node 2
-    if (!is_global_check && node_ptr2->is_near_nodes && node_ptr2->is_contour_match && node_ptr2->ctnode->free_direct == node_ptr2->free_direct) { // node 2
+    if (!is_global_check && node_ptr2->is_contour_match && node_ptr2->ctnode->free_direct == node_ptr2->free_direct) { // node 2
         const auto ctnode2 = node_ptr2->ctnode;
         edgeOut.end_p = ProjectNode(ctnode2, ref_dist); // node 1
     } else {

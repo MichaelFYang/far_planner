@@ -64,7 +64,7 @@ public:
 
     void ExtractGlobalContours();
 
-    static void MatchOutrangeContourNodes(const NodePtrStack& near_nodes, const NodePtrStack& outrange_nodes);
+    static NavNodePtr MatchOutrangeNodeWithCTNode(const NavNodePtr& out_node_ptr, const NodePtrStack& near_nodes);
 
     static bool IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNodePtr& outNode_ptr, CTNodePtr& matched_ctnode);
     
@@ -88,18 +88,20 @@ public:
                                            const ConnectPair& bd_cedge,
                                            const HeightPair h_pair,
                                            const bool& is_global_check);
+    
+    static inline void MatchCTNodeWithNavNode(const CTNodePtr& ctnode_ptr, const NavNodePtr& node_ptr) {
+        if (ctnode_ptr == NULL || node_ptr == NULL) return;
+        ctnode_ptr->is_global_match = true;
+        ctnode_ptr->nav_node_id = node_ptr->id;
+        node_ptr->ctnode = ctnode_ptr;
+        node_ptr->is_contour_match = true;
+    }
 
     static bool ReprojectPointOutsidePolygons(Point3D& point, const float& free_radius);
 
     static void AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     static void DeleteContourFromSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
-
-    static inline void RemoveOutrangeContourNodes(const NodePtrStack& outrange_nodes) {
-        for (const auto& node_ptr : outrange_nodes) {
-            RemoveMatchWithNavNode(node_ptr);
-        }
-    }
 
     bool IsPointInVetexAngleRestriction(const CTNodePtr& ctnode, const Point3D end_p);
 
@@ -148,7 +150,7 @@ private:
 
     template <typename NodeType1, typename NodeType2>
     static inline bool IsInMatchHeight(const NodeType1& node_ptr1, const NodeType2& node_ptr2) {
-        if (abs(node_ptr1->position.z - node_ptr2->position.z) < FARUtil::kMarginHeight) {
+        if (abs(node_ptr1->position.z - node_ptr2->position.z) < FARUtil::kTolerZ) {
             return true;
         }
         return false;
@@ -183,14 +185,6 @@ private:
         const cv::Point2f node_cv = cv::Point2f(node->position.x, node->position.y);
         const cv::Point2f dir = NodeProjectDir(node);
         return node_cv + dist * dir;
-    }
-
-    static inline void MatchCTNodeWithNavNode(const CTNodePtr& ctnode_ptr, const NavNodePtr& node_ptr) {
-        if (ctnode_ptr == NULL || node_ptr == NULL) return;
-        ctnode_ptr->is_global_match = true;
-        ctnode_ptr->nav_node_id = node_ptr->id;
-        node_ptr->ctnode = ctnode_ptr;
-        node_ptr->is_contour_match = true;
     }
 
     static inline void RemoveMatchWithNavNode(const NavNodePtr& node_ptr) {
@@ -241,7 +235,7 @@ private:
     }
 
     static inline bool IsOverlapRange(const HeightPair& hpair, const HeightPair& hpairRef) {
-        if (hpair.maxH > hpairRef.minH - FARUtil::kMarginHeight || hpair.minH < hpairRef.maxH + FARUtil::kMarginHeight) {
+        if (hpair.maxH > hpairRef.minH - FARUtil::kTolerZ || hpair.minH < hpairRef.maxH + FARUtil::kTolerZ) {
             return true;
         }
         return false;

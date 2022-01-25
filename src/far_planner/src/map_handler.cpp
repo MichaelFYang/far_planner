@@ -12,17 +12,17 @@
 
 void MapHandler::Init(const MapHandlerParams& params) {
     map_params_ = params;
-    row_num_ = std::ceil(map_params_.grid_max_length / map_params_.ceil_length);
+    row_num_ = std::ceil(map_params_.grid_max_length / map_params_.cell_length);
     col_num_ = row_num_;
-    level_num_ = std::ceil(map_params_.grid_max_height / map_params_.ceil_height);
-    neighbor_Lnum_ = std::ceil(map_params_.sensor_range * 2.0f / map_params_.ceil_length) + 1; 
+    level_num_ = std::ceil(map_params_.grid_max_height / map_params_.cell_height);
+    neighbor_Lnum_ = std::ceil(map_params_.sensor_range * 2.0f / map_params_.cell_length) + 1; 
     neighbor_Hnum_ = 5; 
     if (level_num_ % 2 == 0) level_num_ ++;         // force to odd number, robot will be at center
     if (neighbor_Lnum_ % 2 == 0) neighbor_Lnum_ ++; // force to odd number
     // inlitialize grid 
     Eigen::Vector3i pointcloud_grid_size(row_num_, col_num_, level_num_);
     Eigen::Vector3d pointcloud_grid_origin(0,0,0);
-    Eigen::Vector3d pointcloud_grid_resolution(map_params_.ceil_length, map_params_.ceil_length, map_params_.ceil_height);
+    Eigen::Vector3d pointcloud_grid_resolution(map_params_.cell_length, map_params_.cell_length, map_params_.cell_height);
     PointCloudPtr cloud_ptr_tmp;
     world_obs_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr>>(
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
@@ -45,7 +45,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
     std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
 
     // init terrain height map
-    height_dim_ = std::ceil((map_params_.sensor_range + map_params_.ceil_length) * 2.0f / FARUtil::robot_dim);
+    height_dim_ = std::ceil((map_params_.sensor_range + map_params_.cell_length) * 2.0f / FARUtil::robot_dim);
     if (height_dim_ % 2 == 0) height_dim_ ++;
     Eigen::Vector3i height_grid_size(height_dim_, height_dim_, 1);
     Eigen::Vector3d height_grid_origin(0,0,0);
@@ -62,7 +62,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
     std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0);
     std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0);
 
-    INFLATE_N = 2;
+    INFLATE_N = 1;
     flat_terrain_cloud_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
     kdtree_terrain_clould_->setSortedResults(false);
@@ -132,9 +132,9 @@ void MapHandler::GetCloudOfPoint(const Point3D& center,
 
 void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
     Point3D map_origin;
-    map_origin.x = ori_robot_pos.x - (map_params_.ceil_length * row_num_)   / 2.0f;
-    map_origin.y = ori_robot_pos.y - (map_params_.ceil_length * col_num_)   / 2.0f;
-    map_origin.z = ori_robot_pos.z - (map_params_.ceil_height * level_num_) / 2.0f - FARUtil::vehicle_height; // From Ground Level
+    map_origin.x = ori_robot_pos.x - (map_params_.cell_length * row_num_)   / 2.0f;
+    map_origin.y = ori_robot_pos.y - (map_params_.cell_length * col_num_)   / 2.0f;
+    map_origin.z = ori_robot_pos.z - (map_params_.cell_height * level_num_) / 2.0f - FARUtil::vehicle_height; // From Ground Level
     Eigen::Vector3d pointcloud_grid_origin(map_origin.x, map_origin.y, map_origin.z);
     world_obs_cloud_grid_->SetOrigin(pointcloud_grid_origin);
     world_free_cloud_grid_->SetOrigin(pointcloud_grid_origin);
@@ -160,18 +160,12 @@ void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
                 int ind = world_obs_cloud_grid_->Sub2Ind(neighbor_sub);
                 neighbor_free_indices_.insert(ind);
             }
-            for (int k = -H; k <= H; k++) {
+            for (int k =-H; k <= H; k++) {
                 neighbor_sub.z() = robot_cell_sub_.z() + k;
                 if (world_obs_cloud_grid_->InRange(neighbor_sub)) {
                     int ind = world_obs_cloud_grid_->Sub2Ind(neighbor_sub);
                     neighbor_obs_indices_.insert(ind), neighbor_free_indices_.insert(ind);
                 }
-            }
-            // additional terrain points + 1
-            neighbor_sub.z() = robot_cell_sub_.z() + H + 1;
-            if (world_obs_cloud_grid_->InRange(neighbor_sub)) {
-                int ind = world_obs_cloud_grid_->Sub2Ind(neighbor_sub);
-                neighbor_free_indices_.insert(ind);
             }
         }
     }
@@ -241,7 +235,7 @@ void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     }
 }
 
-float MapHandler::TerrainHeightOfPoint(const Point3D& p, bool& is_matched, const bool& is_search, const bool& is_limited_search) {
+float MapHandler::TerrainHeightOfPoint(const Point3D& p, bool& is_matched, const bool& is_search) {
     is_matched = false;
     const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(p.x, p.y, 0.0f));
     if (terrain_height_grid_->InRange(sub)) {
@@ -251,13 +245,9 @@ float MapHandler::TerrainHeightOfPoint(const Point3D& p, bool& is_matched, const
             return terrain_height_grid_->GetCell(ind)[0];
         }
     }
-    if (is_search || is_limited_search) {
+    if (is_search) {
         float matched_dist_squre;
-        const float LRS = pow(FARUtil::kMatchDist, 2);
         const float terrain_h = NearestHeightOfPoint(p, matched_dist_squre);
-        if (is_limited_search && matched_dist_squre < LRS) {
-            is_matched = true;
-        }
         return terrain_h;
     }
     return p.z; 
@@ -306,7 +296,7 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
 void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs) {
     std::unordered_set<int> neighbor_copy = neighbor_obs;
     neighbor_obs.clear();
-    const float R = map_params_.ceil_length * 0.707f; // sqrt(2)/2
+    const float R = map_params_.cell_length * 0.707f; // sqrt(2)/2
     for (const auto& idx : neighbor_copy) {
         const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); 
         const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(pos.x, pos.y, 0.0f));
@@ -314,16 +304,8 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
         bool inRange = false;
         float minH, maxH;
         const float avgH = NearestHeightOfRadius(pos, R, minH, maxH, inRange);
-        if (maxH - minH > FARUtil::kTolerZ) { // check for discontinours terrain
-            const float cur_ground_h = FARUtil::robot_pos.z - FARUtil::vehicle_height;
-            if (abs(maxH - cur_ground_h) < abs(minH - cur_ground_h)) {
-                minH = std::max(maxH - FARUtil::kMarginHeight, cur_ground_h - FARUtil::kMarginHeight);
-            } else {
-                maxH = std::min(minH + FARUtil::kMarginHeight, cur_ground_h + FARUtil::kMarginHeight);
-            }
-        }
-        if (inRange && pos.z + map_params_.ceil_height / 2.0f > minH - FARUtil::kHeightVoxel &&
-                       pos.z - map_params_.ceil_height / 2.0f < maxH + FARUtil::kMarginHeight) 
+        if (inRange && pos.z + map_params_.cell_height > minH &&
+                       pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
         {
             neighbor_obs.insert(idx);
         }

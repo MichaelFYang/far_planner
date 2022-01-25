@@ -21,8 +21,8 @@ world_frame                             : map
 GraphMsger/robot_id                     : 1  # graph from robot id "0" is extracted from files
 
 # Map Handler Params
-MapHandler/ceil_length                  : 5.0    # Unit: meter
-MapHandler/ceil_height                  : 1.0    # Unit: meter
+MapHandler/floor_height                 : 2.0     # Unit: meter
+MapHandler/cell_length                  : 5.0     # Unit: meter
 MapHandler/map_grid_max_length          : 200.0  # Unit: meter
 MapHandler/map_grad_max_height          : 10.0   # Unit: meter
 MapHandler/terrain_voxel_dim            : 0.25   # Unit: meter 

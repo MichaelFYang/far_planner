@@ -577,22 +577,14 @@ float FARUtil::PixelDistance(const cv::Point2f& pre_p, const cv::Point2f& cur_p)
   return std::hypotf(pre_p.x - cur_p.x, pre_p.y - cur_p.y);
 }
 
-float FARUtil::VerticalDistToLine(const Point3D& start_p, 
+float FARUtil::VerticalDistToLine2D(const Point3D& start_p, 
                                   const Point3D& end_p, 
-                                  const Point3D& cur_p,
-                                  const bool& is_segment_restrict) 
+                                  const Point3D& cur_p) 
 {
   const Point3D line_dir = end_p - start_p;
-  const Point3D diff_p  = cur_p - start_p;
-  const float dot_value = line_dir.norm_dot(diff_p);
-  if (is_segment_restrict) {
-    const Point3D ops_line_dir = start_p - end_p;
-    const Point3D ops_diff_dir = cur_p - end_p;
-    if (dot_value < 0.0 || ops_line_dir.norm_dot(ops_diff_dir) < 0.0) {
-      return FARUtil::kINF;
-    }
-  }
-  return sin(acos(dot_value)) * diff_p.norm();
+  const Point3D diff_p   = cur_p - start_p;
+  const float dot_value  = line_dir.norm_flat_dot(diff_p);
+  return sin(acos(dot_value)) * diff_p.norm_flat();
 }
 
 Point3D FARUtil::ContourSurfDirs(const Point3D& end_p, 
@@ -906,11 +898,11 @@ void FARUtil::SortEdgesClockWise(const Point3D& center, std::vector<PointPair>& 
 float FARUtil::LineMatchPercentage(const PointPair& line1, const PointPair& line2) {
   const float ds = (line1.first - line2.first).norm_flat();
   const float theta = acos((line1.second - line1.first).norm_flat_dot(line2.second - line2.first));
-  const float contour_ds = (line2.second - line2.first).norm_flat();
   if (theta > FARUtil::kAcceptAlign || ds > FARUtil::kNavClearDist) return 0.0f;
+  const float contour_ds = (line2.second - line2.first).norm_flat();
   float match_ds = contour_ds;
   if (theta > FARUtil::kEpsilon) {
-    match_ds = std::min(match_ds, (FARUtil::kNavClearDist - ds) / tan(theta));
+    match_ds = std::min(match_ds, FARUtil::kNavClearDist / tan(theta));
   }
   return match_ds / contour_ds;
 }

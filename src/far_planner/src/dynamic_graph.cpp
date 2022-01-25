@@ -143,10 +143,25 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
             new_node_ptr->is_near_nodes = true;
             near_nav_nodes_.push_back(new_node_ptr);
             if (new_node_ptr->is_navpoint) this->UpdateCurInterNavNode(new_node_ptr);
-            if (new_node_ptr->ctnode != NULL) new_node_ptr->ctnode->is_global_match = true;
+            if (new_node_ptr->ctnode != NULL) {
+                ContourGraph::MatchCTNodeWithNavNode(new_node_ptr->ctnode, new_node_ptr);
+            }
         }
         // connect outrange contour nodes
-        ContourGraph::MatchOutrangeContourNodes(near_nav_nodes_, out_contour_nodes_);
+        for (const auto& out_node_ptr : out_contour_nodes_) {
+            const NavNodePtr matched_node = ContourGraph::MatchOutrangeNodeWithCTNode(out_node_ptr, near_nav_nodes_);
+            const auto it = out_contour_nodes_map_.find(out_node_ptr);
+            if (matched_node != NULL) {
+                this->RecordContourVote(out_node_ptr, matched_node);
+                it->second.second.insert(matched_node);
+
+            }
+            for (const auto& reached_node_ptr : it->second.second) {
+                if (reached_node_ptr != matched_node) {
+                    this->DeleteContourVote(out_node_ptr, reached_node_ptr);
+                }
+            }
+        }
         // reconnect between near nodes
         NodePtrStack outside_break_nodes;
         for (std::size_t i=0; i<near_nav_nodes_.size(); i++) {
@@ -182,8 +197,6 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
             }
             this->TopTwoContourConnector(nav_ptr1);
         }
-        // remove temporary outrange contour nodes match
-        ContourGraph::RemoveOutrangeContourNodes(out_contour_nodes_);
         // update out range break nodes connects
         for (const auto& node_ptr : near_nav_nodes_) {
             for (const auto& ob_node_ptr : outside_break_nodes) {
@@ -230,7 +243,7 @@ bool DynamicGraph::IsValidConnect(const NavNodePtr& node_ptr1,
     bool is_connect = false;
     /* check polygon connections */
     const int vote_queue_size = (node_ptr1->is_odom || node_ptr2->is_odom) ? std::ceil(dg_params_.votes_size / 3.0f) : dg_params_.votes_size;
-    if (IsConvexConnect(node_ptr1, node_ptr2) && this->IsInDirectConstraint(node_ptr1, node_ptr2) && IsOnTerrainConnect(node_ptr1, node_ptr2, false) && ContourGraph::IsNavNodesConnectFreePolygon(node_ptr1, node_ptr2)) {
+    if (IsConvexConnect(node_ptr1, node_ptr2) && this->IsInDirectConstraint(node_ptr1, node_ptr2) && ContourGraph::IsNavNodesConnectFreePolygon(node_ptr1, node_ptr2) && IsOnTerrainConnect(node_ptr1, node_ptr2, false)) {
         RecordPolygonVote(node_ptr1, node_ptr2, vote_queue_size);
     } else {
         DeletePolygonVote(node_ptr1, node_ptr2, vote_queue_size);

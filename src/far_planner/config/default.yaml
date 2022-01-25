@@ -1,6 +1,6 @@
 # Dynamic Planner Default Params
 main_run_freq                           : 2.5
-voxel_dim                               : 0.18  # Unit: meter
+voxel_dim                               : 0.15  # Unit: meter
 robot_dim                               : 0.8   # Unit: meter
 vehicle_height                          : 0.75  # Unit: meter
 sensor_range                            : 40.0  # Unit: meter
@@ -21,11 +21,11 @@ world_frame                             : map
 GraphMsger/robot_id                     : 1  # graph from robot id "0" is extracted from files
 
 # Map Handler Params
-MapHandler/ceil_length                  : 5.0     # Unit: meter
-MapHandler/ceil_height                  : 1.0     # Unit: meter
+MapHandler/floor_height                 : 2.0     # Unit: meter
+MapHandler/cell_length                  : 5.0     # Unit: meter
 MapHandler/map_grid_max_length          : 1000.0  # Unit: meter
-MapHandler/map_grad_max_height          : 100.0   # Unit: meter
-MapHandler/terrain_voxel_dim            : 0.5     # Unit: meter
+MapHandler/map_grad_max_height          : 80.0    # Unit: meter
+MapHandler/terrain_voxel_dim            : 0.25    # Unit: meter
 
 # Scan Handler Params
 ScanHandler/inflate_scan_size           : 2

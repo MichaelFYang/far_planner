@@ -11,8 +11,9 @@ enum CloudType {
 struct MapHandlerParams {
     MapHandlerParams() = default;
     float sensor_range;
-    float ceil_length;
-    float ceil_height;
+    float floor_height;
+    float cell_length;
+    float cell_height;
     float grid_max_length;
     float grid_max_height;
     // local terrain height map
@@ -36,8 +37,7 @@ public:
 
     static float TerrainHeightOfPoint(const Point3D& p, 
                                       bool& is_matched, 
-                                      const bool& is_search, 
-                                      const bool& is_limited_search=false);
+                                      const bool& is_search);
 
     static bool IsPointInObsNeighbor(const Point3D& p);
 
@@ -99,14 +99,14 @@ public:
                          const bool& is_large);
 
     /**
-     * Get neihbor ceils center positions
+     * Get neihbor cells center positions
      * @param neighbor_centers[out] neighbor centers stack
     */
     void GetNeighborCeilsCenters(PointStack& neighbor_centers);
 
     /**
-     * Get neihbor ceils center positions
-     * @param occupancy_centers[out] occupanied ceils center stack
+     * Get neihbor cells center positions
+     * @param occupancy_centers[out] occupanied cells center stack
     */
     void GetOccupancyCeilsCenters(PointStack& occupancy_centers);
 

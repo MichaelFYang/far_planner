@@ -17,6 +17,7 @@ void DPVisualizer::Init(const ros::NodeHandle& nh) {
     // Rviz Publisher
     viz_node_pub_    = nh_.advertise<Marker>("/viz_node_topic", 5);
     viz_path_pub_    = nh_.advertise<Marker>("/viz_path_topic", 5);
+    viz_poly_pub_    = nh_.advertise<MarkerArray>("/viz_poly_topic", 5);
     viz_graph_pub_   = nh_.advertise<MarkerArray>("/viz_graph_topic", 5);
     viz_contour_pub_ = nh_.advertise<MarkerArray>("/viz_contour_topic", 5);
     viz_map_pub_     = nh_.advertise<MarkerArray>("/viz_grid_map_topic", 5);
@@ -111,6 +112,21 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     view_extend_marker_array.markers.push_back(origin_p_marker);
     view_extend_marker_array.markers.push_back(extend_p_marker);
     viz_view_extend.publish(view_extend_marker_array);
+}
+
+void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs) {
+    MarkerArray poly_marker_array;
+    Marker global_contour_marker;
+    global_contour_marker.type = Marker::LINE_LIST;
+    this->SetMarker(VizColor::ORANGE, "global_contour", 0.15f, 0.5f, global_contour_marker);
+    for (const auto& p_pair : contour_pairs) {
+        geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
+        geometry_msgs::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
+        global_contour_marker.points.push_back(p_start);
+        global_contour_marker.points.push_back(p_end);
+    }
+    poly_marker_array.markers.push_back(global_contour_marker);
+    viz_poly_pub_.publish(poly_marker_array);
 }
 
 void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph) 
@@ -365,8 +381,8 @@ void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointSt
     Marker neighbor_marker, occupancy_marker;
     neighbor_marker.type = Marker::CUBE_LIST;
     occupancy_marker.type = Marker::CUBE_LIST;
-    this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.2f,  neighbor_marker);
-    this->SetMarker(VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.15f, occupancy_marker);
+    this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.4f,  neighbor_marker);
+    this->SetMarker(VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.2f, occupancy_marker);
     neighbor_marker.scale.z = occupancy_marker.scale.z = ceil_height;
     const std::size_t N1 = neighbor_centers.size();
     const std::size_t N2 = occupancy_centers.size();

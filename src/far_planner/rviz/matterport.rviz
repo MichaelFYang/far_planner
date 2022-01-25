@@ -347,6 +347,14 @@ Visualization Manager:
         vertices_matches: false
       Queue Size: 100
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: false
+      Marker Topic: /viz_poly_topic
+      Name: GlobalPolygon
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: false
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /viz_node_topic
@@ -476,7 +484,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.019999999552965164
+      Size (m): 0.04
       Style: Flat Squares
       Topic: /FAR_obs_debug
       Unreliable: false
