@@ -52,8 +52,8 @@ PCLPoint FARUtil::Point3DToPCLPoint(const Point3D& point) {
 }
 
 void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
-                                     const PointCloudPtr& cloudRefer,
-                                     const PointCloudPtr& cloudNew)
+                                      const PointCloudPtr& cloudRefer,
+                                      const PointCloudPtr& cloudNew)
 {
   PointCloudPtr temp_new_cloud(new pcl::PointCloud<PCLPoint>());
   FARUtil::ResetCloudIntensity(cloudIn, false);
@@ -62,7 +62,7 @@ void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
   *temp_new_cloud = *cloudIn + *cloudRefer;
   FARUtil::FilterCloud(temp_new_cloud, FARUtil::kLeafSize * 2.0);
   for (const auto& p : temp_new_cloud->points) {
-    if (p.intensity < FARUtil::kNewPIThred && FARUtil::IsPointInToleratedHeight(p)) {
+    if (p.intensity < FARUtil::kNewPIThred) {
       cloudNew->points.push_back(p);
     } 
   }

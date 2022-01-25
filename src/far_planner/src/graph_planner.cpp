@@ -274,14 +274,18 @@ bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
     if (is_free_nav) {
         while (true) {
             const NavNodePtr parent_ptr = check_ptr->free_parent;
-            global_path.push_back(parent_ptr);
+            if (parent_ptr->free_direct != NodeFreeDirect::CONCAVE) {
+                global_path.push_back(parent_ptr);
+            }
             if (parent_ptr->free_parent == NULL) break;
             check_ptr = parent_ptr;
         }
     } else {
         while (true) {
             const NavNodePtr parent_ptr = check_ptr->parent;
-            global_path.push_back(parent_ptr);
+            if (parent_ptr->free_direct != NodeFreeDirect::CONCAVE) {
+                global_path.push_back(parent_ptr);
+            }
             if (parent_ptr->parent == NULL) break;
             check_ptr = parent_ptr;
         } 

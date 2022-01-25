@@ -75,9 +75,9 @@ public:
     }
 
     /** Update global cloud grid with incoming clouds 
-     * @param CloudIn incoming cloud ptr
+     * @param CloudInOut incoming cloud ptr and output valid in range points
     */
-    void UpdateObsCloudGrid(const PointCloudPtr& obsCloudIn);
+    void UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut);
     void UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn);
     void UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const PointCloudPtr& terrainHeightOut);
 

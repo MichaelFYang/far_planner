@@ -117,6 +117,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   FARUtil::surround_obs_cloud_->clear();
   FARUtil::surround_free_cloud_->clear();
   FARUtil::stack_new_cloud_->clear();
+  FARUtil::vanish_pillar_ptr_->clear();
   FARUtil::stack_dyobs_cloud_->clear();
   FARUtil::cur_new_cloud_->clear();
   FARUtil::cur_dyobs_cloud_->clear();
@@ -160,7 +161,7 @@ void FARMaster::Loop() {
       if (!FARUtil::IsDebug) printf("\033[2K");
       std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
     }
-    // Adjust heights with terrain
+    /* Adjust heights with terrain */
     map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
     map_handler_.AdjustNodesHeight(nav_graph_);
     // Truncate for local range nodes
@@ -184,23 +185,22 @@ void FARMaster::Loop() {
     }
     /* Graph Updating */
     graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
-
     runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
     runtime_pub_.publish(runtimer_);
-
     /* Update v-graph in other modules */
     nav_graph_ = graph_manager_.GetNavGraph();
     if (is_graph_init_) {
       if (!FARUtil::IsDebug) printf("\033[2K");
       std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
     }
-    contour_graph_.ExtractGlobalContours();
-    /* Publish local boundary */
+    contour_graph_.ExtractGlobalContours();      // Global Polygon Update
+    graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
+    graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
+
+    /* Publish local boundary to lower level local planner */
     this->LocalBoundaryHandler(ContourGraph::local_boundary_);
-    /* Planner Graph Update */
-    graph_planner_.UpdaetVGraph(nav_graph_);
-    /* Graph Messager Update */
-    graph_msger_.UpdateGlobalGraph(nav_graph_);
+    /* update vanished pillar points cloud */
+    this->AddVanishedPillarNodeToNewCloud(clear_nodes_, FARUtil::vanish_pillar_ptr_);
 
     /* Viz Navigation Graph */
     const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
@@ -517,7 +517,7 @@ void FARMaster::LoadROSParams() {
   nh.param<int>(cdetect_prefix         + "filter_count_value", cdetect_params_.kThredValue, 6);
   nh.param<bool>(cdetect_prefix        + "is_save_img",        cdetect_params_.is_save_img, false);
   nh.param<std::string>(cdetect_prefix + "img_folder_path",    cdetect_params_.img_path, "");
-  cdetect_params_.kBlurSize    = (int)std::ceil(master_params_.robot_dim / 2.0f / master_params_.voxel_dim);
+  cdetect_params_.kBlurSize    = (int)std::round(FARUtil::kNavClearDist / master_params_.voxel_dim);
   cdetect_params_.sensor_range = master_params_.sensor_range;
   cdetect_params_.voxel_dim    = master_params_.voxel_dim;
 }
@@ -620,6 +620,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
     FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,
                                      FARUtil::surround_obs_cloud_,
                                      FARUtil::cur_new_cloud_);
+    *FARUtil::cur_new_cloud_ += *FARUtil::vanish_pillar_ptr_;
   } else { // stop env update
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
@@ -701,6 +702,7 @@ PointCloudPtr  FARUtil::surround_obs_cloud_  = PointCloudPtr(new pcl::PointCloud
 PointCloudPtr  FARUtil::surround_free_cloud_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::stack_new_cloud_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_new_cloud_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
+PointCloudPtr  FARUtil::vanish_pillar_ptr_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_dyobs_cloud_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::stack_dyobs_cloud_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_scan_cloud_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());

@@ -107,7 +107,8 @@ public:
     // PCL Clouds
     static PointCloudPtr surround_obs_cloud_;   // surround obstacle cloud
     static PointCloudPtr surround_free_cloud_;  // surround free space cloud
-    static PointCloudPtr stack_new_cloud_;      // new obstacle Point Cloud
+    static PointCloudPtr stack_new_cloud_;      // new obstacle points cloud
+    static PointCloudPtr vanish_pillar_ptr_;    // vanished pillar nodes cloud        
     static PointCloudPtr stack_dyobs_cloud_;
     static PointCloudPtr cur_new_cloud_;
     static PointCloudPtr cur_dyobs_cloud_;

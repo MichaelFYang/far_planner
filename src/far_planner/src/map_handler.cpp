@@ -199,19 +199,22 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
     }
 }
 
-void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudIn) {
-    if (!is_init_ || obsCloudIn->empty()) return;
+void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
+    if (!is_init_ || obsCloudInOut->empty()) return;
     std::fill(util_obs_modified_list_.begin(), util_obs_modified_list_.end(), 0);
-    for (const auto& point : obsCloudIn->points) {
+    PointCloudPtr obs_valid_ptr(new pcl::PointCloud<PCLPoint>());
+    for (const auto& point : obsCloudInOut->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub);
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
             world_obs_cloud_grid_->GetCell(ind)->points.push_back(point);
+            obs_valid_ptr->points.push_back(point);
             util_obs_modified_list_[ind] = 1;
             global_visited_induces_[ind] = 1;
         }
     }
+    *obsCloudInOut = *obs_valid_ptr;
     // Filter Modified Ceils
     for (int i = 0; i < world_obs_cloud_grid_->GetCellNumber(); ++i) {
       if (util_obs_modified_list_[i] == 1) FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(i), FARUtil::kLeafSize);

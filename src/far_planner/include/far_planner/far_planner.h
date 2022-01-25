@@ -127,6 +127,17 @@ private:
 
     Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
 
+    inline void AddVanishedPillarNodeToNewCloud(const NodePtrStack& clear_nodes, const PointCloudPtr& vpillar_cloud_ptr) {
+        vpillar_cloud_ptr->clear();
+        const int N = FARUtil::KNewPointC + 1;
+        for (const auto& node_ptr : clear_nodes) {
+            if (node_ptr->free_direct != NodeFreeDirect::PILLAR || FARUtil::IsFreeNavNode(node_ptr)) continue;
+            for (int i=0; i<N; i++) {
+                vpillar_cloud_ptr->points.push_back(FARUtil::Point3DToPCLPoint(node_ptr->position));
+            }
+        }
+    }
+
     inline void ResetGraphCallBack(const std_msgs::EmptyConstPtr& msg) {
         is_reset_env_ = true;
     }
