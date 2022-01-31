@@ -114,18 +114,27 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     viz_view_extend.publish(view_extend_marker_array);
 }
 
-void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs) {
+void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs, const std::vector<PointPair>& unmatched_pairs) {
     MarkerArray poly_marker_array;
-    Marker global_contour_marker;
-    global_contour_marker.type = Marker::LINE_LIST;
-    this->SetMarker(VizColor::ORANGE, "global_contour", 0.15f, 0.5f, global_contour_marker);
+    Marker global_contour_marker, unmatched_contour_marker;
+    global_contour_marker.type    = Marker::LINE_LIST;
+    unmatched_contour_marker.type = Marker::LINE_LIST;
+    this->SetMarker(VizColor::ORANGE, "global_contour",    0.15f, 0.5f, global_contour_marker);
+    this->SetMarker(VizColor::YELLOW, "unmatched_contour", 0.15f, 0.5f, unmatched_contour_marker);
     for (const auto& p_pair : contour_pairs) {
         geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
         geometry_msgs::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
         global_contour_marker.points.push_back(p_start);
         global_contour_marker.points.push_back(p_end);
     }
+    for (const auto& p_pair : unmatched_pairs) {
+        geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
+        geometry_msgs::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
+        unmatched_contour_marker.points.push_back(p_start);
+        unmatched_contour_marker.points.push_back(p_end);
+    }
     poly_marker_array.markers.push_back(global_contour_marker);
+    poly_marker_array.markers.push_back(unmatched_contour_marker);
     viz_poly_pub_.publish(poly_marker_array);
 }
 

@@ -28,10 +28,10 @@ private:
     NavNodePtr cur_internav_ptr_  = NULL;
     NavNodePtr last_internav_ptr_ = NULL;
     NodePtrStack new_nodes_;
-    NodePtrStack near_nav_nodes_, wide_near_nodes_;
+    NodePtrStack near_nav_nodes_, wide_near_nodes_, extend_match_nodes_, margin_near_nodes_;
     NodePtrStack internav_near_nodes_, surround_internav_nodes_;
     NodePtrStack out_contour_nodes_;
-    float CONNECT_ANGLE_COS, NOISE_ANGLE_COS, TRAJ_DIST;
+    float CONNECT_ANGLE_COS, NOISE_ANGLE_COS;
     bool is_bridge_internav_ = false;
     Point3D last_connect_pos_;
 
@@ -142,11 +142,7 @@ private:
     inline void RecordValidTrajEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
         const auto it1 = node_ptr1->trajectory_votes.find(node_ptr2->id);
         const auto it2 = node_ptr2->trajectory_votes.find(node_ptr1->id);
-        
-        // if (it1 == node_ptr1->trajectory_votes.end() || it2 == node_ptr2->trajectory_votes.end() || it1->second != it2->second) {
-        //     ROS_ERROR("DG: Trajectory votes queue error.");
-        //     return;
-        // }
+    
         if (it1->second > 0) {
             it1->second --, it2->second --;
         }
@@ -162,7 +158,7 @@ private:
             }
         }
         it1->second ++, it2->second ++;
-        if (it1->second > dg_params_.votes_size) { // clear trajectory connections and votes
+        if (it1->second > dg_params_.finalize_thred) { // clear trajectory connections and votes
             if (FARUtil::IsDebug) ROS_WARN("DG: Current trajectory edge disconnected, no traversable path found.");
             node_ptr1->trajectory_votes.erase(node_ptr2->id);
             FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->trajectory_connects);
@@ -183,6 +179,15 @@ private:
             return true;
         }
         return false;
+    }
+
+    inline void UpdateNearNodesWithMatchedMarginNodes(const NodePtrStack& margin_nodes, NodePtrStack& near_nodes, NodePtrStack& wide_nodes) {
+        for (const auto& node_ptr : margin_nodes) {
+            if (node_ptr->is_contour_match) {
+                node_ptr->is_wide_near = true, wide_nodes.push_back(node_ptr);
+                node_ptr->is_near_nodes = true, near_nodes.push_back(node_ptr);
+            }
+        }
     }
 
     inline void ReduceDumperCounter(const NavNodePtr& node_ptr) {
@@ -254,7 +259,7 @@ private:
     inline bool IsAValidNewNode(const CTNodePtr ctnode_ptr, bool& is_near_new) {
         is_near_new = FARUtil::IsPointNearNewPoints(ctnode_ptr->position, true);
         if (ctnode_ptr->is_contour_necessary || is_near_new) {
-            if (MapHandler::IsPointInObsNeighbor(ctnode_ptr->position) && IsPointOnTerrain(ctnode_ptr->position)) {
+            if (MapHandler::IsNavPointOnTerrainNeighbor(ctnode_ptr->position, false) && IsPointOnTerrain(ctnode_ptr->position)) {
                 return true;
             } else if (ctnode_ptr->is_contour_necessary) {
                 ctnode_ptr->is_contour_necessary = false;
@@ -320,7 +325,7 @@ private:
         }
         for (const auto& pt_cnode_ptr : node_ptr->potential_contours) {
             const auto it = pt_cnode_ptr->contour_votes.find(node_ptr->id);
-            if (!pt_cnode_ptr->is_near_nodes && FARUtil::IsVoteTrue(it->second, false)) {
+            if (pt_cnode_ptr->is_active && !pt_cnode_ptr->is_near_nodes && FARUtil::IsVoteTrue(it->second, false)) {
                 AddNodeToOutrangeContourMap(pt_cnode_ptr);
             }
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_contours);
@@ -350,7 +355,7 @@ private:
         for (const auto& pcnode : node_ptr->potential_contours) {
             const auto it1 = node_ptr->contour_votes.find(pcnode->id);
             const auto it2 = pcnode->contour_votes.find(node_ptr->id);
-            if (FARUtil::IsVoteTrue(it1->second)) {
+            if (FARUtil::IsVoteTrue(it1->second, false)) {
                 it1->second.clear(), it1->second.push_back(1);
                 it2->second.clear(), it2->second.push_back(1);
             } else {
@@ -384,6 +389,7 @@ private:
     inline void ClearNodeFromInternalStack(const NavNodePtr& node_ptr) {
         FARUtil::EraseNodeFromStack(node_ptr, near_nav_nodes_);
         FARUtil::EraseNodeFromStack(node_ptr, wide_near_nodes_);
+        FARUtil::EraseNodeFromStack(node_ptr, margin_near_nodes_);
         if (node_ptr->is_navpoint) {
             FARUtil::EraseNodeFromStack(node_ptr, internav_near_nodes_);
             FARUtil::EraseNodeFromStack(node_ptr, surround_internav_nodes_);
@@ -418,6 +424,8 @@ private:
 public:
     DynamicGraph() = default;
     ~DynamicGraph() = default;
+
+    static float TRAJ_DIST; // max distances between trajectory nodes
 
     void Init(const ros::NodeHandle& nh, const DynamicGraphParams& params);
 
@@ -475,6 +483,8 @@ public:
     static void FillTrajConnect(const NavNodePtr& node_ptr1,
                                 const NavNodePtr& node_ptr2);
 
+    static bool IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const bool& is_contour);
+
     static inline void FillFrontierVotes(const NavNodePtr& node_ptr, const bool& is_frontier) {
         if (is_frontier) {
             std::deque<int> vote_queue(dg_params_.finalize_thred, 1);
@@ -498,22 +508,24 @@ public:
         return false;
     }
 
-    static inline bool IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, const bool& is_contour) {
-        Point3D mid_p = (node_ptr1->position + node_ptr2->position) / 2.0f;
-        if (!is_contour) {
-            const Point3D diff_p = node_ptr2->position - node_ptr1->position;
-            if (diff_p.norm() > FARUtil::kMatchDist && abs(diff_p.z) / std::hypotf(diff_p.x, diff_p.y) > 1) {
-                return false; // slope is too steep > 45 degree
-            }
+    static inline void RemoveInvaildTerrainConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        const auto it1 = node_ptr1->terrain_votes.find(node_ptr2->id);
+        if (it1 == node_ptr1->terrain_votes.end()) {
+            node_ptr1->terrain_votes.insert({node_ptr2->id, 1});
+            node_ptr2->terrain_votes.insert({node_ptr1->id, 1});
+        } else if (it1->second < dg_params_.finalize_thred * 2) {
+            const auto it2 = node_ptr2->terrain_votes.find(node_ptr1->id);
+            it1->second ++, it2->second ++;
         }
-        bool is_match;
-        float minH, maxH;
-        const float avg_h = MapHandler::NearestHeightOfRadius(mid_p, FARUtil::kMatchDist, minH, maxH, is_match);
-        if (!is_match && is_contour) return false;
-        if (is_match && (maxH - minH > FARUtil::kMarginHeight || abs(avg_h + FARUtil::vehicle_height - mid_p.z) > FARUtil::kTolerZ / 2.0f)) {
-            return false;
+    }
+
+    static inline void RecordVaildTerrainConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        const auto it1 = node_ptr1->terrain_votes.find(node_ptr2->id);
+        if (it1 == node_ptr1->terrain_votes.end()) return;
+        if (it1->second > 0) {
+            const auto it2 = node_ptr2->terrain_votes.find(node_ptr1->id);
+            it1->second --, it2->second --;
         }
-        return true;
     }
 
     static inline void CreateNavNodeFromPoint(const Point3D& point, NavNodePtr& node_ptr, const bool& is_odom, 
@@ -547,7 +559,16 @@ public:
         node_ptr->potential_contours.clear();
         node_ptr->trajectory_connects.clear();
         node_ptr->trajectory_votes.clear();
+        node_ptr->terrain_votes.clear();
         node_ptr->free_direct = (is_odom || is_navpoint) ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
+        // planner members
+        node_ptr->is_block_to_goal    = false;
+        node_ptr->gscore              = FARUtil::kINF;
+        node_ptr->fgscore             = FARUtil::kINF;
+        node_ptr->is_traversable      = true;
+        node_ptr->is_free_traversable = true;
+        node_ptr->parent              = NULL;
+        node_ptr->free_parent         = NULL;
         InitNodePosition(node_ptr, point);
         // Assign Global Unique ID
         AssignGlobalNodeID(node_ptr);
@@ -646,6 +667,8 @@ public:
         idx_node_map_.clear();
         near_nav_nodes_.clear(); 
         wide_near_nodes_.clear(); 
+        extend_match_nodes_.clear();
+        margin_near_nodes_.clear();
         internav_near_nodes_.clear();
         surround_internav_nodes_.clear();
         out_contour_nodes_.clear();
@@ -657,7 +680,7 @@ public:
     /* Get Internal Values */
     const NavNodePtr    GetOdomNode()         const { return odom_node_ptr_;};
     const NodePtrStack& GetNavGraph()         const { return globalGraphNodes_;};
-    const NodePtrStack& GetNearNavGraph()     const { return near_nav_nodes_;};
+    const NodePtrStack& GetExtendLocalNode()  const { return extend_match_nodes_;};
     const NodePtrStack& GetOutContourNodes()  const { return out_contour_nodes_;};
     const NodePtrStack& GetNewNodes()         const { return new_nodes_;};
     const NavNodePtr&   GetLastInterNavNode() const { return last_internav_ptr_;};

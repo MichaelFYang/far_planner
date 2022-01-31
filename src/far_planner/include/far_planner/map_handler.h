@@ -39,7 +39,9 @@ public:
                                       bool& is_matched, 
                                       const bool& is_search);
 
-    static bool IsPointInObsNeighbor(const Point3D& p);
+    static bool IsNavPointOnTerrainNeighbor(const Point3D& p, const bool& is_extend);
+
+    static float NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_associated);
 
     /**
      * @brief Calculate the terrain height of a given point and radius around it
@@ -128,9 +130,8 @@ public:
     void ClearObsCellThroughPosition(const Point3D& point);
 
 private:
-
     MapHandlerParams map_params_;
-    int row_num_, col_num_, level_num_, neighbor_Lnum_, neighbor_Hnum_, height_dim_;
+    int neighbor_Lnum_, neighbor_Hnum_;
     Eigen::Vector3i robot_cell_sub_;
     int INFLATE_N;
     bool is_init_ = false;
@@ -178,10 +179,12 @@ private:
         }
     }
 
-    void ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs);
+    void ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs,
+                                     std::unordered_set<int>& extend_terrain_obs);
 
-    std::unordered_set<int> neighbor_free_indices_; // surrounding free cloud grid indices stack
+    std::unordered_set<int> neighbor_free_indices_;        // surrounding free cloud grid indices stack
     static std::unordered_set<int> neighbor_obs_indices_;  // surrounding obs cloud grid indices stack
+    static std::unordered_set<int> extend_obs_indices_;    // extended surrounding obs cloud grid indices stack
 
     std::vector<int> global_visited_induces_;
     std::vector<int> util_obs_modified_list_;
@@ -191,7 +194,7 @@ private:
     static std::vector<int> terrain_grid_traverse_list_;
 
     
-    std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
     static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
     static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_;
  

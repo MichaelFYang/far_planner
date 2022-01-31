@@ -337,15 +337,18 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
     if (FARUtil::IsDebug) ROS_INFO("GP: *********** new goal updated ***********");
     is_goal_init_          = true;
     is_global_path_init_   = false;
+    is_terrain_associated_ = false;
     origin_goal_pos_       = goal_node_ptr_->position;
-    is_origin_free_        = is_use_internav_goal_ ? true : false;
     is_free_nav_goal_      = command_is_free_nav_;
     next_waypoint_         = Point3D(0,0,0);
     last_waypoint_dist_    = 0.0f;
     last_planning_odom_    = Point3D(0,0,0);
     path_momentum_counter_ = 0;
     recorded_path_.clear();
-    this->ResetFreeTerrainGridOrigin(origin_goal_pos_);
+    if (!FARUtil::IsMultiLayer) {
+        goal_node_ptr_->position.z = MapHandler::NearestTerrainHeightofNavPoint(origin_goal_pos_, is_terrain_associated_) + FARUtil::vehicle_height;
+    }
+    this->ResetFreeTerrainGridOrigin(goal_node_ptr_->position);
 }
 
 void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height)
@@ -353,14 +356,19 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
     if (is_use_internav_goal_) return; // return if using an exsiting internav node as goal
     if (is_adjust_height && is_global_path_init_ && recorded_path_.size() > 1) { // use path to adjust goal height
         const auto it = recorded_path_.end() - 2;
-        goal_ptr->position.z = (*it)->position.z;
+        if (!is_terrain_associated_) {
+            goal_ptr->position.z = (*it)->position.z;
+        } else if ((*it)->is_odom) {
+            goal_ptr->position.z = (*it)->position.z;
+        }
+        
     }
     const Eigen::Vector3i ori_sub = free_terrain_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
     const Point3D ori_pos_height(origin_goal_pos_.x, origin_goal_pos_.y, goal_ptr->position.z);
     const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_node_ptr_->position) ? true : false;
-    goal_ptr->position = ori_pos_height;
-    // reproject to nearby free space
-    if (!is_origin_free) {
+    if (is_origin_free) {
+        goal_ptr->position = ori_pos_height;
+    } else { // reproject to nearby free space
         std::array<int, 4> dx = {-1, 0, 1, 0};
         std::array<int, 4> dy = { 0, 1, 0,-1};
         std::deque<int> q;
@@ -432,34 +440,42 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     free_terrain_grid_->ReInitGrid(INIT_BIT);
     // evaluate goal freespace status
     is_goal_in_freespace_ = false;
-    if (obsCloudIn->empty() && freeCloudIn->empty()) return;
-    // process cloud
-    const int C_IF = gp_params_.clear_inflate_size;
-    for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
-        Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-        for (int i = -C_IF; i <= C_IF; i++) {
-            for (int j = -C_IF; j <= C_IF; j++) {
-                Eigen::Vector3i sub = c_sub;
-                sub.x() += i, sub.y() += j, sub.z() = 0;
-                if (free_terrain_grid_->InRange(sub)) {
-                    const int ind = free_terrain_grid_->Sub2Ind(sub);
-                    free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
+    if (!freeCloudIn->empty() || !obsCloudIn->empty()) { // process terrain cloud
+        const int C_IF = gp_params_.clear_inflate_size;
+        for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
+            Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
+            for (int i = -C_IF; i <= C_IF; i++) {
+                for (int j = -C_IF; j <= C_IF; j++) {
+                    Eigen::Vector3i sub = c_sub;
+                    sub.x() += i, sub.y() += j, sub.z() = 0;
+                    if (free_terrain_grid_->InRange(sub)) {
+                        const int ind = free_terrain_grid_->Sub2Ind(sub);
+                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
+                    }
+                }
+            }
+        }
+        for (const auto& point : freeCloudIn->points) { // Set free cloud in free terrain grid
+            Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
+            for (int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+                    Eigen::Vector3i sub = c_sub;
+                    sub.x() += i, sub.y() += j, sub.z() = 0;
+                    if (free_terrain_grid_->InRange(sub)) {
+                        const int ind = free_terrain_grid_->Sub2Ind(sub);
+                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | FREE_BIT;
+                        is_goal_in_freespace_ = true;
+                    }
                 }
             }
         }
     }
-    // Set free cloud in free terrain grid
-    for (const auto& point : freeCloudIn->points) {
-        Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-        for (int i = -1; i <= 1; i++) {
-            for (int j = -1; j <= 1; j++) {
-                Eigen::Vector3i sub = c_sub;
-                sub.x() += i, sub.y() += j, sub.z() = 0;
-                if (free_terrain_grid_->InRange(sub)) {
-                    const int ind = free_terrain_grid_->Sub2Ind(sub);
-                    free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | FREE_BIT;
-                    is_goal_in_freespace_ = true;
-                }
+    if (!is_goal_in_freespace_) { // check for freespace status if no terrain clouds around
+        for (const auto& node_ptr : current_graph_) {
+            if (!node_ptr->is_navpoint) continue;
+            if ((node_ptr->position - center).norm() < DynamicGraph::TRAJ_DIST && FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr_)) {
+                is_goal_in_freespace_ = true;
+                break;
             }
         }
     }

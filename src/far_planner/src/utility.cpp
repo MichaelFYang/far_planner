@@ -239,8 +239,8 @@ void FARUtil::ClearKdTree(const PointCloudPtr& cloud_ptr,
 }
 
 bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
-  const std::size_t near_c = FARUtil::PointInNewCounter(p, FARUtil::kNearDist * 2.0f);
-  const int counter_limit = is_creation ? std::floor(FARUtil::KNewPointC / 2.0f) : FARUtil::KNewPointC;
+  const std::size_t near_c = FARUtil::PointInNewCounter(p, FARUtil::kMatchDist);
+  const int counter_limit = is_creation ? std::round(FARUtil::KNewPointC / 2.0f) : FARUtil::KNewPointC;
   return (near_c > counter_limit) ? true : false;
 }
 
@@ -724,15 +724,17 @@ void FARUtil::CropBoxCloud(const PointCloudPtr& cloudInOut,
   *cloudInOut = cropBox_cloud;
 }
 
-bool FARUtil::IsInCylinder(const Point3D& from_p, const Point3D& end_p, const Point3D& cur_p, const float& radius) {
-  const Point3D unit_axial = (end_p - from_p).normalize();
+bool FARUtil::IsInCylinder(const Point3D& from_p, const Point3D& end_p, const Point3D& cur_p, const float& radius, const bool& is_2D) {
+  const Point3D unit_axial = is_2D ? (end_p - from_p).normalize_flat() : (end_p - from_p).normalize();
   const Point3D vec = cur_p - from_p;
   const float proj_scalar = vec * unit_axial;
-  if (proj_scalar < - radius || proj_scalar > (end_p - from_p).norm() + radius) {
+  float temp_line_dist = is_2D ? (end_p - from_p).norm_flat() : (end_p - from_p).norm();
+  if (proj_scalar < - radius || proj_scalar > temp_line_dist + radius) {
       return false;
   }
-  const Point3D vec_axial = unit_axial * proj_scalar; 
-  if ((vec - vec_axial).norm() > radius) {
+  const Point3D vec_axial = unit_axial * proj_scalar;
+  temp_line_dist = is_2D ? (vec - vec_axial).norm_flat() : (vec - vec_axial).norm();
+  if (temp_line_dist > radius) {
       return false;
   }
   return true;
@@ -793,7 +795,7 @@ bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {
 }
 
 bool FARUtil::IsPointInLocalRange(const Point3D& p, const bool& is_large_h) {
-  const float H = is_large_h ? FARUtil::kTolerZ * 1.5f : FARUtil::kTolerZ;
+  const float H = is_large_h ? FARUtil::kTolerZ + FARUtil::kHeightVoxel : FARUtil::kTolerZ;
   if (FARUtil::IsPointInToleratedHeight(p, H) && (p - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
       return true;
   }

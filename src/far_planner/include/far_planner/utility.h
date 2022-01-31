@@ -81,6 +81,7 @@ public:
     static float robot_dim;
     static float kAngleNoise;
     static float kCellLength;
+    static float kCellHeight;
     static float vehicle_height;
     static float kLeafSize;
     static float kHeightVoxel;
@@ -107,8 +108,7 @@ public:
     // PCL Clouds
     static PointCloudPtr surround_obs_cloud_;   // surround obstacle cloud
     static PointCloudPtr surround_free_cloud_;  // surround free space cloud
-    static PointCloudPtr stack_new_cloud_;      // new obstacle points cloud
-    static PointCloudPtr vanish_pillar_ptr_;    // vanished pillar nodes cloud        
+    static PointCloudPtr stack_new_cloud_;      // new obstacle points cloud      
     static PointCloudPtr stack_dyobs_cloud_;
     static PointCloudPtr cur_new_cloud_;
     static PointCloudPtr cur_dyobs_cloud_;
@@ -343,7 +343,8 @@ public:
     static bool IsInCylinder(const Point3D& start_p, 
                              const Point3D& end_p, 
                              const Point3D& cur_p,
-                             const float& radius);
+                             const float& radius,
+                             const bool& is_2D=false);
 
     static float LineMatchPercentage(const PointPair& line1, const PointPair& line2);
 
@@ -360,6 +361,13 @@ public:
 
     static bool IsNodeInLocalRange(const NavNodePtr& node_ptr, const bool& is_large_h=false) {
         return IsPointInLocalRange(node_ptr->position, is_large_h);
+    }
+
+    static bool IsNodeInExtendMatchRange(const NavNodePtr& node_ptr) {
+        if (FARUtil::IsPointInToleratedHeight(node_ptr->position, FARUtil::kTolerZ * 1.5f) && (node_ptr->position - FARUtil::odom_pos).norm() < FARUtil::kSensorRange) {
+            return true;
+        }
+        return false;
     }
 
     static bool IsFreeNavNode(const NavNodePtr& node_ptr) {

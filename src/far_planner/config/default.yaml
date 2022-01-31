@@ -24,15 +24,14 @@ GraphMsger/robot_id                     : 1  # graph from robot id "0" is extrac
 MapHandler/floor_height                 : 2.0     # Unit: meter
 MapHandler/cell_length                  : 5.0     # Unit: meter
 MapHandler/map_grid_max_length          : 1000.0  # Unit: meter
-MapHandler/map_grad_max_height          : 80.0    # Unit: meter
-MapHandler/terrain_voxel_dim            : 0.25    # Unit: meter
+MapHandler/map_grad_max_height          : 100.0   # Unit: meter
 
 # Scan Handler Params
 ScanHandler/inflate_scan_size           : 2
 
 # Dynamic Planner Utility Params
 Util/angle_noise                        : 10.0 # Unit: degree
-Util/accept_max_align_angle             : 5.0  # Unit: degree
+Util/accept_max_align_angle             : 4.0  # Unit: degree
 Util/new_intensity_thred                : 2.0
 Util/terrain_free_Z                     : 0.2
 Util/dyosb_update_thred                 : 4

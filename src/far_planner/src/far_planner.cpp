@@ -117,7 +117,6 @@ void FARMaster::ResetEnvironmentAndGraph() {
   FARUtil::surround_obs_cloud_->clear();
   FARUtil::surround_free_cloud_->clear();
   FARUtil::stack_new_cloud_->clear();
-  FARUtil::vanish_pillar_ptr_->clear();
   FARUtil::stack_dyobs_cloud_->clear();
   FARUtil::cur_new_cloud_->clear();
   FARUtil::cur_dyobs_cloud_->clear();
@@ -166,7 +165,7 @@ void FARMaster::Loop() {
     map_handler_.AdjustNodesHeight(nav_graph_);
     // Truncate for local range nodes
     graph_manager_.UpdateGlobalNearNodes();
-    near_nav_graph_ = graph_manager_.GetNearNavGraph();
+    near_nav_graph_ = graph_manager_.GetExtendLocalNode();
     // Match near nav nodes with contour
     contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
     if (master_params_.is_visual_opencv) {
@@ -199,8 +198,6 @@ void FARMaster::Loop() {
 
     /* Publish local boundary to lower level local planner */
     this->LocalBoundaryHandler(ContourGraph::local_boundary_);
-    /* update vanished pillar points cloud */
-    this->AddVanishedPillarNodeToNewCloud(clear_nodes_, FARUtil::vanish_pillar_ptr_);
 
     /* Viz Navigation Graph */
     const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
@@ -212,7 +209,7 @@ void FARMaster::Loop() {
     planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
     planner_viz_.VizGraph(nav_graph_);
     planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
-    planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_);
+    planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
 
     if (is_graph_init_) { 
       if (FARUtil::IsDebug) {
@@ -436,9 +433,9 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(map_prefix + "cell_length",         map_params_.cell_length, 5.0);
   nh.param<float>(map_prefix + "map_grid_max_length", map_params_.grid_max_length, 5000.0);
   nh.param<float>(map_prefix + "map_grad_max_height", map_params_.grid_max_height, 100.0);
-  nh.param<float>(map_prefix + "terrain_voxel_dim",   map_params_.height_voxel_dim, 0.5);
-  map_params_.cell_height  = map_params_.floor_height / 2.5f;
-  map_params_.sensor_range = master_params_.sensor_range;
+  map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
+  map_params_.cell_height      = map_params_.floor_height / 2.5f;
+  map_params_.sensor_range     = master_params_.sensor_range;
 
   // graph planner params
   nh.param<float>(planner_prefix + "converge_distance",    gp_params_.converge_dist, 1.0);
@@ -463,13 +460,14 @@ void FARMaster::LoadROSParams() {
   FARUtil::kLeafSize      = master_params_.voxel_dim;
   FARUtil::kNearDist      = master_params_.robot_dim;
   FARUtil::kHeightVoxel   = map_params_.height_voxel_dim;
-  FARUtil::kMatchDist     = master_params_.robot_dim * 2.0f;
+  FARUtil::kMatchDist     = master_params_.robot_dim * 2.0f + FARUtil::kLeafSize;
   FARUtil::kNavClearDist  = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
   FARUtil::kProjectDist   = master_params_.voxel_dim * 2.0f;
   FARUtil::worldFrameId   = master_params_.world_frame;
   FARUtil::kVizRatio      = master_params_.viz_ratio;
   FARUtil::kTolerZ        = map_params_.floor_height - FARUtil::kHeightVoxel;
   FARUtil::kCellLength    = map_params_.cell_length;
+  FARUtil::kCellHeight    = map_params_.cell_height;
   FARUtil::kAcceptAlign   = FARUtil::kAcceptAlign / 180.0f * M_PI;
   FARUtil::kAngleNoise    = FARUtil::kAngleNoise  / 180.0f * M_PI; 
   FARUtil::robot_dim      = master_params_.robot_dim;
@@ -479,11 +477,11 @@ void FARMaster::LoadROSParams() {
   FARUtil::vehicle_height = master_params_.vehicle_height;
   FARUtil::kSensorRange   = master_params_.sensor_range;
   FARUtil::kMarginDist    = master_params_.sensor_range - FARUtil::kMatchDist;
-  FARUtil::kMarginHeight  = FARUtil::kTolerZ - map_params_.cell_height / 2.0f;
+  FARUtil::kMarginHeight  = FARUtil::kTolerZ - FARUtil::kCellHeight / 2.0f;
   FARUtil::kTerrainRange  = master_params_.terrain_range;
 
   // contour graph params
-  cg_params_.kPillarPerimeter = master_params_.robot_dim * 6.0f;
+  cg_params_.kPillarPerimeter = master_params_.robot_dim * 4.0f;
 
   // dynamic graph params
   nh.param<int>(graph_prefix    + "connect_votes_size",        graph_params_.votes_size, 10);
@@ -620,7 +618,6 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
     FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,
                                      FARUtil::surround_obs_cloud_,
                                      FARUtil::cur_new_cloud_);
-    *FARUtil::cur_new_cloud_ += *FARUtil::vanish_pillar_ptr_;
   } else { // stop env update
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
@@ -702,7 +699,6 @@ PointCloudPtr  FARUtil::surround_obs_cloud_  = PointCloudPtr(new pcl::PointCloud
 PointCloudPtr  FARUtil::surround_free_cloud_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::stack_new_cloud_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_new_cloud_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-PointCloudPtr  FARUtil::vanish_pillar_ptr_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_dyobs_cloud_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::stack_dyobs_cloud_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_scan_cloud_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
@@ -725,6 +721,7 @@ float   FARUtil::kLeafSize;
 float   FARUtil::kHeightVoxel;
 float   FARUtil::kNavClearDist;
 float   FARUtil::kCellLength;
+float   FARUtil::kCellHeight;
 float   FARUtil::kNewPIThred;
 float   FARUtil::kSensorRange;
 float   FARUtil::kMarginDist;
@@ -748,6 +745,7 @@ bool    FARUtil::IsMultiLayer;
 TimeMeasure FARUtil::Timer;
 
 /* Global Graph */
+float DynamicGraph::TRAJ_DIST;
 DynamicGraphParams DynamicGraph::dg_params_;
 NodePtrStack DynamicGraph::globalGraphNodes_;
 std::size_t  DynamicGraph::id_tracker_;
@@ -759,6 +757,7 @@ CTNodeStack ContourGraph::polys_ctnodes_;
 CTNodeStack ContourGraph::contour_graph_;
 PolygonStack ContourGraph::contour_polygons_;
 std::vector<PointPair> ContourGraph::global_contour_;
+std::vector<PointPair> ContourGraph::unmatched_contour_;
 std::vector<PointPair> ContourGraph::inactive_contour_;
 std::vector<PointPair> ContourGraph::boundary_contour_;
 std::vector<PointPair> ContourGraph::local_boundary_;
@@ -770,6 +769,8 @@ PointKdTreePtr MapHandler::kdtree_terrain_clould_;
 std::vector<int> MapHandler::terrain_grid_occupy_list_;
 std::vector<int> MapHandler::terrain_grid_traverse_list_;
 std::unordered_set<int> MapHandler::neighbor_obs_indices_;
+std::unordered_set<int> MapHandler::extend_obs_indices_;
+std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_free_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_obs_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_grid_;
 

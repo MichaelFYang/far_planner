@@ -74,7 +74,7 @@ void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
         nodes_cloud_ptr_->resize(global_graph_.size());
         std::size_t idx = 0;
         for (const auto node_ptr : global_graph_) {
-            if (node_ptr->is_odom) continue;
+            if (node_ptr->is_odom || FARUtil::IsOutsideGoal(node_ptr)) continue;
             PCLPoint pcl_p = FARUtil::Point3DToPCLPoint(node_ptr->position);
             pcl_p.intensity = node_ptr->id;
             nodes_cloud_ptr_->points[idx] = pcl_p;
@@ -173,7 +173,7 @@ void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, N
     const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
     const bool is_boundary = vnode.is_boundary == 0 ? false : true;
     DynamicGraph::CreateNavNodeFromPoint(p, node_ptr, false, is_navpoint, false, is_boundary);
-    node_ptr->is_active = is_boundary ? true : false;
+    node_ptr->is_active = false;
     /* Assign relative values */
     node_ptr->is_covered  = is_covered;
     node_ptr->is_frontier = is_frontier;

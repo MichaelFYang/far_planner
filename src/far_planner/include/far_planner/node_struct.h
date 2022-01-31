@@ -94,6 +94,7 @@ struct NavNode
     std::vector<std::shared_ptr<NavNode>> potential_edges;
     std::vector<std::shared_ptr<NavNode>> trajectory_connects;
     std::unordered_map<std::size_t, std::size_t> trajectory_votes;
+    std::unordered_map<std::size_t, std::size_t> terrain_votes;
     NodeType node_type; 
     NodeFreeDirect free_direct;
     // planner members

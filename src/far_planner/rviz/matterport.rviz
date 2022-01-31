@@ -36,7 +36,7 @@ Visualization Manager:
       Enabled: true
       Length: 1.5
       Name: Vehicle
-      Radius: 0.150000001192092896
+      Radius: 0.15000000596046448
       Reference Frame: vehicle
       Value: true
     - Class: rviz/Image
@@ -151,7 +151,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: FlatColor
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -503,7 +503,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -542,16 +542,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 130.9629364013672
+      Distance: 38.46877670288086
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 62.62998580932617
-        Y: 20.543689727783203
-        Z: -0.5233291387557983
+        X: 10.972058296203613
+        Y: -0.8288973569869995
+        Z: -0.5448966026306152
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -560,7 +560,7 @@ Visualization Manager:
       Pitch: 1.5697963237762451
       Target Frame: map
       Value: Orbit (rviz)
-      Yaw: 4.708582878112793
+      Yaw: 4.698582649230957
     Saved: ~
 Window Geometry:
   ControlPanel:

@@ -31,12 +31,12 @@ GraphPlannerParams gp_params_;
 NavNodePtr odom_node_ptr_  = NULL;
 
 // goal related values
-NavNodePtr goal_node_ptr_  = NULL;
-Point3D origin_goal_pos_   = Point3D(0,0,0);
-bool is_origin_free_       = false;
-bool is_use_internav_goal_ = false;
-bool command_is_free_nav_  = false;
-bool is_goal_in_freespace_ = false;
+NavNodePtr goal_node_ptr_   = NULL;
+Point3D origin_goal_pos_    = Point3D(0,0,0);
+bool is_use_internav_goal_  = false;
+bool command_is_free_nav_   = false;
+bool is_goal_in_freespace_  = false;
+bool is_terrain_associated_ = false;
 bool is_goal_init_;
 NodePtrStack current_graph_;
 bool is_free_nav_goal_;
@@ -130,7 +130,6 @@ inline float EulerCost(const NavNodePtr& current_node,
 
 inline void GoalReset() {
     origin_goal_pos_ = Point3D(0,0,0);
-    is_origin_free_ = false;
     is_goal_in_freespace_ = false;
     if (goal_node_ptr_ != NULL) {
         if (!is_use_internav_goal_) DynamicGraph::ClearGoalNodeInGraph(goal_node_ptr_);
@@ -219,7 +218,6 @@ inline void ResetPlannerInternalValues() {
     odom_node_ptr_ = NULL;
     
     is_goal_init_         = false;
-    is_origin_free_       = false;
     is_use_internav_goal_ = false;
     is_global_path_init_  = false;
     is_free_nav_goal_     = false;

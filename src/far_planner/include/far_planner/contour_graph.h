@@ -48,6 +48,7 @@ public:
     static CTNodeStack  contour_graph_;
     static std::vector<PointPair> global_contour_;
     static std::vector<PointPair> inactive_contour_;
+    static std::vector<PointPair> unmatched_contour_;
     static std::vector<PointPair> boundary_contour_;
     static std::vector<PointPair> local_boundary_;
 
@@ -138,6 +139,13 @@ private:
         ContourGraph::contour_polygons_.push_back(poly_ptr);
     } 
 
+    inline bool IsActiveEdge(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1->is_active && node_ptr2->is_active) {
+            return true;
+        }
+        return false;
+    }
+    
     inline void AddConnect(const CTNodePtr& ctnode_ptr1, const CTNodePtr& ctnode_ptr2) {
         if (ctnode_ptr1 != ctnode_ptr2 &&
             !FARUtil::IsTypeInStack(ctnode_ptr2, ctnode_ptr1->connect_nodes) &&
@@ -164,6 +172,13 @@ private:
             return false;
         }
         return true;
+    }
+
+    static inline bool IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1->is_near_nodes || node_ptr2->is_near_nodes || FARUtil::IsNodeInLocalRange(node_ptr1) || FARUtil::IsNodeInLocalRange(node_ptr2)) {
+            return true;
+        }
+        return false;
     }
 
     template <typename NodeType>
@@ -222,13 +237,6 @@ private:
 
     inline static bool IsNeedGlobalCheck(const Point3D& p1, const Point3D& p2) {
         if (!FARUtil::IsPointInLocalRange(p1) || !FARUtil::IsPointInLocalRange(p2)) {
-            return true;
-        }
-        return false;
-    }
-
-    inline static bool IsEdgeInLocalRange(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-        if (FARUtil::IsNodeInLocalRange(node_ptr1) || FARUtil::IsNodeInLocalRange(node_ptr2)) {
             return true;
         }
         return false;

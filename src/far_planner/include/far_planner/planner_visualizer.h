@@ -44,7 +44,8 @@ public:
                   const float scale=0.75f,
                   const float alpha=0.75f);
 
-    void VizGlobalPolygons(const std::vector<PointPair>& contour_pairs);
+    void VizGlobalPolygons(const std::vector<PointPair>& contour_pairs, 
+                           const std::vector<PointPair>& unmatched_pairs);
 
     void VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point3D& extend_point);
 
