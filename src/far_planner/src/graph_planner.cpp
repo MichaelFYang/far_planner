@@ -471,11 +471,16 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
         }
     }
     if (!is_goal_in_freespace_) { // check for freespace status if no terrain clouds around
+        float min_dist = FARUtil::kINF;
         for (const auto& node_ptr : current_graph_) {
             if (!node_ptr->is_navpoint) continue;
-            if ((node_ptr->position - center).norm() < DynamicGraph::TRAJ_DIST && FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr_)) {
+            const float cur_dist = (node_ptr->position - center).norm_flat();
+            if (cur_dist < DynamicGraph::TRAJ_DIST && FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr_)) {
+                if (cur_dist < min_dist) {
+                    goal_node_ptr_->position.z = node_ptr->position.z;
+                    min_dist = cur_dist;
+                }
                 is_goal_in_freespace_ = true;
-                break;
             }
         }
     }
