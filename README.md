@@ -75,7 +75,7 @@ FAR planner settings are kept in default.yaml in the 'src/far_planner/config' fo
 
 ## Reference
 
-- F. Yang, C. Cao, H. Zhu, J. Oh, and J. Zhang. FAR Planner: Fast, Attemptable Route Planner using Dynamic Visibility Update. Submitted in 2021.
+- F. Yang, C. Cao, H. Zhu, J. Oh, and J. Zhang. FAR Planner: Fast, Attemptable Route Planner using Dynamic Visibility Update. arXiv preprint arXiv:2110.09460, 2021.
 
 ## Author
 
