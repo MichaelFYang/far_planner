@@ -230,8 +230,7 @@ private:
 
     static bool IsEdgeCollideSegment(const PointPair& line, const ConnectPair& edge);
 
-    static bool IsMatchLineConnectFreePolygon(const CTNodePtr& matched_ctnode, 
-                                              const NavNodePtr& matched_navnode);
+    static bool IsCTMatchLineFreePolygon(const CTNodePtr& matched_ctnode, const NavNodePtr& matched_navnode, const bool& is_global_check);
 
     static bool IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2, bool& is_new);
 

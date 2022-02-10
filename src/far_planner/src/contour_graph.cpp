@@ -71,7 +71,9 @@ void ContourGraph::MatchContourWithNavGraph(const NodePtrStack& global_nodes, co
         ctnode_ptr->nav_node_id = 0;
         if (ctnode_ptr->free_direct != NodeFreeDirect::UNKNOW) {
             const NavNodePtr matched_node = this->NearestNavNodeForCTNode(ctnode_ptr, near_nodes);
-            this->MatchCTNodeWithNavNode(ctnode_ptr, matched_node);
+            if (matched_node != NULL && IsCTMatchLineFreePolygon(ctnode_ptr, matched_node, false)) {
+                this->MatchCTNodeWithNavNode(ctnode_ptr, matched_node);
+            }   
         }
     }
     this->EnclosePolygonsCheck();
@@ -141,12 +143,12 @@ bool ContourGraph::IsNavToGoalConnectFreePolygon(const NavNodePtr& node_ptr, con
 }
 
 
-bool ContourGraph::IsMatchLineConnectFreePolygon(const CTNodePtr& matched_ctnode, const NavNodePtr& matched_navnode) {
+bool ContourGraph::IsCTMatchLineFreePolygon(const CTNodePtr& matched_ctnode, const NavNodePtr& matched_navnode, const bool& is_global_check) {
     if ((matched_ctnode->position - matched_navnode->position).norm() < FARUtil::kNavClearDist) return true;
     const HeightPair h_pair(matched_ctnode->position, matched_navnode->position);
     const ConnectPair bd_cedge = ConnectPair(matched_ctnode->position, matched_navnode->position);
     const ConnectPair cedge = ContourGraph::ReprojectEdge(matched_ctnode, matched_navnode, FARUtil::kProjectDist);
-    return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, h_pair, true);
+    return ContourGraph::IsPointsConnectFreePolygon(cedge, bd_cedge, h_pair, is_global_check);
 }
 
 bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
@@ -285,7 +287,7 @@ bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNod
         {
             const PointPair line2(ctnode_ptr->position, next_ctnode->position);
             if (FARUtil::LineMatchPercentage(line1, line2) > 0.99f) {
-                if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
+                if (IsCTMatchLineFreePolygon(next_ctnode, outNode_ptr, true)) {
                     matched_ctnode = next_ctnode;
                     return true;
                 }
@@ -305,7 +307,7 @@ bool ContourGraph::IsContourLineMatch(const NavNodePtr& inNode_ptr, const NavNod
         {
             const PointPair line2(ctnode_ptr->position, next_ctnode->position);
             if (FARUtil::LineMatchPercentage(line1, line2) > 0.99f) {
-                if (IsMatchLineConnectFreePolygon(next_ctnode, outNode_ptr)) {
+                if (IsCTMatchLineFreePolygon(next_ctnode, outNode_ptr, true)) {
                     matched_ctnode = next_ctnode;
                     return true;
                 }
@@ -414,9 +416,7 @@ NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, co
         const float pre_dist = (nearest_node->position - nearest_node->ctnode->position).norm_flat();
         if (min_edist < pre_dist) {
             // reset matching for previous ctnode
-            nearest_node->ctnode->is_global_match = false;
-            nearest_node->ctnode->nav_node_id = 0;
-            nearest_node->ctnode = NULL;
+            RemoveMatchWithNavNode(nearest_node);
         } else {
             nearest_node = NULL;
         }

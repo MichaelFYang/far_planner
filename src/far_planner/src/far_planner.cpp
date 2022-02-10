@@ -462,7 +462,7 @@ void FARMaster::LoadROSParams() {
   FARUtil::kHeightVoxel   = map_params_.height_voxel_dim;
   FARUtil::kMatchDist     = master_params_.robot_dim * 2.0f + FARUtil::kLeafSize;
   FARUtil::kNavClearDist  = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
-  FARUtil::kProjectDist   = master_params_.voxel_dim * 2.0f;
+  FARUtil::kProjectDist   = master_params_.voxel_dim;
   FARUtil::worldFrameId   = master_params_.world_frame;
   FARUtil::kVizRatio      = master_params_.viz_ratio;
   FARUtil::kTolerZ        = map_params_.floor_height - FARUtil::kHeightVoxel;
