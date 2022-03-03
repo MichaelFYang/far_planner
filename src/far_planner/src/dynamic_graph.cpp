@@ -245,7 +245,9 @@ bool DynamicGraph::IsValidConnect(const NavNodePtr& node_ptr1,
     /* check polygon connections */
     const int vote_queue_size = (node_ptr1->is_odom || node_ptr2->is_odom) ? std::ceil(dg_params_.votes_size / 3.0f) : dg_params_.votes_size;
     if (IsConvexConnect(node_ptr1, node_ptr2) && this->IsInDirectConstraint(node_ptr1, node_ptr2) && ContourGraph::IsNavNodesConnectFreePolygon(node_ptr1, node_ptr2) && IsOnTerrainConnect(node_ptr1, node_ptr2, false)) {
-        RecordPolygonVote(node_ptr1, node_ptr2, vote_queue_size);
+        if (this->IsPolyMatchedForConnect(node_ptr1, node_ptr2)) {
+            RecordPolygonVote(node_ptr1, node_ptr2, vote_queue_size);
+        }
     } else {
         DeletePolygonVote(node_ptr1, node_ptr2, vote_queue_size);
     }
@@ -520,8 +522,9 @@ bool DynamicGraph::UpdateNodeSurfDirs(const NavNodePtr& node_ptr, PointPair cur_
 
 void DynamicGraph::ReEvaluateConvexity(const NavNodePtr& node_ptr) {
     if (!node_ptr->is_contour_match || node_ptr->ctnode->poly_ptr->is_pillar) return;
-    const Point3D topo_dir = FARUtil::SurfTopoDirect(node_ptr->surf_dirs);
-    if (topo_dir.norm() > FARUtil::kEpsilon) {
+    bool is_wall = false;
+    const Point3D topo_dir = FARUtil::SurfTopoDirect(node_ptr->surf_dirs, is_wall);
+    if (!is_wall) {
         const Point3D ctnode_p = node_ptr->ctnode->position;
         const Point3D ev_p = ctnode_p + topo_dir * FARUtil::kLeafSize;
         if (FARUtil::IsConvexPoint(node_ptr->ctnode->poly_ptr->vertices, ev_p, FARUtil::free_odom_p)) {
@@ -766,7 +769,7 @@ void DynamicGraph::UpdateGlobalNearNodes() {
                     if (node_ptr->is_navpoint) {
                         node_ptr->position.intensity = node_ptr->fgscore;
                         internav_near_nodes_.push_back(node_ptr);
-                        if ((node_ptr->position - odom_node_ptr_->position).norm() < FARUtil::kMatchDist * 1.5f) {
+                        if ((node_ptr->position - odom_node_ptr_->position).norm() < TRAJ_DIST / 2.0f) {
                             surround_internav_nodes_.push_back(node_ptr);
                         }
                     }
@@ -810,7 +813,7 @@ void DynamicGraph::UpdateGlobalNearNodes() {
 bool DynamicGraph::ReEvaluateCorner(const NavNodePtr node_ptr) {
     if (node_ptr->is_boundary) return true;
     if (node_ptr->is_navpoint) {
-        if (FARUtil::IsTypeInStack(node_ptr, internav_near_nodes_) && this->IsNodeInTerrainOccupy(node_ptr)) {
+        if (FARUtil::IsTypeInStack(node_ptr, surround_internav_nodes_) && this->IsNodeInTerrainOccupy(node_ptr)) {
             return false;
         }
         return true;

@@ -21,13 +21,16 @@ void FARMaster::Init() {
   joy_command_sub_    = nh.subscribe("/joy", 5, &FARMaster::JoyCommandCallBack, this);
   update_command_sub_ = nh.subscribe("/update_visibility_graph", 5, &FARMaster::UpdateCommandCallBack, this);
   goal_pub_           = nh.advertise<geometry_msgs::PointStamped>("/way_point",5);
-  runtime_pub_        = nh.advertise<std_msgs::Float32>("/runtime",1);
   boundary_pub_       = nh.advertise<geometry_msgs::PolygonStamped>("/navigation_boundary",5);
-
+  // Timers
+  runtime_pub_        = nh.advertise<std_msgs::Float32>("/runtime",1);
+  planning_time_pub_  = nh.advertise<std_msgs::Float32>("/planning_time",1);
+  traverse_time_pub_  = nh.advertise<std_msgs::Float32>("/far_traverse_time", 5);
+  // planning status publisher
+  reach_goal_pub_     = nh.advertise<std_msgs::Bool>("/far_reach_goal_status", 5);
   // Terminal formatting subscriber
   read_command_sub_   = nh.subscribe("/read_file_dir", 1, &FARMaster::ReadFileCommand, this);
   save_command_sub_   = nh.subscribe("/save_file_dir", 1, &FARMaster::SaveFileCommand, this);
-
   // DEBUG Publisher
   dynamic_obs_pub_     = nh.advertise<sensor_msgs::PointCloud2>("/FAR_dynamic_obs_debug",1);
   surround_free_debug_ = nh.advertise<sensor_msgs::PointCloud2>("/FAR_free_debug",1);
@@ -185,6 +188,7 @@ void FARMaster::Loop() {
     /* Graph Updating */
     graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
     runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
+    // runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_); // Unit: ms
     runtime_pub_.publish(runtimer_);
     /* Update v-graph in other modules */
     nav_graph_ = graph_manager_.GetNavGraph();
@@ -268,7 +272,8 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     bool is_planning_fails = false;
     goal_waypoint_stamped_.header.stamp = ros::Time::now();
     bool is_current_free_nav = false;
-    if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_current_free_nav) && nav_node_ptr_ != NULL) {
+    bool is_reach_goal = false;
+    if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_reach_goal, is_current_free_nav) && nav_node_ptr_ != NULL) {
       Point3D waypoint = nav_node_ptr_->position;
       if (nav_node_ptr_ != goal_ptr) {
         waypoint = this->ProjectNavWaypoint(nav_node_ptr_, last_nav_ptr);
@@ -293,7 +298,19 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
       }
     }
     if (!FARUtil::IsDebug) printf("\033[2K");
-    FARUtil::Timer.end_time("Path Search");
+
+    // publish planner status and timers
+    std_msgs::Bool reach_goal_msg;
+    reach_goal_msg.data = is_reach_goal;
+    reach_goal_pub_.publish(reach_goal_msg);
+    std_msgs::Float32 traverse_timer;
+    traverse_timer.data = FARUtil::Timer.record_time("Overall_executing");
+    traverse_time_pub_.publish(traverse_timer);
+    if (is_reach_goal) {
+      FARUtil::Timer.end_time("Overall_executing", false);
+    }
+    plan_timer_.data = FARUtil::Timer.end_time("Path Search");
+    planning_time_pub_.publish(plan_timer_);
   }
 }
 
@@ -305,7 +322,7 @@ void FARMaster::LocalBoundaryHandler(const std::vector<PointPair>& local_boundar
   float index_z = robot_pos_.z;
   std::vector<PointPair> sorted_boundary;
   for (const auto& edge : local_boundary) {
-    if (FARUtil::DistanceToLineSeg2D(robot_pos_, edge) > master_params_.boundary_range) continue;
+    if (FARUtil::DistanceToLineSeg2D(robot_pos_, edge) > master_params_.local_planner_range) continue;
     sorted_boundary.push_back(edge);
   }
   FARUtil::SortEdgesClockWise(robot_pos_, sorted_boundary); /* For better rviz visualization purpose only! */ 
@@ -326,7 +343,7 @@ Point3D FARMaster::ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavN
     is_momentum = true;
   }
   Point3D waypoint = nav_node_ptr->position;
-  float free_dist = master_params_.waypoint_project_dist;
+  float free_dist = master_params_.local_planner_range;
   const Point3D extend_p = this->ExtendViewpointOnObsCloud(nav_node_ptr_, FARUtil::surround_obs_cloud_, free_dist);
   free_dist = std::max(free_dist, master_params_.robot_dim * 2.5f);
   if (master_params_.is_viewpoint_extend) {
@@ -415,8 +432,7 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(master_prefix + "vehicle_height",        master_params_.vehicle_height, 0.75);
   nh.param<float>(master_prefix + "sensor_range",          master_params_.sensor_range, 50.0);
   nh.param<float>(master_prefix + "terrain_range",         master_params_.terrain_range, 15.0);
-  nh.param<float>(master_prefix + "near_boundary_range",   master_params_.boundary_range, 5.0);
-  nh.param<float>(master_prefix + "waypoint_project_dist", master_params_.waypoint_project_dist, 5.0);
+  nh.param<float>(master_prefix + "local_planner_range",   master_params_.local_planner_range, 5.0);
   nh.param<float>(master_prefix + "visualize_ratio",       master_params_.viz_ratio, 1.0);
   nh.param<bool>(master_prefix  + "is_viewpoint_extend",   master_params_.is_viewpoint_extend, true);
   nh.param<bool>(master_prefix  + "is_multi_layer",        master_params_.is_multi_layer, false);
@@ -485,13 +501,13 @@ void FARMaster::LoadROSParams() {
 
   // dynamic graph params
   nh.param<int>(graph_prefix    + "connect_votes_size",        graph_params_.votes_size, 10);
-  nh.param<float>(graph_prefix  + "trajectory_interval_ratio", graph_params_.traj_interval_ratio, 2.0);
   nh.param<int>(graph_prefix    + "terrain_inflate_size",      graph_params_.terrain_inflate, 2);
   nh.param<int>(graph_prefix    + "clear_dumper_thred",        graph_params_.dumper_thred, 3);
   nh.param<int>(graph_prefix    + "node_finalize_thred",       graph_params_.finalize_thred, 3);
   nh.param<int>(graph_prefix    + "filter_pool_size",          graph_params_.pool_size, 12);
   nh.param<float>(graph_prefix  + "connect_angle_thred",       graph_params_.kConnectAngleThred, 10.0);
   nh.param<float>(graph_prefix  + "dirs_filter_margin",        graph_params_.filter_dirs_margin, 10.0);
+  graph_params_.traj_interval_ratio      = std::floor(FARUtil::kSensorRange / master_params_.local_planner_range);
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
   graph_params_.kConnectAngleThred       = FARUtil::kAcceptAlign;
@@ -690,6 +706,7 @@ void FARMaster::WaypointCallBack(const geometry_msgs::PointStamped& route_goal) 
     FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_listener_, goal_p); 
   }
   graph_planner_.UpdateGoal(goal_p);
+  FARUtil::Timer.start_time("Overall_executing", true);
   // visualize original goal
   planner_viz_.VizPoint3D(goal_p, "original_goal", VizColor::RED, 1.5);
 }

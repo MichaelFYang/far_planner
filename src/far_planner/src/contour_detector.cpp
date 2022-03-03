@@ -41,7 +41,6 @@ void ContourDetector::BuildTerrainImgAndExtractContour(const NavNodePtr& odom_no
 
 void ContourDetector::UpdateImgMatWithCloud(const PointCloudPtr& pc, cv::Mat& img_mat) {
     int row_idx, col_idx, inf_row, inf_col;
-    const float THRED = FARUtil::IsStaticEnv ? std::ceil(cd_params_.kThredValue/2.0f) : cd_params_.kThredValue;
     const std::vector<int> inflate_vec{-1, 0, 1};
     for (const auto& pcl_p : pc->points) {
         this->PointToImgSub(pcl_p, odom_pos_, row_idx, col_idx, false, false);
@@ -55,7 +54,9 @@ void ContourDetector::UpdateImgMatWithCloud(const PointCloudPtr& pc, cv::Mat& im
             }
         }
     }
-    cv::threshold(img_mat, img_mat, THRED, 1.0, cv::ThresholdTypes::THRESH_BINARY);
+    if (!FARUtil::IsStaticEnv) {
+        cv::threshold(img_mat, img_mat, cd_params_.kThredValue, 1.0, cv::ThresholdTypes::THRESH_BINARY);
+    }
     if (cd_params_.is_save_img) this->SaveCurrentImg(img_mat);
 }
 

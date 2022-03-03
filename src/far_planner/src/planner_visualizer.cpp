@@ -119,7 +119,7 @@ void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs
     Marker global_contour_marker, unmatched_contour_marker;
     global_contour_marker.type    = Marker::LINE_LIST;
     unmatched_contour_marker.type = Marker::LINE_LIST;
-    this->SetMarker(VizColor::ORANGE, "global_contour",    0.15f, 0.5f, global_contour_marker);
+    this->SetMarker(VizColor::ORANGE, "global_contour",    0.2f,  0.5f, global_contour_marker);
     this->SetMarker(VizColor::YELLOW, "unmatched_contour", 0.15f, 0.5f, unmatched_contour_marker);
     for (const auto& p_pair : contour_pairs) {
         geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
@@ -240,8 +240,8 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     this->SetMarker(VizColor::GREEN,   "boundary_vertex",   0.5f,  0.8f,  boundary_node_marker);
     this->SetMarker(VizColor::ORANGE,  "frontier_vertex",   0.5f,  0.8f,  frontier_node_marker);
     this->SetMarker(VizColor::WHITE,   "global_vgraph",     0.1f,  0.2f,  edge_marker);
-    this->SetMarker(VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.2f,  free_edge_marker);
-    this->SetMarker(VizColor::EMERALD, "visibility_edge",   0.1f,  0.2f,  visual_edge_marker);
+    this->SetMarker(VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.25f, free_edge_marker);
+    this->SetMarker(VizColor::EMERALD, "visibility_edge",   0.1f,  0.25f, visual_edge_marker);
     this->SetMarker(VizColor::RED,     "polygon_edge",      0.15f, 0.25f, contour_edge_marker);
     this->SetMarker(VizColor::ORANGE,  "boundary_edge",     0.2f,  0.25f, boundary_edge_marker);
     this->SetMarker(VizColor::ORANGE,  "odom_edge",         0.1f,  0.15f, odom_edge_marker);
@@ -390,7 +390,7 @@ void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointSt
     Marker neighbor_marker, occupancy_marker;
     neighbor_marker.type = Marker::CUBE_LIST;
     occupancy_marker.type = Marker::CUBE_LIST;
-    this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.4f,  neighbor_marker);
+    this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.3f,  neighbor_marker);
     this->SetMarker(VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.2f, occupancy_marker);
     neighbor_marker.scale.z = occupancy_marker.scale.z = ceil_height;
     const std::size_t N1 = neighbor_centers.size();

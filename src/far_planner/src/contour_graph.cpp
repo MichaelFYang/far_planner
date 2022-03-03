@@ -190,6 +190,12 @@ bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
                 return false;
             }
         }
+        for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
+            if (poly_ptr->is_pillar) continue;
+            if (ContourGraph::IsEdgeCollidePoly(poly_ptr->vertices, cedge)) {
+                return false;
+            }
+        }
     }
     return true;
 }

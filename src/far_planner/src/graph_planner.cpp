@@ -22,7 +22,6 @@ void GraphPlanner::Init(const ros::NodeHandle& nh, const GraphPlannerParams& par
     current_graph_.clear();
     // attemptable planning listener
     attemptable_sub_ = nh_.subscribe("/planning_attemptable", 5, &GraphPlanner::AttemptStatusCallBack, this);
-
     // initialize terrian grid
     const int col_num = std::ceil(gp_params_.adjust_radius * 2.0f / FARUtil::kLeafSize);
     Eigen::Vector3i grid_size(col_num, col_num, 1);
@@ -144,7 +143,8 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
                               NodePtrStack& global_path,
                               NavNodePtr& _nav_node_ptr,
                               Point3D& _goal_p,
-                              bool& _is_fails,
+                              bool& _is_fail,
+                              bool& _is_succeed,
                               bool& _is_free_nav) 
 {
     if (!is_goal_init_) return false;
@@ -152,7 +152,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
         ROS_ERROR("GP: Graph or Goal is not initialized correctly.");
         return false;
     }
-    _is_fails = false;
+    _is_fail = false, _is_succeed = false;
     global_path.clear();
     _goal_p = goal_ptr->position;
     if (current_graph_.size() == 1) {
@@ -172,6 +172,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
             _goal_p = origin_goal_pos_;
             goal_ptr->position = _goal_p;   
         }
+        _is_succeed = true;
         global_path.push_back(goal_ptr);
         _nav_node_ptr = goal_ptr;
         _is_free_nav = is_free_nav_goal_;
@@ -250,13 +251,13 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
             }
             if (FARUtil::IsDebug) ROS_ERROR("****************** FAIL TO REACH GOAL ******************");
             this->GoalReset();
-            is_goal_init_ = false, _is_fails = true;
+            is_goal_init_ = false, _is_fail = true;
             return false;
         }
     }
     if (FARUtil::IsDebug) ROS_ERROR("GP: unexpected error happend within planning, navigation to goal fails.");
     this->GoalReset();
-    is_goal_init_ = false, _is_fails = true;
+    is_goal_init_ = false, _is_fail = true;
     return false;
 }
 

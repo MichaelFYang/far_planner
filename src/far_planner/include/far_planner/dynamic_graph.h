@@ -97,7 +97,7 @@ private:
 
 
     inline bool IsNodeInTerrainOccupy(const NavNodePtr& node_ptr) {
-        if (terrain_planner_.IsPointOccupy(node_ptr->position)) return true;
+        if (!FARUtil::IsStaticEnv && terrain_planner_.IsPointOccupy(node_ptr->position)) return true;
         return false;
     }
 
@@ -203,6 +203,15 @@ private:
         const float dist_thred = TRAJ_DIST;
         const float height_thred = FARUtil::kMarginHeight;
         if (cur_inter_ptr->fgscore > dist_thred || !FARUtil::IsPointInToleratedHeight(cur_inter_ptr->position, height_thred)) {
+            return false;
+        }
+        return true;
+    }
+
+    inline bool IsPolyMatchedForConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if ((node_ptr1->is_finalized && !node_ptr1->is_contour_match && !FARUtil::IsFreeNavNode(node_ptr1)) || 
+            (node_ptr2->is_finalized && !node_ptr2->is_contour_match && !FARUtil::IsFreeNavNode(node_ptr2))) 
+        {
             return false;
         }
         return true;

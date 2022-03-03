@@ -5,8 +5,7 @@ robot_dim                               : 0.5   # Unit: meter
 vehicle_height                          : 0.5   # Unit: meter
 sensor_range                            : 10.0  # Unit: meter
 terrain_range                           : 10.0  # Unit: meter
-near_boundary_range                     : 5.0   # Unit: meter
-waypoint_project_dist                   : 2.5   # Unit: meter
+local_planner_range                     : 2.5   # Unit: meter
 visualize_ratio                         : 0.4
 is_viewpoint_extend                     : true
 is_multi_layer                          : false
@@ -30,7 +29,7 @@ MapHandler/map_grad_max_height          : 10.0   # Unit: meter
 ScanHandler/inflate_scan_size           : 2
 
 # Dynamic Planner Utility Params
-Util/angle_noise                        : 10.0  # Unit: degree
+Util/angle_noise                        : 15.0  # Unit: degree
 Util/accept_max_align_angle             : 4.0   # Unit: degree
 Util/new_intensity_thred                : 2.0
 Util/terrain_free_Z                     : 0.15
@@ -41,7 +40,6 @@ Util/new_points_decay_time              : 2.0   # Unit: second
 
 # Dynamic Graph Params
 Graph/connect_votes_size                : 10
-Graph/trajectory_interval_ratio         : 5.0
 Graph/terrain_inflate_size              : 1           
 Graph/clear_dumper_thred                : 4
 Graph/node_finalize_thred               : 6
@@ -49,7 +47,7 @@ Graph/filter_pool_size                  : 12
 
 # Corner Detector Params
 CDetector/resize_ratio                  : 3.0
-CDetector/filter_count_value            : 6
+CDetector/filter_count_value            : 5
 CDetector/is_save_img                   : false
 CDetector/img_folder_path               : /path
 

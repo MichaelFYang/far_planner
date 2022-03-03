@@ -166,7 +166,8 @@ void UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr&
  * @param global_path(return) return the global path from odom node position
  * @param _nav_node_ptr(return) current navigation waypoint
  * @param _goal_p(return) goal position after free space adjust 
- * @param _is_fails(return) whether the planner fails to find the path
+ * @param _is_fail(return) whether the planner fails to find the path
+ * @param _is_succeed(return) whether the vehicle has reached the goal
  * @param _is_free_nav(return) the attemptable navigation status (True)->Non-attempts
  * @return whether or not planning success -> publish a valid path for navigation
 */
@@ -176,6 +177,7 @@ bool PathToGoal(const NavNodePtr& goal_ptr,
                 NavNodePtr&   _nav_node_ptr,
                 Point3D&      _goal_p,
                 bool&         _is_fails,
+                bool&         _is_succeed,
                 bool&         _is_free_nav);
 
 /**

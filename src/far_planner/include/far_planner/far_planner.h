@@ -19,8 +19,7 @@ struct FARMasterParams {
     float voxel_dim;
     float sensor_range;
     float terrain_range;
-    float boundary_range;
-    float waypoint_project_dist;
+    float local_planner_range;
     float main_run_freq;
     float viz_ratio;
     bool  is_multi_layer;
@@ -46,13 +45,13 @@ private:
     ros::Subscriber reset_graph_sub_, joy_command_sub_, update_command_sub_;
     ros::Subscriber odom_sub_, terrain_sub_, terrain_local_sub_, scan_sub_, waypoint_sub_;
     ros::Subscriber read_command_sub_, save_command_sub_; // only use for terminal formatting
-    ros::Publisher  goal_pub_, runtime_pub_;
+    ros::Publisher  goal_pub_, boundary_pub_;
     ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_;
     ros::Publisher  scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
-    ros::Publisher  boundary_pub_;
+    ros::Publisher  runtime_pub_, planning_time_pub_, traverse_time_pub_, reach_goal_pub_;
 
     ros::Timer planning_event_;
-    std_msgs::Float32 runtimer_;
+    std_msgs::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
 
