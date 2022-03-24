@@ -44,13 +44,16 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
     center_p_ = FARUtil::Point3DToPCLPoint(robot_pos);
 }
 
-void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn) {
+void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const PointCloudPtr& freeCloudIn) {
     if (!is_grids_init_ || scanCloudIn->empty()) return;
-    const float H_RANGE = scan_params_.terrain_range / 2.0f;
-    for (const auto& point : scanCloudIn->points) {
+    // remove free scan points
+    PointCloudPtr copyObsScanCloud(new pcl::PointCloud<PCLPoint>());
+    pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud);
+    FARUtil::RemoveOverlapCloud(copyObsScanCloud, freeCloudIn, true);
+    for (const auto& point : copyObsScanCloud->points) { // assign obstacle scan voxels
         const float r = pcl::euclideanDistance(point, center_p_);
-        const int L = r > H_RANGE ? scan_params_.inflate_size * 2 : scan_params_.inflate_size;
-        const int N = static_cast<int>(std::round((r * ANG_RES_Y)/scan_params_.voxel_size/2.0f))+L;
+        const int L = static_cast<int>(std::ceil((r * ANG_RES_X)/scan_params_.voxel_size/2.0f))+FARUtil::kObsInflate;
+        const int N = static_cast<int>(std::ceil((r * ANG_RES_Y)/scan_params_.voxel_size/2.0f));
         Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         for (int i = -L; i <= L; i++) {
             for (int j = -L; j <= L; j++) {

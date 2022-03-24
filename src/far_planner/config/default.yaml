@@ -25,12 +25,10 @@ MapHandler/cell_length                  : 5.0     # Unit: meter
 MapHandler/map_grid_max_length          : 1000.0  # Unit: meter
 MapHandler/map_grad_max_height          : 100.0   # Unit: meter
 
-# Scan Handler Params
-ScanHandler/inflate_scan_size           : 2
-
 # Dynamic Planner Utility Params
 Util/angle_noise                        : 15.0 # Unit: degree
 Util/accept_max_align_angle             : 4.0  # Unit: degree
+Util/obs_inflate_size                   : 1
 Util/new_intensity_thred                : 2.0
 Util/terrain_free_Z                     : 0.2
 Util/dyosb_update_thred                 : 4
@@ -40,14 +38,13 @@ Util/new_points_decay_time              : 1.0  # Unit: second
 
 # Dynamic Graph Params
 Graph/connect_votes_size                : 10
-Graph/terrain_inflate_size              : 1      
 Graph/clear_dumper_thred                : 4
 Graph/node_finalize_thred               : 6
 Graph/filter_pool_size                  : 12
 
 # Corner Detector Params
 CDetector/resize_ratio                  : 3.0
-CDetector/filter_count_value            : 5
+CDetector/filter_count_value            : 3
 CDetector/is_save_img                   : false
 CDetector/img_folder_path               : /path
 
@@ -57,4 +54,3 @@ GPlanner/goal_adjust_radius             : 2.0  # Unit: meter
 GPlanner/free_counter_thred             : 7
 GPlanner/reach_goal_vote_size           : 3
 GPlanner/path_momentum_thred            : 3
-GPlanner/clear_inflate_size             : 3

@@ -410,21 +410,20 @@ Point3D FARUtil::SurfTopoDirect(const PointPair& dirs) {
 }
 
 void FARUtil::InflateCloud(const PointCloudPtr& obsCloudInOut, 
-                          const float& resol,
-                          const int& inflate_size,
-                          const bool& deep_down_inflate) 
+                           const float& resol,
+                           const int& inflate_size,
+                           const bool& deep_z_inflate) 
 {
   const std::size_t current_size = obsCloudInOut->size();
-  const int z_size = inflate_size + 1;
-  const int z_down_idx = deep_down_inflate ? z_size + 1 : z_size;
-  const std::size_t array_size = current_size * (pow(inflate_size*2+1, 2)*(z_size*(z_size+z_down_idx)+1) + 1);
+  const int z_size = deep_z_inflate ? inflate_size + 1 : inflate_size;
+  const std::size_t array_size = current_size * (pow(inflate_size*2+1, 2)*(z_size*2+1) + 1);
   obsCloudInOut->resize(array_size);
   std::size_t cur_idx = current_size;
   for (std::size_t p_idx=0; p_idx<current_size; p_idx++) {
     PCLPoint p = obsCloudInOut->points[p_idx];
     for (int ix=-inflate_size; ix<=inflate_size; ix++) {
       for (int iy=-inflate_size; iy<=inflate_size; iy++) {
-        for (int iz=-z_size-z_down_idx; iz<=z_size; iz++) {
+        for (int iz=-z_size; iz<=z_size; iz++) {
           PCLPoint ref_p;
           ref_p.x = p.x + ix * resol;
           ref_p.y = p.y + iy * resol;
@@ -501,8 +500,8 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
 }
 
 void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
-                                const PointCloudPtr& cloudRef,
-                                const bool& is_copy_cloud) 
+                                 const PointCloudPtr& cloudRef,
+                                 const bool& is_copy_cloud) 
 {
   if (cloudRef->empty() || cloudInOut->empty()) return;
   PointCloudPtr temp_cloud(new pcl::PointCloud<PCLPoint>());

@@ -92,6 +92,7 @@ public:
     static float kNewPIThred;
     static float kSensorRange;
     static float kMarginDist;
+    static float kLocalPlanRange;
     static float kMarginHeight;
     static float kTerrainRange;
     static float kFreeZ;
@@ -99,6 +100,7 @@ public:
     static float kNewDecayTime;
     static int   kDyObsThred;
     static int   KNewPointC;
+    static int   kObsInflate;
     static float kTolerZ;
     static float kAcceptAlign;
     static float kVizRatio;
@@ -265,7 +267,7 @@ public:
     static void InflateCloud(const PointCloudPtr& obsCloudInOut,
                              const float& resol,
                              const int& inflate_size,
-                             const bool& deep_down_inflate);
+                             const bool& deep_z_inflate);
 
     static void SortEdgesClockWise(const Point3D& center, std::vector<PointPair>& edges);
 
@@ -423,9 +425,8 @@ public:
     }
 
     template <typename Point>
-    static bool IsConvexPoint(const std::vector<Point>& poly, const Point& ev_p, const Point& free_p) {
-        const bool in_or_out = PointInsideAPoly(poly, free_p);
-        if (!FARUtil::PointInsideAPoly(poly, ev_p) == in_or_out) {
+    static bool IsConvexPoint(const PolygonPtr& poly_ptr, const Point& ev_p) {
+        if (FARUtil::PointInsideAPoly(poly_ptr->vertices, ev_p) != poly_ptr->is_robot_inside) {
             return true;
         } 
         return false;

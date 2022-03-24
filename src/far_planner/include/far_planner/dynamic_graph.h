@@ -13,8 +13,6 @@ struct DynamicGraphParams {
     int   finalize_thred;
     int   pool_size;
     int   votes_size;
-    int   terrain_inflate;
-    float traj_interval_ratio;
     float kConnectAngleThred;
     float filter_pos_margin;
     float filter_dirs_margin;
@@ -200,9 +198,9 @@ private:
 
     inline bool IsInternavInRange(const NavNodePtr& cur_inter_ptr) {
         if (cur_inter_ptr == NULL) return false;
-        const float dist_thred = TRAJ_DIST;
-        const float height_thred = FARUtil::kMarginHeight;
-        if (cur_inter_ptr->fgscore > dist_thred || !FARUtil::IsPointInToleratedHeight(cur_inter_ptr->position, height_thred)) {
+        if (cur_inter_ptr->fgscore > FARUtil::kLocalPlanRange || 
+            !FARUtil::IsPointInToleratedHeight(cur_inter_ptr->position, FARUtil::kMarginHeight)) 
+        {
             return false;
         }
         return true;
@@ -433,8 +431,6 @@ private:
 public:
     DynamicGraph() = default;
     ~DynamicGraph() = default;
-
-    static float TRAJ_DIST; // max distances between trajectory nodes
 
     void Init(const ros::NodeHandle& nh, const DynamicGraphParams& params);
 

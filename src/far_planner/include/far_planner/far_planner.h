@@ -183,7 +183,8 @@ private:
     void WaypointCallBack(const geometry_msgs::PointStamped& route_goal);
 
     void ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn, 
-                                   const PointCloudPtr& obsCloudIn, 
+                                   const PointCloudPtr& obsCloudIn,
+                                   const PointCloudPtr& freeCloudIn, 
                                    const PointCloudPtr& dyObsCloudOut);
 
     /* define inline functions */

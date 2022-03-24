@@ -7,7 +7,6 @@
 struct TerrainPlannerParams {
     TerrainPlannerParams() = default;
     std::string world_frame;
-    float local_range;
     float radius;
     float voxel_size;
     int   inflate_size;

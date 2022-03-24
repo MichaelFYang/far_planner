@@ -19,7 +19,6 @@ struct GraphPlannerParams {
     int   free_thred;
     int   votes_size;
     int   momentum_thred;
-    int   clear_inflate_size;
 };
 
 

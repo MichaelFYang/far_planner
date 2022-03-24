@@ -442,7 +442,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     // evaluate goal freespace status
     is_goal_in_freespace_ = false;
     if (!freeCloudIn->empty() || !obsCloudIn->empty()) { // process terrain cloud
-        const int C_IF = gp_params_.clear_inflate_size;
+        const int C_IF = FARUtil::kObsInflate;
         for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
             for (int i = -C_IF; i <= C_IF; i++) {
@@ -476,7 +476,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
         for (const auto& node_ptr : current_graph_) {
             if (!node_ptr->is_navpoint) continue;
             const float cur_dist = (node_ptr->position - center).norm_flat();
-            if (cur_dist < DynamicGraph::TRAJ_DIST && FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr_)) {
+            if (cur_dist < FARUtil::kLocalPlanRange && FARUtil::IsAtSameLayer(node_ptr, goal_node_ptr_)) {
                 if (cur_dist < min_dist) {
                     goal_node_ptr_->position.z = node_ptr->position.z;
                     min_dist = cur_dist;

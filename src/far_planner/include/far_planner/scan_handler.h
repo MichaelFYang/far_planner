@@ -8,7 +8,6 @@ struct ScanHandlerParams {
     float terrain_range;
     float voxel_size;
     float ceil_height;
-    int   inflate_size;
 };
 
 enum GridStatus {
@@ -28,7 +27,7 @@ public:
 
     void UpdateRobotPosition(const Point3D& odom_pos);
     
-    void SetCurrentScanCloud(const PointCloudPtr& scanCloudIn);
+    void SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const PointCloudPtr& freeCloudIn);
 
     void SetSurroundObsCloud(const PointCloudPtr& obsCloudIn, 
                              const bool& is_fiWlter_cloud=false);
@@ -52,8 +51,9 @@ private:
     int row_num_, col_num_, level_num_;
     bool is_grids_init_ = false;
     PCLPoint center_p_;
-
-    const float ANG_RES_Y = 2.5f/180.0f * M_PI;
+    // Set resolution for Velodyne LiDAR PUCK: https://www.amtechs.co.jp/product/VLP-16-Puck.pdf
+    const float ANG_RES_Y = 2.0f/180.0f * M_PI; // vertical resolution 2 degree
+    const float ANG_RES_X = 0.5f/180.0f * M_PI; // horizontal resolution 0.5 degree
     std::unique_ptr<grid_ns::Grid<char>> voxel_grids_;
 
     void SetMapOrigin(const Point3D& ori_robot_pos);

@@ -14,15 +14,13 @@ void DynamicGraph::Init(const ros::NodeHandle& nh, const DynamicGraphParams& par
     dg_params_ = params;
     CONNECT_ANGLE_COS = cos(dg_params_.kConnectAngleThred);
     NOISE_ANGLE_COS = cos(FARUtil::kAngleNoise);
-    TRAJ_DIST       = FARUtil::kSensorRange / dg_params_.traj_interval_ratio;
     id_tracker_     = 1;
     last_connect_pos_ = Point3D(0,0,0);
     /* Initialize Terrian Planner */
     tp_params_.world_frame  = FARUtil::worldFrameId;
-    tp_params_.local_range  = TRAJ_DIST;
     tp_params_.voxel_size   = FARUtil::kLeafSize;
     tp_params_.radius       = FARUtil::kNearDist * 2.0f;
-    tp_params_.inflate_size = dg_params_.terrain_inflate;
+    tp_params_.inflate_size = FARUtil::kObsInflate;
     terrain_planner_.Init(nh, tp_params_);
 }
 
@@ -527,7 +525,7 @@ void DynamicGraph::ReEvaluateConvexity(const NavNodePtr& node_ptr) {
     if (!is_wall) {
         const Point3D ctnode_p = node_ptr->ctnode->position;
         const Point3D ev_p = ctnode_p + topo_dir * FARUtil::kLeafSize;
-        if (FARUtil::IsConvexPoint(node_ptr->ctnode->poly_ptr->vertices, ev_p, FARUtil::free_odom_p)) {
+        if (FARUtil::IsConvexPoint(node_ptr->ctnode->poly_ptr, ev_p)) {
             node_ptr->free_direct = NodeFreeDirect::CONVEX;
         } else {
             node_ptr->free_direct = NodeFreeDirect::CONCAVE;
@@ -769,7 +767,7 @@ void DynamicGraph::UpdateGlobalNearNodes() {
                     if (node_ptr->is_navpoint) {
                         node_ptr->position.intensity = node_ptr->fgscore;
                         internav_near_nodes_.push_back(node_ptr);
-                        if ((node_ptr->position - odom_node_ptr_->position).norm() < TRAJ_DIST / 2.0f) {
+                        if ((node_ptr->position - odom_node_ptr_->position).norm() < FARUtil::kLocalPlanRange / 2.0f) {
                             surround_internav_nodes_.push_back(node_ptr);
                         }
                     }

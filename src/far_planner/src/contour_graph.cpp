@@ -32,6 +32,7 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
     }
     ContourGraph::UpdateOdomFreePosition(odom_node_ptr_, FARUtil::free_odom_p);
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
+        poly_ptr->is_robot_inside = FARUtil::PointInsideAPoly(poly_ptr->vertices, FARUtil::free_odom_p);
         CTNodePtr new_ctnode_ptr = NULL;
         if (poly_ptr->is_pillar) {
             Point3D mean_p = FARUtil::AveragePoints(poly_ptr->vertices);
@@ -165,9 +166,14 @@ bool ContourGraph::IsPointsConnectFreePolygon(const ConnectPair& cedge,
     }
     if (!is_global_check) {
         // check for local range polygons
+        const Point3D center_p = Point3D((cedge.start_p.x + cedge.end_p.x) / 2.0f,
+                                         (cedge.start_p.y + cedge.end_p.y) / 2.0f,
+                                         0.0f);
         for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
             if (poly_ptr->is_pillar) continue;
-            if (ContourGraph::IsEdgeCollidePoly(poly_ptr->vertices, cedge)) {
+            if ((poly_ptr->is_robot_inside != FARUtil::PointInsideAPoly(poly_ptr->vertices, center_p)) || 
+                ContourGraph::IsEdgeCollidePoly(poly_ptr->vertices, cedge)) 
+            {
                 return false;
             }
         }
@@ -530,7 +536,7 @@ void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) {
         return;
     }
     const Point3D ev_p = ctnode_ptr->position + topo_dir * FARUtil::kLeafSize;
-    if (FARUtil::IsConvexPoint(ctnode_ptr->poly_ptr->vertices, ev_p, FARUtil::free_odom_p)) {
+    if (FARUtil::IsConvexPoint(ctnode_ptr->poly_ptr, ev_p)) {
         ctnode_ptr->free_direct = NodeFreeDirect::CONVEX;
     } else {
         ctnode_ptr->free_direct = NodeFreeDirect::CONCAVE;
