@@ -57,7 +57,6 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
 
   joy.header.stamp = ros::Time::now();
   joy.header.frame_id = "goalpoint_tool";
-  pub_joy_.publish(joy);
   
   geometry_msgs::PointStamped goal_point;
   goal_point.header.frame_id = "map";
@@ -69,6 +68,9 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
   pub_.publish(goal_point);
   usleep(10000);
   pub_.publish(goal_point);
+  
+  usleep(10000);
+  pub_joy_.publish(joy);
 }
 }  // end namespace rviz
 
