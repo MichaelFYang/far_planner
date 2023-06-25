@@ -69,7 +69,7 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
   usleep(10000);
   pub_.publish(goal_point);
   
-  usleep(10000);
+  usleep(10000); // set to 1000000us (1s) on real robot
   pub_joy_.publish(joy);
 }
 }  // end namespace rviz
