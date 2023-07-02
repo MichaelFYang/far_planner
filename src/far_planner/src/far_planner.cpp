@@ -9,41 +9,49 @@
 #include "far_planner/far_planner.h"
 
 /***************************************************************************************/
+FARMaster::FARMaster() {
+   /* initialize node */
+  node_ = rclcpp::Node::make_shared("far_planner_node");
+}
 
 void FARMaster::Init() {
   /* initialize subscriber and publisher */
-  reset_graph_sub_    = nh.subscribe("/reset_visibility_graph", 5, &FARMaster::ResetGraphCallBack, this);
-  odom_sub_           = nh.subscribe("/odom_world", 5, &FARMaster::OdomCallBack, this);
-  terrain_sub_        = nh.subscribe("/terrain_cloud", 1, &FARMaster::TerrainCallBack, this);
-  scan_sub_           = nh.subscribe("/scan_cloud", 5, &FARMaster::ScanCallBack, this);
-  waypoint_sub_       = nh.subscribe("/goal_point", 1, &FARMaster::WaypointCallBack, this);
-  terrain_local_sub_  = nh.subscribe("/terrain_local_cloud", 1, &FARMaster::TerrainLocalCallBack, this);
-  joy_command_sub_    = nh.subscribe("/joy", 5, &FARMaster::JoyCommandCallBack, this);
-  update_command_sub_ = nh.subscribe("/update_visibility_graph", 5, &FARMaster::UpdateCommandCallBack, this);
-  goal_pub_           = nh.advertise<geometry_msgs::PointStamped>("/way_point",5);
-  boundary_pub_       = nh.advertise<geometry_msgs::PolygonStamped>("/navigation_boundary",5);
+  reset_graph_sub_    = node_->create_subscription<std_msgs::Empty>("/reset_visibility_graph", 5, std::bind(&FARMaster::ResetGraphCallBack, this, std::placeholders::_1));
+  odom_sub_           = node_->create_subscription<nav_msgs::Odometry>("/odom_world", 5, std::bind(&FARMaster::OdomCallBack, this, std::placeholders::_1));
+  terrain_sub_        = node_->create_subscription<sensor_msgs::PointCloud2>("/terrain_cloud", 1, std::bind(&FARMaster::TerrainCallBack, this, std::placeholders::_1));
+  scan_sub_           = node_->create_subscription<sensor_msgs::PointCloud2>("/scan_cloud", 5, std::bind(&FARMaster::ScanCallBack, this, std::placeholders::_1));
+  waypoint_sub_       = node_->create_subscription<geometry_msgs::PointStamped>("/goal_point", 1, std::bind(&FARMaster::WaypointCallBack, this, std::placeholders::_1));
+  terrain_local_sub_  = node_->create_subscription<sensor_msgs::PointCloud2>("/terrain_local_cloud", 1, std::bind(&FARMaster::TerrainLocalCallBack, this, std::placeholders::_1));
+  joy_command_sub_    = node_->create_subscription<sensor_msgs::Joy>("/joy", 5, std::bind(&FARMaster::JoyCommandCallBack, this, std::placeholders::_1));
+  update_command_sub_ = node_->create_subscription<std_msgs::Empty>("/update_visibility_graph", 5, std::bind(&FARMaster::UpdateCommandCallBack, this, std::placeholders::_1));
+  goal_pub_           = node_->create_publisher<geometry_msgs::PointStamped>("/way_point",5);
+  boundary_pub_       = node_->create_publisher<geometry_msgs::PolygonStamped>("/navigation_boundary",5);
+
   // Timers
-  runtime_pub_        = nh.advertise<std_msgs::Float32>("/runtime",1);
-  planning_time_pub_  = nh.advertise<std_msgs::Float32>("/planning_time",1);
-  traverse_time_pub_  = nh.advertise<std_msgs::Float32>("/far_traverse_time", 5);
+  runtime_pub_        = node_->create_publisher<std_msgs::Float32>("/runtime",1);
+  planning_time_pub_  = node_->create_publisher<std_msgs::Float32>("/planning_time",1);
+  traverse_time_pub_  = node_->create_publisher<std_msgs::Float32>("/far_traverse_time", 5);
+
   // planning status publisher
-  reach_goal_pub_     = nh.advertise<std_msgs::Bool>("/far_reach_goal_status", 5);
+  reach_goal_pub_     = node_->create_publisher<std_msgs::Bool>("/far_reach_goal_status", 5);
+
   // Terminal formatting subscriber
-  read_command_sub_   = nh.subscribe("/read_file_dir", 1, &FARMaster::ReadFileCommand, this);
-  save_command_sub_   = nh.subscribe("/save_file_dir", 1, &FARMaster::SaveFileCommand, this);
+  read_command_sub_   = node_->create_subscription<std_msgs::String>("/read_file_dir", 1, std::bind(&FARMaster::ReadFileCommand, this, std::placeholders::_1));
+  save_command_sub_   = node_->create_subscription<std_msgs::String>("/save_file_dir", 1, std::bind(&FARMaster::SaveFileCommand, this, std::placeholders::_1));
+
   // DEBUG Publisher
-  dynamic_obs_pub_     = nh.advertise<sensor_msgs::PointCloud2>("/FAR_dynamic_obs_debug",1);
-  surround_free_debug_ = nh.advertise<sensor_msgs::PointCloud2>("/FAR_free_debug",1);
-  surround_obs_debug_  = nh.advertise<sensor_msgs::PointCloud2>("/FAR_obs_debug",1);
-  scan_grid_debug_     = nh.advertise<sensor_msgs::PointCloud2>("/FAR_scanGrid_debug",1);
-  new_PCL_pub_         = nh.advertise<sensor_msgs::PointCloud2>("/FAR_new_debug",1);
-  terrain_height_pub_  = nh.advertise<sensor_msgs::PointCloud2>("/FAR_terrain_height_debug",1);
+  dynamic_obs_pub_     = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_dynamic_obs_debug",1);
+  surround_free_debug_ = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_free_debug",1);
+  surround_obs_debug_  = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_obs_debug",1);
+  scan_grid_debug_     = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_scanGrid_debug",1);
+  new_PCL_pub_         = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_new_debug",1);
+  terrain_height_pub_  = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_terrain_height_debug",1);
 
   this->LoadROSParams();
 
   /*init path generation thred callback*/
   const float duration_time = 0.99f / master_params_.main_run_freq;
-  planning_event_ = nh.createTimer(ros::Duration(duration_time), &FARMaster::PlanningCallBack, this);
+  planning_event_ = this->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
 
   /* init Dynamic Planner Processing Objects */
   contour_detector_.Init(cdetect_params_);
@@ -132,109 +140,116 @@ void FARMaster::ResetEnvironmentAndGraph() {
 }
 
 void FARMaster::Loop() {
-  ros::Rate loop_rate(master_params_.main_run_freq);
-  while (ros::ok()) {
-    if (is_reset_env_) {
-      this->ResetEnvironmentAndGraph(); 
-      is_reset_env_ = false;
-      if (FARUtil::IsDebug) ROS_WARN("****************** Graph and Env Reset ******************");
-      loop_rate.sleep(); // skip this iteration
-      continue;
-    }
-    /* Process callback functions */
-    ros::spinOnce(); 
-    if (!this->PreconditionCheck()) {
-      loop_rate.sleep();
-      continue;
-    }
-    /* add main process after this line */
-    graph_manager_.UpdateRobotPosition(robot_pos_);
-    odom_node_ptr_ = graph_manager_.GetOdomNode();
-    if (odom_node_ptr_ == NULL) {
-      ROS_WARN("FAR: Waiting for Odometry...");
-      loop_rate.sleep();
-      continue;
-    }
-    /* Extract Vertices and new nodes */
-    FARUtil::Timer.start_time("Total V-Graph Update");
-    contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
-    contour_graph_.UpdateContourGraph(odom_node_ptr_, realworld_contour_);
-    if (is_graph_init_) {
-      if (!FARUtil::IsDebug) printf("\033[2K");
-      std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
-    }
-    /* Adjust heights with terrain */
-    map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
-    map_handler_.AdjustNodesHeight(nav_graph_);
-    // Truncate for local range nodes
-    graph_manager_.UpdateGlobalNearNodes();
-    near_nav_graph_ = graph_manager_.GetExtendLocalNode();
-    // Match near nav nodes with contour
-    contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
-    if (master_params_.is_visual_opencv) {
-      FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
-      cv::Mat cloud_img = contour_detector_.GetCloudImgMat();
-      contour_detector_.ShowCornerImage(cloud_img, new_vertices_ptr_);
-    }
-    /* update planner graph */
-    new_nodes_.clear();
-    if (!is_stop_update_ && graph_manager_.ExtractGraphNodes(new_ctnodes_)) {
-      new_nodes_ = graph_manager_.GetNewNodes();
-    }
-    if (is_graph_init_) {
-      if (!FARUtil::IsDebug) printf("\033[2K");
-      std::cout<<"    "<< "Number of new vertices adding to global V-Graph: "<< new_nodes_.size()<<std::endl;
-    }
-    /* Graph Updating */
-    graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
-    runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
-    // runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_); // Unit: ms
-    runtime_pub_.publish(runtimer_);
-    /* Update v-graph in other modules */
-    nav_graph_ = graph_manager_.GetNavGraph();
-    if (is_graph_init_) {
-      if (!FARUtil::IsDebug) printf("\033[2K");
-      std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
-    }
-    contour_graph_.ExtractGlobalContours();      // Global Polygon Update
-    graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
-    graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
+    rclcpp::Rate loop_rate(master_params_.main_run_freq);
 
-    /* Publish local boundary to lower level local planner */
-    this->LocalBoundaryHandler(ContourGraph::local_boundary_);
+    node_->create_wall_timer(std::chrono::milliseconds(int(1000 / master_params_.main_run_freq)), [this]() {
+        if (is_reset_env_) {
+            this->ResetEnvironmentAndGraph();
+            is_reset_env_ = false;
+            if (FARUtil::IsDebug) RCLCPP_WARN(node_->get_logger(), "****************** Graph and Env Reset ******************");
+            loop_rate.sleep();
+            return;
+        }
 
-    /* Viz Navigation Graph */
-    const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
-    if (last_internav_ptr != NULL) {
-      planner_viz_.VizPoint3D(last_internav_ptr->position, "last_nav_node", VizColor::MAGNA, 1.0);
-    }
-    planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
-    planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
-    planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
-    planner_viz_.VizGraph(nav_graph_);
-    planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
-    planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
+        rclcpp::spin_some(node_);
+        if (!this->PreconditionCheck()) {
+            loop_rate.sleep();
+            return;
+        }
 
-    if (is_graph_init_) { 
-      if (FARUtil::IsDebug) {
-        std::cout<<" ========================================================== "<<std::endl;
-      } else { // cleanup outputs in terminal
-        for (int i = 0; i < 6; i++) {
-          printf("\033[A");
+      /* add main process after this line */
+      graph_manager_.UpdateRobotPosition(robot_pos_);
+      odom_node_ptr_ = graph_manager_.GetOdomNode();
+      if (odom_node_ptr_ == NULL) {
+        ROS_WARN("FAR: Waiting for Odometry...");
+        loop_rate.sleep();
+        continue;
+      }
+      /* Extract Vertices and new nodes */
+      FARUtil::Timer.start_time("Total V-Graph Update");
+      contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
+      contour_graph_.UpdateContourGraph(odom_node_ptr_, realworld_contour_);
+      if (is_graph_init_) {
+        if (!FARUtil::IsDebug) printf("\033[2K");
+        std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
+      }
+      /* Adjust heights with terrain */
+      map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
+      map_handler_.AdjustNodesHeight(nav_graph_);
+      // Truncate for local range nodes
+      graph_manager_.UpdateGlobalNearNodes();
+      near_nav_graph_ = graph_manager_.GetExtendLocalNode();
+      // Match near nav nodes with contour
+      contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
+      if (master_params_.is_visual_opencv) {
+        FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
+        cv::Mat cloud_img = contour_detector_.GetCloudImgMat();
+        contour_detector_.ShowCornerImage(cloud_img, new_vertices_ptr_);
+      }
+      /* update planner graph */
+      new_nodes_.clear();
+      if (!is_stop_update_ && graph_manager_.ExtractGraphNodes(new_ctnodes_)) {
+        new_nodes_ = graph_manager_.GetNewNodes();
+      }
+      if (is_graph_init_) {
+        if (!FARUtil::IsDebug) printf("\033[2K");
+        std::cout<<"    "<< "Number of new vertices adding to global V-Graph: "<< new_nodes_.size()<<std::endl;
+      }
+      /* Graph Updating */
+      graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
+
+      runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
+      // runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_); // Unit: ms
+      runtime_pub_->publish(runtimer_);
+    
+      /* Update v-graph in other modules */
+      nav_graph_ = graph_manager_.GetNavGraph();
+      if (is_graph_init_) {
+        if (!FARUtil::IsDebug) printf("\033[2K");
+        std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
+      }
+      contour_graph_.ExtractGlobalContours();      // Global Polygon Update
+      graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
+      graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
+
+      /* Publish local boundary to lower level local planner */
+      this->LocalBoundaryHandler(ContourGraph::local_boundary_);
+
+      /* Viz Navigation Graph */
+      const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
+      if (last_internav_ptr != NULL) {
+        planner_viz_.VizPoint3D(last_internav_ptr->position, "last_nav_node", VizColor::MAGNA, 1.0);
+      }
+      planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
+      planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
+      planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
+      planner_viz_.VizGraph(nav_graph_);
+      planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
+      planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
+
+      if (is_graph_init_) { 
+        if (FARUtil::IsDebug) {
+          std::cout<<" ========================================================== "<<std::endl;
+        } else { // cleanup outputs in terminal
+          for (int i = 0; i < 6; i++) {
+            printf("\033[A");
+          }
         }
       }
-    }
 
-    if (!is_graph_init_ && !nav_graph_.empty()) {
-      is_graph_init_ = true;
-      printf("\033[A"), printf("\033[A"), printf("\033[2K");
-      std::cout<< "\033[1;32m V-Graph Initialized \033[0m\n" << std::endl;
-    }
-    loop_rate.sleep();
+      if (!is_graph_init_ && !nav_graph_.empty()) {
+            is_graph_init_ = true;
+            RCLCPP_INFO(node_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
+        }
+
+        loop_rate.sleep();
+    });
+
+    rclcpp::spin(node_);
   }
 }
 
-void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
+void FARMaster::PlanningCallBack() {
   if (!is_graph_init_) return;
   const NavNodePtr goal_ptr = graph_planner_.GetGoalNodePtr();
   if (goal_ptr == NULL) {
@@ -270,7 +285,7 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     Point3D current_free_goal;
     NavNodePtr last_nav_ptr = nav_node_ptr_;
     bool is_planning_fails = false;
-    goal_waypoint_stamped_.header.stamp = ros::Time::now();
+    goal_waypoint_stamped_.header.stamp = node_->now();
     bool is_current_free_nav = false;
     bool is_reach_goal = false;
     if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_reach_goal, is_current_free_nav) && nav_node_ptr_ != NULL) {
@@ -286,8 +301,7 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
       planner_viz_.VizPoint3D(waypoint, "waypoint", VizColor::MAGNA, 1.5);
       planner_viz_.VizPoint3D(current_free_goal, "free_goal", VizColor::GREEN, 1.5);
       planner_viz_.VizPath(global_path, is_current_free_nav);
-    } else if (is_planner_running_) {
-      // stop robot
+    } else if (is_planner_running_) { // stop robot
       global_path.clear();
       planner_viz_.VizPath(global_path);
       is_planner_running_ = false;
@@ -300,40 +314,43 @@ void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {
     if (!FARUtil::IsDebug) printf("\033[2K");
 
     // publish planner status and timers
-    std_msgs::Bool reach_goal_msg;
+    auto reach_goal_msg = std_msgs::msg::Bool();
     reach_goal_msg.data = is_reach_goal;
     reach_goal_pub_.publish(reach_goal_msg);
-    std_msgs::Float32 traverse_timer;
+    auto traverse_timer = std_msgs::msg::Float32();
     traverse_timer.data = FARUtil::Timer.record_time("Overall_executing");
     traverse_time_pub_.publish(traverse_timer);
     if (is_reach_goal) {
       FARUtil::Timer.end_time("Overall_executing", false);
     }
+
     plan_timer_.data = FARUtil::Timer.end_time("Path Search");
-    planning_time_pub_.publish(plan_timer_);
+    planning_time_pub_->publish(plan_timer_);
   }
 }
 
 void FARMaster::LocalBoundaryHandler(const std::vector<PointPair>& local_boundary) {
   if (!master_params_.is_pub_boundary || local_boundary.empty()) return;
-  geometry_msgs::PolygonStamped boundary_poly;
+
+  geometry_msgs::msg::PolygonStamped boundary_poly;
   boundary_poly.header.frame_id = master_params_.world_frame;
-  boundary_poly.header.stamp = ros::Time::now();
+  boundary_poly.header.stamp = this->now(); // Using the ROS2 method to get the current time
+
   float index_z = robot_pos_.z;
   std::vector<PointPair> sorted_boundary;
   for (const auto& edge : local_boundary) {
     if (FARUtil::DistanceToLineSeg2D(robot_pos_, edge) > master_params_.local_planner_range) continue;
     sorted_boundary.push_back(edge);
   }
-  FARUtil::SortEdgesClockWise(robot_pos_, sorted_boundary); /* For better rviz visualization purpose only! */ 
+  FARUtil::SortEdgesClockWise(robot_pos_, sorted_boundary); /* For better rviz visualization purpose only! */
   for (const auto& edge : sorted_boundary) {
-    geometry_msgs::Point32 geo_p1, geo_p2;
+    geometry_msgs::msg::Point32 geo_p1, geo_p2;
     geo_p1.x = edge.first.x,  geo_p1.y = edge.first.y,  geo_p1.z = index_z;
     geo_p2.x = edge.second.x, geo_p2.y = edge.second.y, geo_p2.z = index_z;
     boundary_poly.polygon.points.push_back(geo_p1), boundary_poly.polygon.points.push_back(geo_p2);
-    index_z += 0.001f; // seperate polygon lines
+    index_z += 0.001f; // separate polygon lines
   }
-  boundary_pub_.publish(boundary_poly);
+  boundary_pub_->publish(boundary_poly);
 }
 
 
@@ -414,56 +431,94 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
 
 
 void FARMaster::LoadROSParams() {
-  const std::string master_prefix   = "/far_planner/";
-  const std::string map_prefix      = master_prefix + "MapHandler/";
-  const std::string scan_prefix     = master_prefix + "ScanHandler/";
-  const std::string cdetect_prefix  = master_prefix + "CDetector/";
-  const std::string graph_prefix    = master_prefix + "Graph/";
-  const std::string viz_prefix      = master_prefix + "Viz/";
-  const std::string utility_prefix  = master_prefix + "Util/";
-  const std::string planner_prefix  = master_prefix + "GPlanner/";
-  const std::string contour_prefix  = master_prefix + "ContourGraph/";
-  const std::string msger_prefix    = master_prefix + "GraphMsger/";
+  const std::string master_prefix   = "far_planner";
+  const std::string map_prefix      = master_prefix + ".map_handler";
+  const std::string scan_prefix     = master_prefix + ".scan_handler";
+  const std::string cdetect_prefix  = master_prefix + ".c_detector";
+  const std::string graph_prefix    = master_prefix + ".graph";
+  const std::string viz_prefix      = master_prefix + ".viz";
+  const std::string utility_prefix  = master_prefix + ".util";
+  const std::string planner_prefix  = master_prefix + ".g_planner";
+  const std::string contour_prefix  = master_prefix + ".contour_graph";
+  const std::string msger_prefix    = master_prefix + ".graph_msger";
 
-  // master params
-  nh.param<float>(master_prefix + "main_run_freq",         master_params_.main_run_freq, 5.0);
-  nh.param<float>(master_prefix + "voxel_dim",             master_params_.voxel_dim, 0.2);
-  nh.param<float>(master_prefix + "robot_dim",             master_params_.robot_dim, 0.8);
-  nh.param<float>(master_prefix + "vehicle_height",        master_params_.vehicle_height, 0.75);
-  nh.param<float>(master_prefix + "sensor_range",          master_params_.sensor_range, 50.0);
-  nh.param<float>(master_prefix + "terrain_range",         master_params_.terrain_range, 15.0);
-  nh.param<float>(master_prefix + "local_planner_range",   master_params_.local_planner_range, 5.0);
-  nh.param<float>(master_prefix + "visualize_ratio",       master_params_.viz_ratio, 1.0);
-  nh.param<bool>(master_prefix  + "is_viewpoint_extend",   master_params_.is_viewpoint_extend, true);
-  nh.param<bool>(master_prefix  + "is_multi_layer",        master_params_.is_multi_layer, false);
-  nh.param<bool>(master_prefix  + "is_opencv_visual",      master_params_.is_visual_opencv, true);
-  nh.param<bool>(master_prefix  + "is_static_env",         master_params_.is_static_env, true);
-  nh.param<bool>(master_prefix  + "is_pub_boundary",       master_params_.is_pub_boundary, true);
-  nh.param<bool>(master_prefix  + "is_debug_output",       master_params_.is_debug_output, false);
-  nh.param<bool>(master_prefix  + "is_attempt_autoswitch", master_params_.is_attempt_autoswitch, true);
-  nh.param<std::string>(master_prefix + "world_frame",     master_params_.world_frame, "map");
+   // master params
+  node_->declare_parameter<float>(master_prefix + ".main_run_freq", 5.0);
+  node_->declare_parameter<float>(master_prefix + ".voxel_dim", 0.2);
+  node_->declare_parameter<float>(master_prefix + ".robot_dim", 0.8);
+  node_->declare_parameter<float>(master_prefix + ".vehicle_height", 0.75);
+  node_->declare_parameter<float>(master_prefix + ".sensor_range", 50.0);
+  node_->declare_parameter<float>(master_prefix + ".terrain_range", 15.0);
+  node_->declare_parameter<float>(master_prefix + ".local_planner_range", 5.0);
+  node_->declare_parameter<float>(master_prefix + ".visualize_ratio", 1.0);
+  node_->declare_parameter<bool>(master_prefix  + ".is_viewpoint_extend", true);
+  node_->declare_parameter<bool>(master_prefix  + ".is_multi_layer", false);
+  node_->declare_parameter<bool>(master_prefix  + ".is_opencv_visual", true);
+  node_->declare_parameter<bool>(master_prefix  + ".is_static_env", true);
+  node_->declare_parameter<bool>(master_prefix  + ".is_pub_boundary", true);
+  node_->declare_parameter<bool>(master_prefix  + ".is_debug_output", false);
+  node_->declare_parameter<bool>(master_prefix  + ".is_attempt_autoswitch", true);
+  node_->declare_parameter<std::string>(master_prefix + ".world_frame", "map");
+  
+  // Get parameters
+  node_->get_parameter(master_prefix + ".main_run_freq", master_params_.main_run_freq);
+  node_->get_parameter(master_prefix + ".voxel_dim", master_params_.voxel_dim);
+  node_->get_parameter(master_prefix + ".robot_dim", master_params_.robot_dim);
+  node_->get_parameter(master_prefix + ".vehicle_height", master_params_.vehicle_height);
+  node_->get_parameter(master_prefix + ".sensor_range", master_params_.sensor_range);
+  node_->get_parameter(master_prefix + ".terrain_range", master_params_.terrain_range);
+  node_->get_parameter(master_prefix + ".local_planner_range", master_params_.local_planner_range);
+  node_->get_parameter(master_prefix + ".visualize_ratio", master_params_.viz_ratio);
+  node_->get_parameter(master_prefix  + ".is_viewpoint_extend", master_params_.is_viewpoint_extend);
+  node_->get_parameter(master_prefix  + ".is_multi_layer", master_params_.is_multi_layer);
+  node_->get_parameter(master_prefix  + ".is_opencv_visual", master_params_.is_visual_opencv);
+  node_->get_parameter(master_prefix  + ".is_static_env", master_params_.is_static_env);
+  node_->get_parameter(master_prefix  + ".is_pub_boundary", master_params_.is_pub_boundary);
+  node_->get_parameter(master_prefix  + ".is_debug_output", master_params_.is_debug_output);
+  node_->get_parameter(master_prefix  + ".is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
+  node_->get_parameter<std::string>(master_prefix + ".world_frame", master_params_.world_frame);
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
-  // map handler params
-  nh.param<float>(map_prefix + "floor_height",        map_params_.floor_height, 2.0);
-  nh.param<float>(map_prefix + "cell_length",         map_params_.cell_length, 5.0);
-  nh.param<float>(map_prefix + "map_grid_max_length", map_params_.grid_max_length, 5000.0);
-  nh.param<float>(map_prefix + "map_grad_max_height", map_params_.grid_max_height, 100.0);
-  map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
-  map_params_.cell_height      = map_params_.floor_height / 2.5f;
-  map_params_.sensor_range     = master_params_.sensor_range;
+  // Declare map parameters
+  node_->declare_parameter<float>(map_prefix + ".floor_height", 2.0);
+  node_->declare_parameter<float>(map_prefix + ".cell_length", 5.0);
+  node_->declare_parameter<float>(map_prefix + ".map_grid_max_length", 5000.0);
+  node_->declare_parameter<float>(map_prefix + ".map_grad_max_height", 100.0);
 
-  // utility params
-  nh.param<float>(utility_prefix + "angle_noise",            FARUtil::kAngleNoise, 15.0);
-  nh.param<float>(utility_prefix + "accept_max_align_angle", FARUtil::kAcceptAlign, 15.0);
-  nh.param<float>(utility_prefix + "new_intensity_thred",    FARUtil::kNewPIThred, 2.0);
-  nh.param<float>(utility_prefix + "nav_clear_dist",         FARUtil::kNavClearDist, 0.5);
-  nh.param<float>(utility_prefix + "terrain_free_Z",         FARUtil::kFreeZ, 0.1);
-  nh.param<int>(utility_prefix   + "dyosb_update_thred",     FARUtil::kDyObsThred, 4);
-  nh.param<int>(utility_prefix   + "new_point_counter",      FARUtil::KNewPointC, 10);
-  nh.param<float>(utility_prefix + "dynamic_obs_dacay_time", FARUtil::kObsDecayTime, 10.0);
-  nh.param<float>(utility_prefix + "new_points_decay_time",  FARUtil::kNewDecayTime, 2.0);
-  nh.param<int>(utility_prefix   + "obs_inflate_size",       FARUtil::kObsInflate, 2);
+  // Get map parameters
+  node_->get_parameter(map_prefix + ".floor_height", map_params_.floor_height);
+  node_->get_parameter(map_prefix + ".cell_length", map_params_.cell_length);
+  node_->get_parameter(map_prefix + ".map_grid_max_length", map_params_.grid_max_length);
+  node_->get_parameter(map_prefix + ".map_grad_max_height", map_params_.grid_max_height);
+
+  // Compute dependent parameters
+  map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
+  map_params_.cell_height = map_params_.floor_height / 2.5f;
+  map_params_.sensor_range = master_params_.sensor_range;
+
+  // Declare utility parameters
+  node_->declare_parameter<float>(utility_prefix + ".angle_noise", 15.0);
+  node_->declare_parameter<float>(utility_prefix + ".accept_max_align_angle", 15.0);
+  node_->declare_parameter<float>(utility_prefix + ".new_intensity_thred", 2.0);
+  node_->declare_parameter<float>(utility_prefix + ".nav_clear_dist", 0.5);
+  node_->declare_parameter<float>(utility_prefix + ".terrain_free_Z", 0.1);
+  node_->declare_parameter<int>(utility_prefix + ".dyosb_update_thred", 4);
+  node_->declare_parameter<int>(utility_prefix + ".new_point_counter", 10);
+  node_->declare_parameter<float>(utility_prefix + ".dynamic_obs_dacay_time", 10.0);
+  node_->declare_parameter<float>(utility_prefix + ".new_points_decay_time", 2.0);
+  node_->declare_parameter<int>(utility_prefix + ".obs_inflate_size", 2);
+
+  // Get utility parameters
+  node_->get_parameter(utility_prefix + ".angle_noise", FARUtil::kAngleNoise);
+  node_->get_parameter(utility_prefix + ".accept_max_align_angle", FARUtil::kAcceptAlign);
+  node_->get_parameter(utility_prefix + ".new_intensity_thred", FARUtil::kNewPIThred);
+  node_->get_parameter(utility_prefix + ".nav_clear_dist", FARUtil::kNavClearDist);
+  node_->get_parameter(utility_prefix + ".terrain_free_Z", FARUtil::kFreeZ);
+  node_->get_parameter(utility_prefix + ".dyosb_update_thred", FARUtil::kDyObsThred);
+  node_->get_parameter(utility_prefix + ".new_point_counter", FARUtil::KNewPointC);
+  node_->get_parameter(utility_prefix + ".dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
+  node_->get_parameter(utility_prefix + ".new_points_decay_time", FARUtil::kNewDecayTime);
+  node_->get_parameter(utility_prefix + ".obs_inflate_size", FARUtil::kObsInflate);
   FARUtil::kLeafSize       = master_params_.voxel_dim;
   FARUtil::kNearDist       = master_params_.robot_dim;
   FARUtil::kHeightVoxel    = map_params_.height_voxel_dim;
@@ -489,11 +544,18 @@ void FARMaster::LoadROSParams() {
   FARUtil::kLocalPlanRange = master_params_.local_planner_range;
 
   // graph planner params
-  nh.param<float>(planner_prefix + "converge_distance",    gp_params_.converge_dist, 1.0);
-  nh.param<float>(planner_prefix + "goal_adjust_radius",   gp_params_.adjust_radius, 10.0);
-  nh.param<int>(planner_prefix   + "free_counter_thred",   gp_params_.free_thred, 5);
-  nh.param<int>(planner_prefix   + "reach_goal_vote_size", gp_params_.votes_size, 5);
-  nh.param<int>(planner_prefix   + "path_momentum_thred",  gp_params_.momentum_thred, 5);
+  node_->declare_parameter<float>(planner_prefix + ".converge_distance", 1.0);
+  node_->declare_parameter<float>(planner_prefix + ".goal_adjust_radius", 10.0);
+  node_->declare_parameter<int>(planner_prefix + ".free_counter_thred", 5);
+  node_->declare_parameter<int>(planner_prefix + ".reach_goal_vote_size", 5);
+  node_->declare_parameter<int>(planner_prefix + ".path_momentum_thred", 5);
+  
+  node_->get_parameter(planner_prefix + ".converge_distance", gp_params_.converge_dist);
+  node_->get_parameter(planner_prefix + ".goal_adjust_radius", gp_params_.adjust_radius);
+  node_->get_parameter(planner_prefix + ".free_counter_thred", gp_params_.free_thred);
+  node_->get_parameter(planner_prefix + ".reach_goal_vote_size", gp_params_.votes_size);
+  node_->get_parameter(planner_prefix + ".path_momentum_thred", gp_params_.momentum_thred);
+
   gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
 
@@ -501,19 +563,29 @@ void FARMaster::LoadROSParams() {
   cg_params_.kPillarPerimeter = master_params_.robot_dim * 4.0f;
 
   // dynamic graph params
-  nh.param<int>(graph_prefix    + "connect_votes_size",        graph_params_.votes_size, 10);
-  nh.param<int>(graph_prefix    + "clear_dumper_thred",        graph_params_.dumper_thred, 3);
-  nh.param<int>(graph_prefix    + "node_finalize_thred",       graph_params_.finalize_thred, 3);
-  nh.param<int>(graph_prefix    + "filter_pool_size",          graph_params_.pool_size, 12);
-  nh.param<float>(graph_prefix  + "connect_angle_thred",       graph_params_.kConnectAngleThred, 10.0);
-  nh.param<float>(graph_prefix  + "dirs_filter_margin",        graph_params_.filter_dirs_margin, 10.0);
+  node_->declare_parameter<int>(graph_prefix + ".connect_votes_size", 10);
+  node_->declare_parameter<int>(graph_prefix + ".clear_dumper_thred", 3);
+  node_->declare_parameter<int>(graph_prefix + ".node_finalize_thred", 3);
+  node_->declare_parameter<int>(graph_prefix + ".filter_pool_size", 12);
+  node_->declare_parameter<float>(graph_prefix + ".connect_angle_thred", 10.0);
+  node_->declare_parameter<float>(graph_prefix + ".dirs_filter_margin", 10.0);
+
+  node_->get_parameter(graph_prefix + ".connect_votes_size", graph_params_.votes_size);
+  node_->get_parameter(graph_prefix + ".clear_dumper_thred", graph_params_.dumper_thred);
+  node_->get_parameter(graph_prefix + ".node_finalize_thred", graph_params_.finalize_thred);
+  node_->get_parameter(graph_prefix + ".filter_pool_size", graph_params_.pool_size);
+  node_->get_parameter(graph_prefix + ".connect_angle_thred", graph_params_.kConnectAngleThred);
+  node_->get_parameter(graph_prefix + ".dirs_filter_margin", graph_params_.filter_dirs_margin);
+
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
   graph_params_.kConnectAngleThred       = FARUtil::kAcceptAlign;
   graph_params_.frontier_perimeter_thred = FARUtil::kMatchDist * 4.0f;
 
   // graph messager params
-  nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
+  node_->declare_parameter<int>(msger_prefix + ".robot_id", 0);
+  node_->get_parameter(msger_prefix + ".robot_id", msger_parmas_.robot_id);
+
   msger_parmas_.frame_id    = master_params_.world_frame;
   msger_parmas_.votes_size  = graph_params_.votes_size;
   msger_parmas_.pool_size   = graph_params_.pool_size;
@@ -525,37 +597,47 @@ void FARMaster::LoadROSParams() {
   scan_params_.ceil_height   = map_params_.floor_height;
 
   // contour detector params
-  nh.param<float>(cdetect_prefix       + "resize_ratio",       cdetect_params_.kRatio, 5.0);
-  nh.param<int>(cdetect_prefix         + "filter_count_value", cdetect_params_.kThredValue, 5);
-  nh.param<bool>(cdetect_prefix        + "is_save_img",        cdetect_params_.is_save_img, false);
-  nh.param<std::string>(cdetect_prefix + "img_folder_path",    cdetect_params_.img_path, "");
+  node_->declare_parameter<float>(cdetect_prefix + ".resize_ratio", 5.0);
+  node_->declare_parameter<int>(cdetect_prefix + ".filter_count_value", 5);
+  node_->declare_parameter<bool>(cdetect_prefix + ".is_save_img", false);
+  node_->declare_parameter<std::string>(cdetect_prefix + ".img_folder_path", "");
+
+  node_->get_parameter(cdetect_prefix + ".resize_ratio", cdetect_params_.kRatio);
+  node_->get_parameter(cdetect_prefix + ".filter_count_value", cdetect_params_.kThredValue);
+  node_->get_parameter(cdetect_prefix + ".is_save_img", cdetect_params_.is_save_img);
+  node_->get_parameter(cdetect_prefix + ".img_folder_path", cdetect_params_.img_path);
+
   cdetect_params_.kBlurSize    = (int)std::round(FARUtil::kNavClearDist / master_params_.voxel_dim);
   cdetect_params_.sensor_range = master_params_.sensor_range;
   cdetect_params_.voxel_dim    = master_params_.voxel_dim;
 }
 
-void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
+void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   // transform from odom frame to mapping frame
   std::string odom_frame = msg->header.frame_id;
-  tf::Pose tf_odom_pose;
-  tf::poseMsgToTF(msg->pose.pose, tf_odom_pose);
+  tf2::Transform tf_odom_pose;
+  tf2::fromMsg(msg->pose.pose, tf_odom_pose);
+  
   if (!FARUtil::IsSameFrameID(odom_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) ROS_WARN_ONCE("FARMaster: odom frame does NOT match with world frame!");
-    tf::StampedTransform odom_to_world_tf_stamp;
+    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(node_->get_logger(), "FARMaster: odom frame does NOT match with world frame!");
+    tf2::Transform odom_to_world_tf_stamp;
     try
     {
-      tf_listener_->waitForTransform(master_params_.world_frame, odom_frame, ros::Time(0), ros::Duration(1.0));
-      tf_listener_->lookupTransform(master_params_.world_frame, odom_frame, ros::Time(0), odom_to_world_tf_stamp);
+      tf_buffer_->canTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero, std::chrono::seconds(1));
+      auto transform_stamped = tf_buffer_->lookupTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero);
+      tf2::fromMsg(transform_stamped.transform, odom_to_world_tf_stamp);
       tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
     }
-    catch (tf::TransformException ex){
-      ROS_ERROR("Tracking odom TF lookup: %s",ex.what());
+    catch (tf2::TransformException& ex) {
+      RCLCPP_ERROR(node_->get_logger(), "Tracking odom TF lookup: %s",ex.what());
       return;
     }
   }
-  robot_pos_.x = tf_odom_pose.getOrigin().getX(); 
-  robot_pos_.y = tf_odom_pose.getOrigin().getY();
-  robot_pos_.z = tf_odom_pose.getOrigin().getZ();
+  
+  robot_pos_.x = tf_odom_pose.getOrigin().x(); 
+  robot_pos_.y = tf_odom_pose.getOrigin().y();
+  robot_pos_.z = tf_odom_pose.getOrigin().z();
+
   // extract robot heading
   FARUtil::robot_pos = robot_pos_;
   double roll, pitch, yaw;
@@ -564,13 +646,14 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
 
   if (!is_odom_init_) {
     // system start time
-    FARUtil::systemStartTime = ros::Time::now().toSec();
+    FARUtil::systemStartTime = node_->now().seconds();
     FARUtil::map_origin = robot_pos_;
     map_handler_.UpdateRobotPosition(robot_pos_);
   }
 
   is_odom_init_ = true;
 }
+
 
 void FARMaster::PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
                              const PointCloudPtr& cloudOut) 
@@ -601,19 +684,19 @@ void FARMaster::PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
   }
 }
 
-void FARMaster::ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& scan_pc) {
+void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
   if (master_params_.is_static_env || !is_odom_init_) return;
   this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_);
   scan_handler_.UpdateRobotPosition(robot_pos_);
 }
 
-void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
+void FARMaster::TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (master_params_.is_static_env) return;
   this->PrcocessCloud(pc, local_terrain_ptr_);
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
 }
 
-void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
+void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (!is_odom_init_) return;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
@@ -649,7 +732,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
                                     FARUtil::surround_free_cloud_, 
                                     FARUtil::cur_dyobs_cloud_);
     if (FARUtil::cur_dyobs_cloud_->size() > FARUtil::kDyObsThred) {
-      if (FARUtil::IsDebug) ROS_WARN("FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
+      if (FARUtil::IsDebug) RCLCPP_WARN(node_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
       FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true);
       map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_);
       FARUtil::RemoveOverlapCloud(FARUtil::surround_obs_cloud_, FARUtil::cur_dyobs_cloud_);
@@ -796,8 +879,13 @@ std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_gr
 
 
 int main(int argc, char** argv){
-  ros::init(argc, argv, "far_planner_node");
-  FARMaster dp_node;
-  dp_node.Init();
-  dp_node.Loop();
+  rclcpp::init(argc, argv);
+  
+  auto far_planner_node = std::make_shared<FARMaster>();
+  far_planner_node->Init();
+  far_planner_node->Loop();
+
+  rclcpp::shutdown();
+
+  return 0;
 }

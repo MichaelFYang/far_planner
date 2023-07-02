@@ -32,26 +32,35 @@ struct FARMasterParams {
     std::string world_frame;
 };
 
-class FARMaster {
+class FARMaster : public rclcpp::Node
+{
 public:
-    FARMaster() = default;
-    ~FARMaster() = default;
+    FARMaster();
+    ~FARMaster();
 
     void Init(); // ROS initialization
     void Loop(); // Main Loop Function
 
 private:
-    ros::NodeHandle nh;
-    ros::Subscriber reset_graph_sub_, joy_command_sub_, update_command_sub_;
-    ros::Subscriber odom_sub_, terrain_sub_, terrain_local_sub_, scan_sub_, waypoint_sub_;
-    ros::Subscriber read_command_sub_, save_command_sub_; // only use for terminal formatting
-    ros::Publisher  goal_pub_, boundary_pub_;
-    ros::Publisher  dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_;
-    ros::Publisher  scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
-    ros::Publisher  runtime_pub_, planning_time_pub_, traverse_time_pub_, reach_goal_pub_;
+    rclcpp::Node::SharedPtr node_;
 
-    ros::Timer planning_event_;
-    std_msgs::Float32 runtimer_, plan_timer_;
+    rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reset_graph_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_command_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr update_command_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_local_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr scan_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr waypoint_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr read_command_sub_, save_command_sub_;
+    
+    rclcpp::Publisher<YourMessageType>::SharedPtr goal_pub_, boundary_pub_;
+    rclcpp::Publisher<YourMessageType>::SharedPtr dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_;
+    rclcpp::Publisher<YourMessageType>::SharedPtr scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
+    rclcpp::Publisher<YourMessageType>::SharedPtr runtime_pub_, planning_time_pub_, traverse_time_pub_, reach_goal_pub_;
+
+    rclcpp::TimerBase::SharedPtr planning_event_;
+    std_msgs::msg::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
 
@@ -119,24 +128,24 @@ private:
 
     Point3D ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr);
 
-    /* Callback Functions */
-    void OdomCallBack(const nav_msgs::OdometryConstPtr& msg);
-    void TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
-    void TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
+        // Callback Functions
+    void OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg);
+    void TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc);
+    void TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc);
 
-    Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
+    // Rest of your callback functions...
 
-    inline void ResetGraphCallBack(const std_msgs::EmptyConstPtr& msg) {
+    inline void ResetGraphCallBack(const std_msgs::msg::Empty::SharedPtr msg) {
         is_reset_env_ = true;
     }
 
-    inline void JoyCommandCallBack(const sensor_msgs::JoyConstPtr& msg) {
+    inline void JoyCommandCallBack(const sensor_msgs::msg::Joy::SharedPtr msg) {
         if (msg->buttons[4] > 0.5) {
             is_reset_env_ = true;
         }
     } 
 
-    inline void UpdateCommandCallBack(const std_msgs::Bool& msg) {
+    inline void UpdateCommandCallBack(const std_msgs::msg::Bool::SharedPtr msg) {
         if (is_stop_update_ && msg.data) {
             if (FARUtil::IsDebug) ROS_WARN("FARMaster: Resume visibility graph update.");
             is_stop_update_ = !msg.data;
