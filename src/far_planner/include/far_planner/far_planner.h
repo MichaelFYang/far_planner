@@ -32,7 +32,7 @@ struct FARMasterParams {
     std::string world_frame;
 };
 
-class FARMaster : public rclcpp::Node
+class FARMaster
 {
 public:
     FARMaster();
@@ -42,7 +42,7 @@ public:
     void Loop(); // Main Loop Function
 
 private:
-    rclcpp::Node::SharedPtr node_;
+    rclcpp::Node::SharedPtr nh_;
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reset_graph_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_command_sub_;
@@ -53,11 +53,20 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr scan_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr waypoint_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr read_command_sub_, save_command_sub_;
-    
-    rclcpp::Publisher<YourMessageType>::SharedPtr goal_pub_, boundary_pub_;
-    rclcpp::Publisher<YourMessageType>::SharedPtr dynamic_obs_pub_, surround_free_debug_, surround_obs_debug_;
-    rclcpp::Publisher<YourMessageType>::SharedPtr scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
-    rclcpp::Publisher<YourMessageType>::SharedPtr runtime_pub_, planning_time_pub_, traverse_time_pub_, reach_goal_pub_;
+
+    rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr goal_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr boundary_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr runtime_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr planning_time_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr traverse_time_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reach_goal_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr dynamic_obs_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr surround_free_debug_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr surround_obs_debug_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr scan_grid_debug_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr new_PCL_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_height_pub_;
+
 
     rclcpp::TimerBase::SharedPtr planning_event_;
     std_msgs::msg::Float32 runtimer_, plan_timer_;
@@ -66,7 +75,7 @@ private:
 
     bool is_reset_env_, is_stop_update_;
 
-    geometry_msgs::PointStamped goal_waypoint_stamped_;
+    geometry_msgs::msg::PointStamped goal_waypoint_stamped_;
 
     bool is_cloud_init_, is_scan_init_, is_odom_init_, is_planner_running_;
     bool is_graph_init_;
@@ -121,9 +130,9 @@ private:
 
     void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
 
-    void PlanningCallBack(const ros::TimerEvent& event);
+    void PlanningCallBack();
     
-    void PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
+    void PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
                        const PointCloudPtr& cloudOut);
 
     Point3D ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr);
@@ -146,13 +155,13 @@ private:
     } 
 
     inline void UpdateCommandCallBack(const std_msgs::msg::Bool::SharedPtr msg) {
-        if (is_stop_update_ && msg.data) {
-            if (FARUtil::IsDebug) ROS_WARN("FARMaster: Resume visibility graph update.");
-            is_stop_update_ = !msg.data;
+        if (is_stop_update_ && msg->data) {
+            if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: Resume visibility graph update.");
+            is_stop_update_ = !msg->data;
         }
-        if (!is_stop_update_ && !msg.data) {
-            if (FARUtil::IsDebug) ROS_WARN("FARMaster: Stop visibility graph update.");
-            is_stop_update_ = !msg.data;
+        if (!is_stop_update_ && !msg->data) {
+            if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: Stop visibility graph update.");
+            is_stop_update_ = !msg->data;
         }   
     }
 

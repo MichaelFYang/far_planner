@@ -11,47 +11,47 @@
 /***************************************************************************************/
 FARMaster::FARMaster() {
    /* initialize node */
-  node_ = rclcpp::Node::make_shared("far_planner_node");
+  nh_ = rclcpp::Node::make_shared("far_planner_node");
 }
 
 void FARMaster::Init() {
   /* initialize subscriber and publisher */
-  reset_graph_sub_    = node_->create_subscription<std_msgs::Empty>("/reset_visibility_graph", 5, std::bind(&FARMaster::ResetGraphCallBack, this, std::placeholders::_1));
-  odom_sub_           = node_->create_subscription<nav_msgs::Odometry>("/odom_world", 5, std::bind(&FARMaster::OdomCallBack, this, std::placeholders::_1));
-  terrain_sub_        = node_->create_subscription<sensor_msgs::PointCloud2>("/terrain_cloud", 1, std::bind(&FARMaster::TerrainCallBack, this, std::placeholders::_1));
-  scan_sub_           = node_->create_subscription<sensor_msgs::PointCloud2>("/scan_cloud", 5, std::bind(&FARMaster::ScanCallBack, this, std::placeholders::_1));
-  waypoint_sub_       = node_->create_subscription<geometry_msgs::PointStamped>("/goal_point", 1, std::bind(&FARMaster::WaypointCallBack, this, std::placeholders::_1));
-  terrain_local_sub_  = node_->create_subscription<sensor_msgs::PointCloud2>("/terrain_local_cloud", 1, std::bind(&FARMaster::TerrainLocalCallBack, this, std::placeholders::_1));
-  joy_command_sub_    = node_->create_subscription<sensor_msgs::Joy>("/joy", 5, std::bind(&FARMaster::JoyCommandCallBack, this, std::placeholders::_1));
-  update_command_sub_ = node_->create_subscription<std_msgs::Empty>("/update_visibility_graph", 5, std::bind(&FARMaster::UpdateCommandCallBack, this, std::placeholders::_1));
-  goal_pub_           = node_->create_publisher<geometry_msgs::PointStamped>("/way_point",5);
-  boundary_pub_       = node_->create_publisher<geometry_msgs::PolygonStamped>("/navigation_boundary",5);
+  reset_graph_sub_    = nh_->create_subscription<std_msgs::msg::Empty>("/reset_visibility_graph", 5, std::bind(&FARMaster::ResetGraphCallBack, this, std::placeholders::_1));
+  odom_sub_           = nh_->create_subscription<nav_msgs::msg::Odometry>("/odom_world", 5, std::bind(&FARMaster::OdomCallBack, this, std::placeholders::_1));
+  terrain_sub_        = nh_->create_subscription<sensor_msgs::msg::PointCloud2>("/terrain_cloud", 1, std::bind(&FARMaster::TerrainCallBack, this, std::placeholders::_1));
+  scan_sub_           = nh_->create_subscription<sensor_msgs::msg::PointCloud2>("/scan_cloud", 5, std::bind(&FARMaster::ScanCallBack, this, std::placeholders::_1));
+  waypoint_sub_       = nh_->create_subscription<geometry_msgs::msg::PointStamped>("/goal_point", 1, std::bind(&FARMaster::WaypointCallBack, this, std::placeholders::_1));
+  terrain_local_sub_  = nh_->create_subscription<sensor_msgs::msg::PointCloud2>("/terrain_local_cloud", 1, std::bind(&FARMaster::TerrainLocalCallBack, this, std::placeholders::_1));
+  joy_command_sub_    = nh_->create_subscription<sensor_msgs::msg::Joy>("/joy", 5, std::bind(&FARMaster::JoyCommandCallBack, this, std::placeholders::_1));
+  update_command_sub_ = nh_->create_subscription<std_msgs::msg::Bool>("/update_visibility_graph", 5, std::bind(&FARMaster::UpdateCommandCallBack, this, std::placeholders::_1));
+  goal_pub_           = nh_->create_publisher<geometry_msgs::msg::PointStamped>("/way_point",5);
+  boundary_pub_       = nh_->create_publisher<geometry_msgs::msg::PolygonStamped>("/navigation_boundary",5);
 
   // Timers
-  runtime_pub_        = node_->create_publisher<std_msgs::Float32>("/runtime",1);
-  planning_time_pub_  = node_->create_publisher<std_msgs::Float32>("/planning_time",1);
-  traverse_time_pub_  = node_->create_publisher<std_msgs::Float32>("/far_traverse_time", 5);
+  runtime_pub_        = nh_->create_publisher<std_msgs::msg::Float32>("/runtime",1);
+  planning_time_pub_  = nh_->create_publisher<std_msgs::msg::Float32>("/planning_time",1);
+  traverse_time_pub_  = nh_->create_publisher<std_msgs::msg::Float32>("/far_traverse_time", 5);
 
   // planning status publisher
-  reach_goal_pub_     = node_->create_publisher<std_msgs::Bool>("/far_reach_goal_status", 5);
+  reach_goal_pub_     = nh_->create_publisher<std_msgs::msg::Bool>("/far_reach_goal_status", 5);
 
   // Terminal formatting subscriber
-  read_command_sub_   = node_->create_subscription<std_msgs::String>("/read_file_dir", 1, std::bind(&FARMaster::ReadFileCommand, this, std::placeholders::_1));
-  save_command_sub_   = node_->create_subscription<std_msgs::String>("/save_file_dir", 1, std::bind(&FARMaster::SaveFileCommand, this, std::placeholders::_1));
+  read_command_sub_   = nh_->create_subscription<std_msgs::msg::String>("/read_file_dir", 1, std::bind(&FARMaster::ReadFileCommand, this, std::placeholders::_1));
+  save_command_sub_   = nh_->create_subscription<std_msgs::msg::String>("/save_file_dir", 1, std::bind(&FARMaster::SaveFileCommand, this, std::placeholders::_1));
 
   // DEBUG Publisher
-  dynamic_obs_pub_     = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_dynamic_obs_debug",1);
-  surround_free_debug_ = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_free_debug",1);
-  surround_obs_debug_  = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_obs_debug",1);
-  scan_grid_debug_     = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_scanGrid_debug",1);
-  new_PCL_pub_         = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_new_debug",1);
-  terrain_height_pub_  = node_->create_publisher<sensor_msgs::PointCloud2>("/FAR_terrain_height_debug",1);
+  dynamic_obs_pub_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_dynamic_obs_debug",1);
+  surround_free_debug_ = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_free_debug",1);
+  surround_obs_debug_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_obs_debug",1);
+  scan_grid_debug_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_scanGrid_debug",1);
+  new_PCL_pub_         = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_new_debug",1);
+  terrain_height_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_terrain_height_debug",1);
 
   this->LoadROSParams();
 
   /*init path generation thred callback*/
-  const float duration_time = 0.99f / master_params_.main_run_freq;
-  planning_event_ = this->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
+  const float duration_time = master_params_.main_run_freq;
+  planning_event_ = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
 
   /* init Dynamic Planner Processing Objects */
   contour_detector_.Init(cdetect_params_);
@@ -142,16 +142,16 @@ void FARMaster::ResetEnvironmentAndGraph() {
 void FARMaster::Loop() {
     rclcpp::Rate loop_rate(master_params_.main_run_freq);
 
-    node_->create_wall_timer(std::chrono::milliseconds(int(1000 / master_params_.main_run_freq)), [this]() {
+    nh_->create_wall_timer(std::chrono::milliseconds(int(1000 / master_params_.main_run_freq)), [this]() {
         if (is_reset_env_) {
             this->ResetEnvironmentAndGraph();
             is_reset_env_ = false;
-            if (FARUtil::IsDebug) RCLCPP_WARN(node_->get_logger(), "****************** Graph and Env Reset ******************");
+            if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "****************** Graph and Env Reset ******************");
             loop_rate.sleep();
             return;
         }
 
-        rclcpp::spin_some(node_);
+        rclcpp::spin_some(nh_);
         if (!this->PreconditionCheck()) {
             loop_rate.sleep();
             return;
@@ -239,13 +239,13 @@ void FARMaster::Loop() {
 
       if (!is_graph_init_ && !nav_graph_.empty()) {
             is_graph_init_ = true;
-            RCLCPP_INFO(node_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
+            RCLCPP_INFO(nh_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
         }
 
         loop_rate.sleep();
     });
 
-    rclcpp::spin(node_);
+    rclcpp::spin(nh_);
   }
 }
 
@@ -285,7 +285,7 @@ void FARMaster::PlanningCallBack() {
     Point3D current_free_goal;
     NavNodePtr last_nav_ptr = nav_node_ptr_;
     bool is_planning_fails = false;
-    goal_waypoint_stamped_.header.stamp = node_->now();
+    goal_waypoint_stamped_.header.stamp = nh_->now();
     bool is_current_free_nav = false;
     bool is_reach_goal = false;
     if (graph_planner_.PathToGoal(goal_ptr, global_path, nav_node_ptr_, current_free_goal, is_planning_fails, is_reach_goal, is_current_free_nav) && nav_node_ptr_ != NULL) {
@@ -443,53 +443,53 @@ void FARMaster::LoadROSParams() {
   const std::string msger_prefix    = master_prefix + ".graph_msger";
 
    // master params
-  node_->declare_parameter<float>(master_prefix + ".main_run_freq", 5.0);
-  node_->declare_parameter<float>(master_prefix + ".voxel_dim", 0.2);
-  node_->declare_parameter<float>(master_prefix + ".robot_dim", 0.8);
-  node_->declare_parameter<float>(master_prefix + ".vehicle_height", 0.75);
-  node_->declare_parameter<float>(master_prefix + ".sensor_range", 50.0);
-  node_->declare_parameter<float>(master_prefix + ".terrain_range", 15.0);
-  node_->declare_parameter<float>(master_prefix + ".local_planner_range", 5.0);
-  node_->declare_parameter<float>(master_prefix + ".visualize_ratio", 1.0);
-  node_->declare_parameter<bool>(master_prefix  + ".is_viewpoint_extend", true);
-  node_->declare_parameter<bool>(master_prefix  + ".is_multi_layer", false);
-  node_->declare_parameter<bool>(master_prefix  + ".is_opencv_visual", true);
-  node_->declare_parameter<bool>(master_prefix  + ".is_static_env", true);
-  node_->declare_parameter<bool>(master_prefix  + ".is_pub_boundary", true);
-  node_->declare_parameter<bool>(master_prefix  + ".is_debug_output", false);
-  node_->declare_parameter<bool>(master_prefix  + ".is_attempt_autoswitch", true);
-  node_->declare_parameter<std::string>(master_prefix + ".world_frame", "map");
+  nh_->declare_parameter<float>(master_prefix + ".main_run_freq", 5.0);
+  nh_->declare_parameter<float>(master_prefix + ".voxel_dim", 0.2);
+  nh_->declare_parameter<float>(master_prefix + ".robot_dim", 0.8);
+  nh_->declare_parameter<float>(master_prefix + ".vehicle_height", 0.75);
+  nh_->declare_parameter<float>(master_prefix + ".sensor_range", 50.0);
+  nh_->declare_parameter<float>(master_prefix + ".terrain_range", 15.0);
+  nh_->declare_parameter<float>(master_prefix + ".local_planner_range", 5.0);
+  nh_->declare_parameter<float>(master_prefix + ".visualize_ratio", 1.0);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_viewpoint_extend", true);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_multi_layer", false);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_opencv_visual", true);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_static_env", true);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_pub_boundary", true);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_debug_output", false);
+  nh_->declare_parameter<bool>(master_prefix  + ".is_attempt_autoswitch", true);
+  nh_->declare_parameter<std::string>(master_prefix + ".world_frame", "map");
   
   // Get parameters
-  node_->get_parameter(master_prefix + ".main_run_freq", master_params_.main_run_freq);
-  node_->get_parameter(master_prefix + ".voxel_dim", master_params_.voxel_dim);
-  node_->get_parameter(master_prefix + ".robot_dim", master_params_.robot_dim);
-  node_->get_parameter(master_prefix + ".vehicle_height", master_params_.vehicle_height);
-  node_->get_parameter(master_prefix + ".sensor_range", master_params_.sensor_range);
-  node_->get_parameter(master_prefix + ".terrain_range", master_params_.terrain_range);
-  node_->get_parameter(master_prefix + ".local_planner_range", master_params_.local_planner_range);
-  node_->get_parameter(master_prefix + ".visualize_ratio", master_params_.viz_ratio);
-  node_->get_parameter(master_prefix  + ".is_viewpoint_extend", master_params_.is_viewpoint_extend);
-  node_->get_parameter(master_prefix  + ".is_multi_layer", master_params_.is_multi_layer);
-  node_->get_parameter(master_prefix  + ".is_opencv_visual", master_params_.is_visual_opencv);
-  node_->get_parameter(master_prefix  + ".is_static_env", master_params_.is_static_env);
-  node_->get_parameter(master_prefix  + ".is_pub_boundary", master_params_.is_pub_boundary);
-  node_->get_parameter(master_prefix  + ".is_debug_output", master_params_.is_debug_output);
-  node_->get_parameter(master_prefix  + ".is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
-  node_->get_parameter<std::string>(master_prefix + ".world_frame", master_params_.world_frame);
+  nh_->get_parameter(master_prefix + ".main_run_freq", master_params_.main_run_freq);
+  nh_->get_parameter(master_prefix + ".voxel_dim", master_params_.voxel_dim);
+  nh_->get_parameter(master_prefix + ".robot_dim", master_params_.robot_dim);
+  nh_->get_parameter(master_prefix + ".vehicle_height", master_params_.vehicle_height);
+  nh_->get_parameter(master_prefix + ".sensor_range", master_params_.sensor_range);
+  nh_->get_parameter(master_prefix + ".terrain_range", master_params_.terrain_range);
+  nh_->get_parameter(master_prefix + ".local_planner_range", master_params_.local_planner_range);
+  nh_->get_parameter(master_prefix + ".visualize_ratio", master_params_.viz_ratio);
+  nh_->get_parameter(master_prefix  + ".is_viewpoint_extend", master_params_.is_viewpoint_extend);
+  nh_->get_parameter(master_prefix  + ".is_multi_layer", master_params_.is_multi_layer);
+  nh_->get_parameter(master_prefix  + ".is_opencv_visual", master_params_.is_visual_opencv);
+  nh_->get_parameter(master_prefix  + ".is_static_env", master_params_.is_static_env);
+  nh_->get_parameter(master_prefix  + ".is_pub_boundary", master_params_.is_pub_boundary);
+  nh_->get_parameter(master_prefix  + ".is_debug_output", master_params_.is_debug_output);
+  nh_->get_parameter(master_prefix  + ".is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
+  nh_->get_parameter<std::string>(master_prefix + ".world_frame", master_params_.world_frame);
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
   // Declare map parameters
-  node_->declare_parameter<float>(map_prefix + ".floor_height", 2.0);
-  node_->declare_parameter<float>(map_prefix + ".cell_length", 5.0);
-  node_->declare_parameter<float>(map_prefix + ".map_grid_max_length", 5000.0);
-  node_->declare_parameter<float>(map_prefix + ".map_grad_max_height", 100.0);
+  nh_->declare_parameter<float>(map_prefix + ".floor_height", 2.0);
+  nh_->declare_parameter<float>(map_prefix + ".cell_length", 5.0);
+  nh_->declare_parameter<float>(map_prefix + ".map_grid_max_length", 5000.0);
+  nh_->declare_parameter<float>(map_prefix + ".map_grad_max_height", 100.0);
 
   // Get map parameters
-  node_->get_parameter(map_prefix + ".floor_height", map_params_.floor_height);
-  node_->get_parameter(map_prefix + ".cell_length", map_params_.cell_length);
-  node_->get_parameter(map_prefix + ".map_grid_max_length", map_params_.grid_max_length);
-  node_->get_parameter(map_prefix + ".map_grad_max_height", map_params_.grid_max_height);
+  nh_->get_parameter(map_prefix + ".floor_height", map_params_.floor_height);
+  nh_->get_parameter(map_prefix + ".cell_length", map_params_.cell_length);
+  nh_->get_parameter(map_prefix + ".map_grid_max_length", map_params_.grid_max_length);
+  nh_->get_parameter(map_prefix + ".map_grad_max_height", map_params_.grid_max_height);
 
   // Compute dependent parameters
   map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
@@ -497,28 +497,28 @@ void FARMaster::LoadROSParams() {
   map_params_.sensor_range = master_params_.sensor_range;
 
   // Declare utility parameters
-  node_->declare_parameter<float>(utility_prefix + ".angle_noise", 15.0);
-  node_->declare_parameter<float>(utility_prefix + ".accept_max_align_angle", 15.0);
-  node_->declare_parameter<float>(utility_prefix + ".new_intensity_thred", 2.0);
-  node_->declare_parameter<float>(utility_prefix + ".nav_clear_dist", 0.5);
-  node_->declare_parameter<float>(utility_prefix + ".terrain_free_Z", 0.1);
-  node_->declare_parameter<int>(utility_prefix + ".dyosb_update_thred", 4);
-  node_->declare_parameter<int>(utility_prefix + ".new_point_counter", 10);
-  node_->declare_parameter<float>(utility_prefix + ".dynamic_obs_dacay_time", 10.0);
-  node_->declare_parameter<float>(utility_prefix + ".new_points_decay_time", 2.0);
-  node_->declare_parameter<int>(utility_prefix + ".obs_inflate_size", 2);
+  nh_->declare_parameter<float>(utility_prefix + ".angle_noise", 15.0);
+  nh_->declare_parameter<float>(utility_prefix + ".accept_max_align_angle", 15.0);
+  nh_->declare_parameter<float>(utility_prefix + ".new_intensity_thred", 2.0);
+  nh_->declare_parameter<float>(utility_prefix + ".nav_clear_dist", 0.5);
+  nh_->declare_parameter<float>(utility_prefix + ".terrain_free_Z", 0.1);
+  nh_->declare_parameter<int>(utility_prefix + ".dyosb_update_thred", 4);
+  nh_->declare_parameter<int>(utility_prefix + ".new_point_counter", 10);
+  nh_->declare_parameter<float>(utility_prefix + ".dynamic_obs_dacay_time", 10.0);
+  nh_->declare_parameter<float>(utility_prefix + ".new_points_decay_time", 2.0);
+  nh_->declare_parameter<int>(utility_prefix + ".obs_inflate_size", 2);
 
   // Get utility parameters
-  node_->get_parameter(utility_prefix + ".angle_noise", FARUtil::kAngleNoise);
-  node_->get_parameter(utility_prefix + ".accept_max_align_angle", FARUtil::kAcceptAlign);
-  node_->get_parameter(utility_prefix + ".new_intensity_thred", FARUtil::kNewPIThred);
-  node_->get_parameter(utility_prefix + ".nav_clear_dist", FARUtil::kNavClearDist);
-  node_->get_parameter(utility_prefix + ".terrain_free_Z", FARUtil::kFreeZ);
-  node_->get_parameter(utility_prefix + ".dyosb_update_thred", FARUtil::kDyObsThred);
-  node_->get_parameter(utility_prefix + ".new_point_counter", FARUtil::KNewPointC);
-  node_->get_parameter(utility_prefix + ".dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
-  node_->get_parameter(utility_prefix + ".new_points_decay_time", FARUtil::kNewDecayTime);
-  node_->get_parameter(utility_prefix + ".obs_inflate_size", FARUtil::kObsInflate);
+  nh_->get_parameter(utility_prefix + ".angle_noise", FARUtil::kAngleNoise);
+  nh_->get_parameter(utility_prefix + ".accept_max_align_angle", FARUtil::kAcceptAlign);
+  nh_->get_parameter(utility_prefix + ".new_intensity_thred", FARUtil::kNewPIThred);
+  nh_->get_parameter(utility_prefix + ".nav_clear_dist", FARUtil::kNavClearDist);
+  nh_->get_parameter(utility_prefix + ".terrain_free_Z", FARUtil::kFreeZ);
+  nh_->get_parameter(utility_prefix + ".dyosb_update_thred", FARUtil::kDyObsThred);
+  nh_->get_parameter(utility_prefix + ".new_point_counter", FARUtil::KNewPointC);
+  nh_->get_parameter(utility_prefix + ".dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
+  nh_->get_parameter(utility_prefix + ".new_points_decay_time", FARUtil::kNewDecayTime);
+  nh_->get_parameter(utility_prefix + ".obs_inflate_size", FARUtil::kObsInflate);
   FARUtil::kLeafSize       = master_params_.voxel_dim;
   FARUtil::kNearDist       = master_params_.robot_dim;
   FARUtil::kHeightVoxel    = map_params_.height_voxel_dim;
@@ -544,17 +544,17 @@ void FARMaster::LoadROSParams() {
   FARUtil::kLocalPlanRange = master_params_.local_planner_range;
 
   // graph planner params
-  node_->declare_parameter<float>(planner_prefix + ".converge_distance", 1.0);
-  node_->declare_parameter<float>(planner_prefix + ".goal_adjust_radius", 10.0);
-  node_->declare_parameter<int>(planner_prefix + ".free_counter_thred", 5);
-  node_->declare_parameter<int>(planner_prefix + ".reach_goal_vote_size", 5);
-  node_->declare_parameter<int>(planner_prefix + ".path_momentum_thred", 5);
+  nh_->declare_parameter<float>(planner_prefix + ".converge_distance", 1.0);
+  nh_->declare_parameter<float>(planner_prefix + ".goal_adjust_radius", 10.0);
+  nh_->declare_parameter<int>(planner_prefix + ".free_counter_thred", 5);
+  nh_->declare_parameter<int>(planner_prefix + ".reach_goal_vote_size", 5);
+  nh_->declare_parameter<int>(planner_prefix + ".path_momentum_thred", 5);
   
-  node_->get_parameter(planner_prefix + ".converge_distance", gp_params_.converge_dist);
-  node_->get_parameter(planner_prefix + ".goal_adjust_radius", gp_params_.adjust_radius);
-  node_->get_parameter(planner_prefix + ".free_counter_thred", gp_params_.free_thred);
-  node_->get_parameter(planner_prefix + ".reach_goal_vote_size", gp_params_.votes_size);
-  node_->get_parameter(planner_prefix + ".path_momentum_thred", gp_params_.momentum_thred);
+  nh_->get_parameter(planner_prefix + ".converge_distance", gp_params_.converge_dist);
+  nh_->get_parameter(planner_prefix + ".goal_adjust_radius", gp_params_.adjust_radius);
+  nh_->get_parameter(planner_prefix + ".free_counter_thred", gp_params_.free_thred);
+  nh_->get_parameter(planner_prefix + ".reach_goal_vote_size", gp_params_.votes_size);
+  nh_->get_parameter(planner_prefix + ".path_momentum_thred", gp_params_.momentum_thred);
 
   gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
@@ -563,19 +563,19 @@ void FARMaster::LoadROSParams() {
   cg_params_.kPillarPerimeter = master_params_.robot_dim * 4.0f;
 
   // dynamic graph params
-  node_->declare_parameter<int>(graph_prefix + ".connect_votes_size", 10);
-  node_->declare_parameter<int>(graph_prefix + ".clear_dumper_thred", 3);
-  node_->declare_parameter<int>(graph_prefix + ".node_finalize_thred", 3);
-  node_->declare_parameter<int>(graph_prefix + ".filter_pool_size", 12);
-  node_->declare_parameter<float>(graph_prefix + ".connect_angle_thred", 10.0);
-  node_->declare_parameter<float>(graph_prefix + ".dirs_filter_margin", 10.0);
+  nh_->declare_parameter<int>(graph_prefix + ".connect_votes_size", 10);
+  nh_->declare_parameter<int>(graph_prefix + ".clear_dumper_thred", 3);
+  nh_->declare_parameter<int>(graph_prefix + ".node_finalize_thred", 3);
+  nh_->declare_parameter<int>(graph_prefix + ".filter_pool_size", 12);
+  nh_->declare_parameter<float>(graph_prefix + ".connect_angle_thred", 10.0);
+  nh_->declare_parameter<float>(graph_prefix + ".dirs_filter_margin", 10.0);
 
-  node_->get_parameter(graph_prefix + ".connect_votes_size", graph_params_.votes_size);
-  node_->get_parameter(graph_prefix + ".clear_dumper_thred", graph_params_.dumper_thred);
-  node_->get_parameter(graph_prefix + ".node_finalize_thred", graph_params_.finalize_thred);
-  node_->get_parameter(graph_prefix + ".filter_pool_size", graph_params_.pool_size);
-  node_->get_parameter(graph_prefix + ".connect_angle_thred", graph_params_.kConnectAngleThred);
-  node_->get_parameter(graph_prefix + ".dirs_filter_margin", graph_params_.filter_dirs_margin);
+  nh_->get_parameter(graph_prefix + ".connect_votes_size", graph_params_.votes_size);
+  nh_->get_parameter(graph_prefix + ".clear_dumper_thred", graph_params_.dumper_thred);
+  nh_->get_parameter(graph_prefix + ".node_finalize_thred", graph_params_.finalize_thred);
+  nh_->get_parameter(graph_prefix + ".filter_pool_size", graph_params_.pool_size);
+  nh_->get_parameter(graph_prefix + ".connect_angle_thred", graph_params_.kConnectAngleThred);
+  nh_->get_parameter(graph_prefix + ".dirs_filter_margin", graph_params_.filter_dirs_margin);
 
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
@@ -583,8 +583,8 @@ void FARMaster::LoadROSParams() {
   graph_params_.frontier_perimeter_thred = FARUtil::kMatchDist * 4.0f;
 
   // graph messager params
-  node_->declare_parameter<int>(msger_prefix + ".robot_id", 0);
-  node_->get_parameter(msger_prefix + ".robot_id", msger_parmas_.robot_id);
+  nh_->declare_parameter<int>(msger_prefix + ".robot_id", 0);
+  nh_->get_parameter(msger_prefix + ".robot_id", msger_parmas_.robot_id);
 
   msger_parmas_.frame_id    = master_params_.world_frame;
   msger_parmas_.votes_size  = graph_params_.votes_size;
@@ -597,15 +597,15 @@ void FARMaster::LoadROSParams() {
   scan_params_.ceil_height   = map_params_.floor_height;
 
   // contour detector params
-  node_->declare_parameter<float>(cdetect_prefix + ".resize_ratio", 5.0);
-  node_->declare_parameter<int>(cdetect_prefix + ".filter_count_value", 5);
-  node_->declare_parameter<bool>(cdetect_prefix + ".is_save_img", false);
-  node_->declare_parameter<std::string>(cdetect_prefix + ".img_folder_path", "");
+  nh_->declare_parameter<float>(cdetect_prefix + ".resize_ratio", 5.0);
+  nh_->declare_parameter<int>(cdetect_prefix + ".filter_count_value", 5);
+  nh_->declare_parameter<bool>(cdetect_prefix + ".is_save_img", false);
+  nh_->declare_parameter<std::string>(cdetect_prefix + ".img_folder_path", "");
 
-  node_->get_parameter(cdetect_prefix + ".resize_ratio", cdetect_params_.kRatio);
-  node_->get_parameter(cdetect_prefix + ".filter_count_value", cdetect_params_.kThredValue);
-  node_->get_parameter(cdetect_prefix + ".is_save_img", cdetect_params_.is_save_img);
-  node_->get_parameter(cdetect_prefix + ".img_folder_path", cdetect_params_.img_path);
+  nh_->get_parameter(cdetect_prefix + ".resize_ratio", cdetect_params_.kRatio);
+  nh_->get_parameter(cdetect_prefix + ".filter_count_value", cdetect_params_.kThredValue);
+  nh_->get_parameter(cdetect_prefix + ".is_save_img", cdetect_params_.is_save_img);
+  nh_->get_parameter(cdetect_prefix + ".img_folder_path", cdetect_params_.img_path);
 
   cdetect_params_.kBlurSize    = (int)std::round(FARUtil::kNavClearDist / master_params_.voxel_dim);
   cdetect_params_.sensor_range = master_params_.sensor_range;
@@ -619,7 +619,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   tf2::fromMsg(msg->pose.pose, tf_odom_pose);
   
   if (!FARUtil::IsSameFrameID(odom_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(node_->get_logger(), "FARMaster: odom frame does NOT match with world frame!");
+    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(), "FARMaster: odom frame does NOT match with world frame!");
     tf2::Transform odom_to_world_tf_stamp;
     try
     {
@@ -629,7 +629,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
       tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
     }
     catch (tf2::TransformException& ex) {
-      RCLCPP_ERROR(node_->get_logger(), "Tracking odom TF lookup: %s",ex.what());
+      RCLCPP_ERROR(nh_->get_logger(), "Tracking odom TF lookup: %s",ex.what());
       return;
     }
   }
@@ -646,7 +646,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
   if (!is_odom_init_) {
     // system start time
-    FARUtil::systemStartTime = node_->now().seconds();
+    FARUtil::systemStartTime = nh_->now().seconds();
     FARUtil::map_origin = robot_pos_;
     map_handler_.UpdateRobotPosition(robot_pos_);
   }
@@ -655,7 +655,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 }
 
 
-void FARMaster::PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
+void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
                              const PointCloudPtr& cloudOut) 
 {
 
@@ -732,7 +732,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
                                     FARUtil::surround_free_cloud_, 
                                     FARUtil::cur_dyobs_cloud_);
     if (FARUtil::cur_dyobs_cloud_->size() > FARUtil::kDyObsThred) {
-      if (FARUtil::IsDebug) RCLCPP_WARN(node_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
+      if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
       FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true);
       map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_);
       FARUtil::RemoveOverlapCloud(FARUtil::surround_obs_cloud_, FARUtil::cur_dyobs_cloud_);

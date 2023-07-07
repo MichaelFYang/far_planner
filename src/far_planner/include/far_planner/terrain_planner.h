@@ -40,7 +40,7 @@ public:
     TerrainPlanner() = default;
     ~TerrainPlanner() = default;
 
-    void Init(const ros::NodeHandle& nh, const TerrainPlannerParams& params);
+    void Init(const rclcpp::Node::SharedPtr& nh, const TerrainPlannerParams& params);
 
     void UpdateCenterNode(const NavNodePtr& node_ptr);
     
@@ -64,7 +64,7 @@ public:
     void VisualPaths();
 
 private:
-    ros::NodeHandle nh_;
+    rclcpp::Node::SharedPtr nh_;
     TerrainPlannerParams tp_params_;
     int row_num_, col_num_;
     bool is_grids_init_ = false;
@@ -72,7 +72,8 @@ private:
     Point3D center_pos_;
     std::vector<PointStack> viz_path_stack_;
 
-    ros::Publisher local_path_pub_, terrain_map_pub_;
+    rclcpp::Publisher<Marker>::SharedPtr local_path_pub_; 
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_map_pub_;
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
 

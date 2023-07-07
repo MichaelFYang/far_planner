@@ -2,7 +2,6 @@
 #define FAR_UTILITY_H
 
 /* C++ Library */
-#include <ros/ros.h>
 #include <memory>
 #include <string>
 #include <time.h>
@@ -10,41 +9,53 @@
 #include <algorithm>
 #include <unordered_set>
 #include <boost/functional/hash.hpp>
+
 /*Internal Library*/
 #include "point_struct.h"
 #include "node_struct.h"
 #include "grid.h"
-/*ROS Library*/
-#include <tf/tf.h>
-#include <tf/transform_datatypes.h>
-#include <visibility_graph_msg/Graph.h>
-#include <visibility_graph_msg/Node.h>
-#include <tf/transform_listener.h>
-#include <nav_msgs/Odometry.h>
-#include <std_msgs/Empty.h>
-#include <std_msgs/Bool.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Float32.h>
-#include <std_srvs/Trigger.h>
-#include <nav_msgs/Path.h>
-#include <sensor_msgs/Joy.h>
-#include <geometry_msgs/Quaternion.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/PointStamped.h>
-#include <geometry_msgs/PolygonStamped.h>
+
+/*ROS2 Library*/
+#include <rclcpp/rclcpp.hpp>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/buffer.h>
+#include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <sensor_msgs/msg/joy.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/quaternion.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/polygon_stamped.hpp>
+
+// Need to convert visibility_graph_msg
+#include <visibility_graph_msg/msg/graph.hpp>
+#include <visibility_graph_msg/msg/node.hpp>
+
 /*OpenCV Library*/
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+
 /* PCL Library*/
 #include <pcl/pcl_macros.h>
 #include <pcl/point_cloud.h>
 #include <pcl/search/kdtree.h>
-#include <pcl_ros/transforms.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/common/transforms.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/filters/extract_indices.h>
+
+/* PCL + ROS2 Library*/
 #include <pcl_conversions/pcl_conversions.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 
 /* Utility Header Timer */
 #include "time_measure.h"
@@ -131,7 +142,7 @@ public:
 
     static void ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHigh);
 
-    static void ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut);
+    static void ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut, const rclcpp::Node::SharedPtr nh);
     
     static void CropPCLCloud(const PointCloudPtr& cloudIn,
                              const PointCloudPtr& cloudCropped,
@@ -152,7 +163,8 @@ public:
 
     static void StackCloudByTime(const PointCloudPtr& curInCloud,
                                  const PointCloudPtr& StackCloud,
-                                 const float& duration);
+                                 const float& duration,
+                                 const rclcpp::Node::SharedPtr nh);
 
     static void TransferCloud(const Point3D& transPoint,
                               const PointCloudPtr& cloudInOut);
@@ -169,12 +181,12 @@ public:
 
     static void TransformPCLFrame(const std::string& from_frame_id,
                                   const std::string& to_frame_id,
-                                  const tf::TransformListener* tf_listener,
+                                  const std::shared_ptr<tf2_ros::Buffer>& tf_buffer,
                                   const PointCloudPtr& cloudInOut);
 
     static void TransformPoint3DFrame(const std::string& from_frame_id,
                                       const std::string& to_frame_id,
-                                      const tf::TransformListener* tf_listener,
+                                      const std::shared_ptr<tf2_ros::Buffer>& tf_buffer,
                                       Point3D& point);
 
     static bool IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame);
@@ -227,7 +239,7 @@ public:
 
     static PCLPoint Point3DToPCLPoint(const Point3D& point);
 
-    static geometry_msgs::Point Point3DToGeoMsgPoint(const Point3D& point);
+    static geometry_msgs::msg::Point Point3DToGeoMsgPoint(const Point3D& point);
 
     static int Mod(const int& a, const int& b);
 

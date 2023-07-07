@@ -9,7 +9,7 @@
 
 /***************************************************************************************/
 
-void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams& params) {
+void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlannerParams& params) {
     nh_ = nh;
     tp_params_ = params;
     row_num_ = std::ceil((FARUtil::kLocalPlanRange + tp_params_.radius) * 2.0f / tp_params_.voxel_size);
@@ -22,8 +22,8 @@ void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams&
     this->AllocateGridNodes(); 
     viz_path_stack_.clear();
 
-    local_path_pub_   = nh_.advertise<Marker>("/local_terrain_path_debug", 5);
-    terrain_map_pub_  = nh_.advertise<sensor_msgs::PointCloud2>("/local_terrain_map_debug", 5);
+    local_path_pub_   = nh_->create_publisher<Marker>("/local_terrain_path_debug", 5);
+    terrain_map_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/local_terrain_map_debug", 5);
 }
 
 void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {

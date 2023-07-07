@@ -1,19 +1,23 @@
 #ifndef GRAPH_EXTRACTOR_H
 #define GRAPH_EXTRACTOR_H
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <unordered_map>
-#include <std_msgs/String.h>
+
+#include <std_msgs/msg/string.hpp>
+
 #include <visibility_graph_msg/Graph.h>
 #include <visibility_graph_msg/Node.h>
-#include <std_srvs/Trigger.h>
-#include <geometry_msgs/Point.h>
 
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <std_srvs/srv/trigger.hpp>  // instead of std_srvs/Trigger.h
+
+#include <geometry_msgs/msg/point.hpp>  // instead of geometry_msgs/Point.h
+
+#include <visualization_msgs/msg/marker.hpp>  // instead of visualization_msgs/Marker.h
+#include <visualization_msgs/msg/marker_array.hpp>  // instead of visualization_msgs/MarkerArray.h
 
 #include "boundary_handler/point_struct.h"
 
@@ -94,7 +98,7 @@ struct GraphExtractorParams {
 
 class GraphExtractor {
 public:
-    GraphExtractor()  = default;
+    GraphExtractor(rclcpp::Node::SharedPtr nh)  = default;
     ~GraphExtractor() = default;
 
     void Init();
@@ -102,7 +106,7 @@ public:
     void Loop();
 
 private:
-    ros::NodeHandle nh;
+    rclcpp::Node::SharedPtr nh_;
     ros::Publisher  graph_viz_pub_, viz_node_pub_;
 
     std::size_t id_ = 0;

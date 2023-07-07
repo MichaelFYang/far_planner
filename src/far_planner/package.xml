@@ -1,21 +1,32 @@
-<package>
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>far_planner</name>
   <version>0.0.1</version>
   <description>FAR Planner</description>
+  <author email="fanyang1@alumni.cmu.edu">Fan Yang</author>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
   <license>BSD</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>roscpp</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>visibility_graph_msg</build_depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>pcl_conversions</depend>
+  <depend>eigen</depend>
+  <depend>opencv4</depend>
+
+  <depend>visibility_graph_msg</depend>
+
   <build_depend>pcl_ros</build_depend>
+  <exec_depend>pcl_ros</exec_depend>
 
-  <run_depend>roscpp</run_depend>
-  <run_depend>std_msgs</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>visibility_graph_msg</run_depend>
-  <run_depend>pcl_ros</run_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
+

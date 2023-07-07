@@ -1,6 +1,6 @@
-Header header
+std_msgs/Header header
 uint32 id
-uint8 FreeType
+uint8 freetype
 geometry_msgs/Point position
 geometry_msgs/Point[] surface_dirs
 bool is_covered

@@ -1,7 +1,7 @@
 #ifndef CONTOUR_GRAPH_H
 #define CONTOUR_GRAPH_H
 
-#include "utility.h"
+#include "far_planner/utility.h"
 
 struct ConnectPair
 {

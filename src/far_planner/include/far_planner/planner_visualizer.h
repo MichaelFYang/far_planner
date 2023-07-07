@@ -3,11 +3,11 @@
 
 #include "utility.h"
 #include "contour_graph.h"
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
-typedef visualization_msgs::Marker Marker;
-typedef visualization_msgs::MarkerArray MarkerArray;
+typedef visualization_msgs::msg::Marker Marker;
+typedef visualization_msgs::msg::MarkerArray MarkerArray;
 
 
 enum VizColor {
@@ -25,18 +25,18 @@ enum VizColor {
 
 class DPVisualizer {
 private:
-    ros::NodeHandle nh_;
+    rclcpp::Node::SharedPtr nh_;
     // Utility Cloud 
     PointCloudPtr point_cloud_ptr_;
     // rviz publisher 
-    ros::Publisher viz_node_pub_, viz_path_pub_, viz_poly_pub_, viz_graph_pub_;
-    ros::Publisher viz_contour_pub_, viz_map_pub_, viz_view_extend;
+    rclcpp::Publisher<MarkerArray>::SharedPtr viz_node_pub_, viz_path_pub_, viz_poly_pub_, viz_graph_pub_;
+    rclcpp::Publisher<MarkerArray>::SharedPtr viz_contour_pub_, viz_map_pub_, viz_view_extend;
 
 public:
     DPVisualizer() = default;
     ~DPVisualizer() = default;
 
-    void Init(const ros::NodeHandle& nh);
+    void Init(const rclcpp::Node::SharedPtr nh);
 
     void VizNodes(const NodePtrStack& node_stack, 
                   const std::string& ns,
@@ -66,7 +66,8 @@ public:
                     const float alpha=0.9f);
 
     void VizGraph(const NodePtrStack& graph);
-    void VizPointCloud(const ros::Publisher& viz_pub, 
+
+    void VizPointCloud(const rclcpp::Publisher<MarkerArray>::SharedPtr& viz_pub, 
                        const PointCloudPtr& pc);
 
     static void SetMarker(const VizColor& color, 

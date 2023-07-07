@@ -12,32 +12,41 @@
 /***************************************************************************************/
 
 
+void GraphExtractor::GraphExtractor(rclcpp::Node::SharedPtr nh) {
+    nh_ = nh;
+    Init();
+}
+
 void GraphExtractor::Init() {
-    /* initialize subscriber and publisher */
-    graph_viz_pub_ = nh.advertise<MarkerArray>("/graph_decoder_viz",5);
-    viz_node_pub_  = nh.advertise<Marker>("/free_p_viz",5);
+    /* initialize publisher */
+    graph_viz_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/graph_decoder_viz",5);
+    viz_node_pub_  = nh_->create_publisher<visualization_msgs::msg::Marker>("/free_p_viz",5);
+    
     this->LoadParmas();
+    
     robot_id_ = 0;
     boundary_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     extracted_polys_.clear(), extracted_graph_.clear();
+    
     this->ReadTrajFile(free_p_);
 }
 
 
 void GraphExtractor::LoadParmas() {
     const std::string prefix = "/boundary_handler/";
-    nh.param<std::string>(prefix + "world_frame", ge_params_.frame_id, "map");
+    nh_->get_parameter(prefix + "/world_frame", ge_params_.frame_id);
+
     std::string folder_path;
-    nh.param<std::string>(prefix + "folder_path", folder_path, "/home/usr/far_planner/boundary_handler/data/");
-    nh.param<std::string>(prefix + "boundary_file", ge_params_.bd_file_path, "boundary.ply");
-    nh.param<std::string>(prefix + "traj_file", ge_params_.traj_file_path, "traj.txt");
-    nh.param<std::string>(prefix + "graph_file", ge_params_.vgraph_path, "boundary_graph.vgh");
-    nh.param<float>(prefix + "visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0);
-    nh.param<float>(prefix + "height_tolz", ge_params_.height_tolz, 1.0);
+    nh_->get_parameter(prefix + "/folder_path", folder_path);
+    nh_->get_parameter(prefix + "/boundary_file", ge_params_.bd_file_path);
+    nh_->get_parameter(prefix + "/traj_file", ge_params_.traj_file_path);
+    nh_->get_parameter(prefix + "/graph_file", ge_params_.vgraph_path);
+    nh_->get_parameter_or(prefix + "/visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0f);
+    nh_->get_parameter_or(prefix + "/height_tolz", ge_params_.height_tolz, 1.0f);
+
     ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
     ge_params_.bd_file_path   = folder_path + ge_params_.bd_file_path;
     ge_params_.traj_file_path = folder_path + ge_params_.traj_file_path;
-    
 }
 
 void GraphExtractor::SetMarker(const VizColor& color, 
@@ -45,7 +54,7 @@ void GraphExtractor::SetMarker(const VizColor& color,
                              const float scale,
                              const float alpha,  
                              Marker& scan_marker) 
-{
+{ 
     scan_marker.header.frame_id = ge_params_.frame_id;
     scan_marker.header.stamp = ros::Time::now();
     scan_marker.id = 0;

@@ -11,17 +11,17 @@
 /***************************************************************************************/
 
 
-void DPVisualizer::Init(const ros::NodeHandle& nh) {
+void DPVisualizer::Init(const rclcpp::Node::SharedPtr nh) {
     nh_ = nh;
     point_cloud_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     // Rviz Publisher
-    viz_node_pub_    = nh_.advertise<Marker>("/viz_node_topic", 5);
-    viz_path_pub_    = nh_.advertise<Marker>("/viz_path_topic", 5);
-    viz_poly_pub_    = nh_.advertise<MarkerArray>("/viz_poly_topic", 5);
-    viz_graph_pub_   = nh_.advertise<MarkerArray>("/viz_graph_topic", 5);
-    viz_contour_pub_ = nh_.advertise<MarkerArray>("/viz_contour_topic", 5);
-    viz_map_pub_     = nh_.advertise<MarkerArray>("/viz_grid_map_topic", 5);
-    viz_view_extend  = nh_.advertise<MarkerArray>("/viz_viewpoint_extend_topic", 5);
+    viz_node_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>("/viz_node_topic", 5);
+    viz_path_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>("/viz_path_topic", 5);
+    viz_poly_pub_    = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_poly_topic", 5);
+    viz_graph_pub_   = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_graph_topic", 5);
+    viz_contour_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_contour_topic", 5);
+    viz_map_pub_     = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_grid_map_topic", 5);
+    viz_view_extend  = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_viewpoint_extend_topic", 5);
 }
 
 void DPVisualizer::VizNodes(const NodePtrStack& node_stack, 
@@ -41,7 +41,7 @@ void DPVisualizer::VizNodes(const NodePtrStack& node_stack,
         idx ++;
     }
     node_marker.points.resize(idx);
-    viz_node_pub_.publish(node_marker);
+    viz_node_pub_->publish(node_marker);
 }
 
 void DPVisualizer::VizPoint3D(const Point3D& point, 
@@ -57,7 +57,7 @@ void DPVisualizer::VizPoint3D(const Point3D& point,
     node_marker.pose.position.x = point.x;
     node_marker.pose.position.y = point.y;
     node_marker.pose.position.z = point.z;
-    viz_node_pub_.publish(node_marker);
+    viz_node_pub_->publish(node_marker);
 }
 
 void DPVisualizer::VizPath(const NodePtrStack& global_path, const bool& is_free_nav) {
@@ -65,12 +65,12 @@ void DPVisualizer::VizPath(const NodePtrStack& global_path, const bool& is_free_
     path_marker.type = Marker::LINE_STRIP;
     const VizColor color = is_free_nav ? VizColor::GREEN : VizColor::BLUE;
     this->SetMarker(color, "global_path", 0.75f, 0.9f, path_marker);
-    geometry_msgs::Point geo_p;
+    geometry_msgs::msg::Point geo_p;
     for (const auto& node_ptr : global_path) {
         geo_p = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         path_marker.points.push_back(geo_p);
     }
-    viz_path_pub_.publish(path_marker);
+    viz_path_pub_->publish(path_marker);
 }
 
 void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point3D& extend_point) {
@@ -84,7 +84,7 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     this->SetMarker(VizColor::RED,     "extend_viewpoint", 0.7f,  0.5f,   extend_p_marker);
     this->SetMarker(VizColor::YELLOW,  "raytracing_line",  0.3f,  0.5f,   ray_tracing_marker);
     this->SetMarker(VizColor::MAGNA,   "corner_direct",    0.15f, 0.75f,  corner_direct_marker);
-    geometry_msgs::Point p_start, p_end;
+    geometry_msgs::msg::Point p_start, p_end;
     p_start = FARUtil::Point3DToGeoMsgPoint(ori_nav_ptr->position);
     p_end   = FARUtil::Point3DToGeoMsgPoint(extend_point);
     origin_p_marker.points.push_back(p_start);
@@ -92,7 +92,7 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     // ray tracing marker
     ray_tracing_marker.points.push_back(p_start), ray_tracing_marker.points.push_back(p_end);
     auto Draw_Surf_Dir = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2, p3;
+        geometry_msgs::msg::Point p1, p2, p3;
         p1 = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         Point3D end_p;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -111,7 +111,7 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     view_extend_marker_array.markers.push_back(ray_tracing_marker);
     view_extend_marker_array.markers.push_back(origin_p_marker);
     view_extend_marker_array.markers.push_back(extend_p_marker);
-    viz_view_extend.publish(view_extend_marker_array);
+    viz_view_extend->publish(view_extend_marker_array);
 }
 
 void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs, const std::vector<PointPair>& unmatched_pairs) {
@@ -122,20 +122,20 @@ void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs
     this->SetMarker(VizColor::ORANGE, "global_contour",    0.2f,  0.5f, global_contour_marker);
     this->SetMarker(VizColor::YELLOW, "unmatched_contour", 0.15f, 0.5f, unmatched_contour_marker);
     for (const auto& p_pair : contour_pairs) {
-        geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
-        geometry_msgs::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
+        geometry_msgs::msg::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
+        geometry_msgs::msg::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
         global_contour_marker.points.push_back(p_start);
         global_contour_marker.points.push_back(p_end);
     }
     for (const auto& p_pair : unmatched_pairs) {
-        geometry_msgs::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
-        geometry_msgs::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
+        geometry_msgs::msg::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
+        geometry_msgs::msg::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
         unmatched_contour_marker.points.push_back(p_start);
         unmatched_contour_marker.points.push_back(p_end);
     }
     poly_marker_array.markers.push_back(global_contour_marker);
     poly_marker_array.markers.push_back(unmatched_contour_marker);
-    viz_poly_pub_.publish(poly_marker_array);
+    viz_poly_pub_->publish(poly_marker_array);
 }
 
 void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph) 
@@ -157,7 +157,7 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
     this->SetMarker(VizColor::BLUE,    "angle_direct",     0.25f, 0.75f, contour_helper_marker);
 
     auto Draw_Contour = [&](const CTNodePtr& ctnode_ptr) {
-        geometry_msgs::Point geo_vertex, geo_connect;
+        geometry_msgs::msg::Point geo_vertex, geo_connect;
         geo_vertex = FARUtil::Point3DToGeoMsgPoint(ctnode_ptr->position);
         contour_vertex_marker.points.push_back(geo_vertex);
         if (ctnode_ptr->is_global_match) {
@@ -175,7 +175,7 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
         contour_marker.points.push_back(geo_connect);
     };
     auto Draw_Surf_Dir = [&](const CTNodePtr& ctnode) {
-        geometry_msgs::Point p1, p2, p3;
+        geometry_msgs::msg::Point p1, p2, p3;
         p1 = FARUtil::Point3DToGeoMsgPoint(ctnode->position);
         Point3D end_p;
         if (ctnode->free_direct != NodeFreeDirect::PILLAR) {
@@ -206,32 +206,32 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
     contour_marker_array.markers.push_back(contour_marker);
     contour_marker_array.markers.push_back(contour_surf_marker);
     contour_marker_array.markers.push_back(contour_helper_marker);
-    viz_contour_pub_.publish(contour_marker_array);
+    viz_contour_pub_->publish(contour_marker_array);
 }
 
 void DPVisualizer::VizGraph(const NodePtrStack& graph) {
-    MarkerArray graph_marker_array;
-    Marker nav_node_marker, unfinal_node_marker, near_node_marker, covered_node_marker, internav_node_marker, frontier_node_marker,
+    visualization_msgs::msg::MarkerArray graph_marker_array;
+    visualization_msgs::msg::Marker nav_node_marker, unfinal_node_marker, near_node_marker, covered_node_marker, internav_node_marker, frontier_node_marker,
            edge_marker, visual_edge_marker, contour_edge_marker, free_edge_marker, odom_edge_marker, goal_edge_marker, traj_edge_marker,
            corner_surf_marker, contour_align_marker, corner_helper_marker, boundary_node_marker, boundary_edge_marker;
-    nav_node_marker.type       = Marker::SPHERE_LIST;
-    unfinal_node_marker.type   = Marker::SPHERE_LIST;
-    near_node_marker.type      = Marker::SPHERE_LIST;
-    covered_node_marker.type   = Marker::SPHERE_LIST;
-    internav_node_marker.type  = Marker::SPHERE_LIST;
-    boundary_node_marker.type  = Marker::SPHERE_LIST;
-    frontier_node_marker.type  = Marker::SPHERE_LIST;
-    contour_align_marker.type  = Marker::LINE_LIST;
-    edge_marker.type           = Marker::LINE_LIST;
-    visual_edge_marker.type    = Marker::LINE_LIST;
-    free_edge_marker.type      = Marker::LINE_LIST;
-    contour_edge_marker.type   = Marker::LINE_LIST;
-    odom_edge_marker.type      = Marker::LINE_LIST;
-    goal_edge_marker.type      = Marker::LINE_LIST;
-    traj_edge_marker.type      = Marker::LINE_LIST;
-    boundary_edge_marker.type  = Marker::LINE_LIST;
-    corner_surf_marker.type    = Marker::LINE_LIST;
-    corner_helper_marker.type  = Marker::CUBE_LIST;
+    nav_node_marker.type       = visualization_msgs::msg::Marker::SPHERE_LIST;
+    unfinal_node_marker.type   = visualization_msgs::msg::Marker::SPHERE_LIST;
+    near_node_marker.type      = visualization_msgs::msg::Marker::SPHERE_LIST;
+    covered_node_marker.type   = visualization_msgs::msg::Marker::SPHERE_LIST;
+    internav_node_marker.type  = visualization_msgs::msg::Marker::SPHERE_LIST;
+    boundary_node_marker.type  = visualization_msgs::msg::Marker::SPHERE_LIST;
+    frontier_node_marker.type  = visualization_msgs::msg::Marker::SPHERE_LIST;
+    contour_align_marker.type  = visualization_msgs::msg::Marker::LINE_LIST;
+    edge_marker.type           = visualization_msgs::msg::Marker::LINE_LIST;
+    visual_edge_marker.type    = visualization_msgs::msg::Marker::LINE_LIST;
+    free_edge_marker.type      = visualization_msgs::msg::Marker::LINE_LIST;
+    contour_edge_marker.type   = visualization_msgs::msg::Marker::LINE_LIST;
+    odom_edge_marker.type      = visualization_msgs::msg::Marker::LINE_LIST;
+    goal_edge_marker.type      = visualization_msgs::msg::Marker::LINE_LIST;
+    traj_edge_marker.type      = visualization_msgs::msg::Marker::LINE_LIST;
+    boundary_edge_marker.type  = visualization_msgs::msg::Marker::LINE_LIST;
+    corner_surf_marker.type    = visualization_msgs::msg::Marker::LINE_LIST;
+    corner_helper_marker.type  = visualization_msgs::msg::Marker::CUBE_LIST;
     this->SetMarker(VizColor::WHITE,   "global_vertex",     0.5f,  0.5f,  nav_node_marker);
     this->SetMarker(VizColor::RED,     "updating_vertex",   0.5f,  0.8f,  unfinal_node_marker);
     this->SetMarker(VizColor::MAGNA,   "localrange_vertex", 0.5f,  0.8f,  near_node_marker);
@@ -253,14 +253,14 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     /* Lambda Function */
     auto Draw_Contour_Align = [&](const NavNodePtr& node_ptr) {
         if (node_ptr->is_odom || !node_ptr->is_contour_match) return;
-        geometry_msgs::Point nav_pos, vertex_pos;
+        geometry_msgs::msg::Point nav_pos, vertex_pos;
         nav_pos = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         vertex_pos = FARUtil::Point3DToGeoMsgPoint(node_ptr->ctnode->position);
         contour_align_marker.points.push_back(vertex_pos);
         contour_align_marker.points.push_back(nav_pos);
     };
     auto Draw_Edge = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2;
+        geometry_msgs::msg::Point p1, p2;
         p1 = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         // navigable vgraph
         for (const auto& cnode : node_ptr->connect_nodes) {
@@ -311,7 +311,7 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
         }
     };
     auto Draw_Surf_Dir = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2, p3;
+        geometry_msgs::msg::Point p1, p2, p3;
         p1 = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         Point3D end_p;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -336,7 +336,7 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
             // ROS_WARN("Viz: graph includes NULL nodes");
             continue;
         }
-        const geometry_msgs::Point cpoint = FARUtil::Point3DToGeoMsgPoint(nav_node_ptr->position);
+        const geometry_msgs::msg::Point cpoint = FARUtil::Point3DToGeoMsgPoint(nav_node_ptr->position);
         nav_node_marker.points[idx] = cpoint;
         if (!nav_node_ptr->is_finalized) {
             unfinal_node_marker.points.push_back(cpoint);
@@ -380,16 +380,16 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     graph_marker_array.markers.push_back(corner_surf_marker);
     graph_marker_array.markers.push_back(corner_helper_marker);
     graph_marker_array.markers.push_back(contour_align_marker);
-    viz_graph_pub_.publish(graph_marker_array);
+    viz_graph_pub_->publish(graph_marker_array);
 }
 
 void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointStack& occupancy_centers,
                                const float& ceil_length, const float& ceil_height)
 {
-    MarkerArray map_grid_marker_array;
-    Marker neighbor_marker, occupancy_marker;
-    neighbor_marker.type = Marker::CUBE_LIST;
-    occupancy_marker.type = Marker::CUBE_LIST;
+    visualization_msgs::msg::MarkerArray map_grid_marker_array;
+    visualization_msgs::msg::Marker neighbor_marker, occupancy_marker;
+    neighbor_marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
+    occupancy_marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
     this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.3f,  neighbor_marker);
     this->SetMarker(VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.2f, occupancy_marker);
     neighbor_marker.scale.z = occupancy_marker.scale.z = ceil_height;
@@ -397,30 +397,30 @@ void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointSt
     const std::size_t N2 = occupancy_centers.size();
     neighbor_marker.points.resize(N1), occupancy_marker.points.resize(N2);
     for (std::size_t i=0; i<N1; i++) {
-        geometry_msgs::Point p = FARUtil::Point3DToGeoMsgPoint(neighbor_centers[i]);
+        geometry_msgs::msg::Point p = FARUtil::Point3DToGeoMsgPoint(neighbor_centers[i]);
         neighbor_marker.points[i] = p;
     }
     for (std::size_t i=0; i<N2; i++) {
-        geometry_msgs::Point p = FARUtil::Point3DToGeoMsgPoint(occupancy_centers[i]);
+        geometry_msgs::msg::Point p = FARUtil::Point3DToGeoMsgPoint(occupancy_centers[i]);
         occupancy_marker.points[i] = p;
     }
     map_grid_marker_array.markers.push_back(neighbor_marker);
     map_grid_marker_array.markers.push_back(occupancy_marker);
-    viz_map_pub_.publish(map_grid_marker_array);
+    viz_map_pub_->publish(map_grid_marker_array);
 }
 
 void DPVisualizer::SetMarker(const VizColor& color, 
                              const std::string& ns,
                              const float& scale,
                              const float& alpha,  
-                             Marker& scan_marker, 
+                             visualization_msgs::msg::Marker& scan_marker, 
                              const float& scale_ratio) 
 {
     scan_marker.header.frame_id = FARUtil::worldFrameId;
-    scan_marker.header.stamp = ros::Time::now();
+    scan_marker.header.stamp = nh_->now();
     scan_marker.id = 0;
     scan_marker.ns = ns;
-    scan_marker.action = Marker::ADD;
+    scan_marker.action = visualization_msgs::msg::Marker::ADD;
     scan_marker.scale.x = scan_marker.scale.y = scan_marker.scale.z = scale * scale_ratio;
     scan_marker.pose.orientation.x = 0.0;
     scan_marker.pose.orientation.y = 0.0;
@@ -432,21 +432,22 @@ void DPVisualizer::SetMarker(const VizColor& color,
     DPVisualizer::SetColor(color, alpha, scan_marker);
 }
 
-void DPVisualizer::VizPointCloud(const ros::Publisher& viz_pub, 
+
+void DPVisualizer::VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& viz_pub, 
                                  const PointCloudPtr& pc) 
 {
-    sensor_msgs::PointCloud2 msg_pc;
+    sensor_msgs::msg::PointCloud2 msg_pc;
     pcl::toROSMsg(*pc, msg_pc);
     msg_pc.header.frame_id = FARUtil::worldFrameId;
-    msg_pc.header.stamp = ros::Time::now();
-    viz_pub.publish(msg_pc);
+    msg_pc.header.stamp = nh_->now();
+    viz_pub->publish(msg_pc);
 }
 
 void DPVisualizer::SetColor(const VizColor& color, 
                             const float& alpha, 
-                            Marker& scan_marker)
+                            visualization_msgs::msg::Marker& scan_marker)
 {
-    std_msgs::ColorRGBA c;
+    std_msgs::msg::ColorRGBA c;
     c.a = alpha;
     if (color == VizColor::RED) {
     c.r = 1.0f, c.g = c.b = 0.f;
