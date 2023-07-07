@@ -15,7 +15,7 @@ const char OBS_BIT  = char(1); // 0001
 const char FREE_BIT = char(2); // 0010
 
 
-void GraphPlanner::Init(const ros::NodeHandle& nh, const GraphPlannerParams& params) {
+void GraphPlanner::Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerParams& params) {
     nh_ = nh;
     gp_params_ = params;
     is_goal_init_ = false;

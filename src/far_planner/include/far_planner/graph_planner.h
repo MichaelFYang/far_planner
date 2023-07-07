@@ -142,7 +142,7 @@ public:
 GraphPlanner() = default;
 ~GraphPlanner() = default;
 
-void Init(const ros::NodeHandle& nh, const GraphPlannerParams& params);
+void Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerParams& params);
 
 
 /**

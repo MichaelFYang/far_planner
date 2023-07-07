@@ -596,7 +596,7 @@ void DynamicGraph::RecordPolygonVote(const NavNodePtr& node_ptr1,
     const auto it2 = node_ptr2->edge_votes.find(node_ptr1->id);
     if (FARUtil::IsDebug) {
         if ((it1 == node_ptr1->edge_votes.end()) != (it2 == node_ptr2->edge_votes.end())) {
-            ROS_ERROR_THROTTLE(1.0, "DG: Critical! Polygon edge votes queue error.");
+            RCLCPP_ERROR(nh_->get_logger(), "DG: Critical! Polygon edge votes queue error.");
         }
     }
     if (it1 == node_ptr1->edge_votes.end() || it2 == node_ptr2->edge_votes.end()) {
@@ -611,7 +611,7 @@ void DynamicGraph::RecordPolygonVote(const NavNodePtr& node_ptr1,
         }
     } else {
         if (FARUtil::IsDebug) {
-            if (it1->second.size() != it2->second.size()) ROS_ERROR_THROTTLE(1.0, "DG: Polygon edge votes are not equal.");
+            if (it1->second.size() != it2->second.size()) RRCLCPP_WARN(nh_->get_logger(), "DG: Polygon edge votes are not equal.");
         }
         if (is_reset) it1->second.clear(), it2->second.clear();
         it1->second.push_back(1), it2->second.push_back(1);

@@ -67,7 +67,7 @@ public:
 
     void VizGraph(const NodePtrStack& graph);
 
-    void VizPointCloud(const rclcpp::Publisher<MarkerArray>::SharedPtr& viz_pub, 
+    void VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr viz_pub, 
                        const PointCloudPtr& pc);
 
     static void SetMarker(const VizColor& color, 

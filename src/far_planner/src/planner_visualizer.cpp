@@ -433,7 +433,7 @@ void DPVisualizer::SetMarker(const VizColor& color,
 }
 
 
-void DPVisualizer::VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& viz_pub, 
+void DPVisualizer::VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr viz_pub, 
                                  const PointCloudPtr& pc) 
 {
     sensor_msgs::msg::PointCloud2 msg_pc;

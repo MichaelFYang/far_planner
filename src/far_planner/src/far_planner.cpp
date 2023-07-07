@@ -98,9 +98,6 @@ void FARMaster::Init() {
   FARUtil::stack_new_cloud_->clear();
   FARUtil::stack_dyobs_cloud_->clear();
 
-  // init TF listener
-  tf_listener_ = new tf::TransformListener();
-
   // clear temp vectors and memory
   this->ClearTempMemory();
   FARUtil::robot_pos = Point3D(0,0,0);
@@ -137,7 +134,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   FARUtil::cur_new_cloud_->clear();
   FARUtil::cur_dyobs_cloud_->clear();
   /* Stop the robot if it is moving */
-  goal_waypoint_stamped_.header.stamp = ros::Time::now();
+  goal_waypoint_stamped_.header.stamp = nh_->now();
   goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(robot_pos_);
   goal_pub_->publish(goal_waypoint_stamped_);
   NodePtrStack empty_path;
@@ -294,7 +291,7 @@ void FARMaster::PlanningCallBack() {
         planner_viz_.VizViewpointExtend(goal_ptr, goal_ptr->position);
       }
       goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(waypoint);
-      goal_pub_.publish(goal_waypoint_stamped_);
+      goal_pub_->publish(goal_waypoint_stamped_);
       is_planner_running_ = true;
       planner_viz_.VizPoint3D(waypoint, "waypoint", VizColor::MAGNA, 1.5);
       planner_viz_.VizPoint3D(current_free_goal, "free_goal", VizColor::GREEN, 1.5);
@@ -306,7 +303,7 @@ void FARMaster::PlanningCallBack() {
       nav_heading_ = Point3D(0,0,0);
       if (is_planning_fails) { // stops the robot
         goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(robot_pos_);
-        goal_pub_.publish(goal_waypoint_stamped_);
+        goal_pub_->publish(goal_waypoint_stamped_);
       }
     }
     if (!FARUtil::IsDebug) printf("\033[2K");
@@ -314,10 +311,10 @@ void FARMaster::PlanningCallBack() {
     // publish planner status and timers
     auto reach_goal_msg = std_msgs::msg::Bool();
     reach_goal_msg.data = is_reach_goal;
-    reach_goal_pub_.publish(reach_goal_msg);
+    reach_goal_pub_->publish(reach_goal_msg);
     auto traverse_timer = std_msgs::msg::Float32();
     traverse_timer.data = FARUtil::Timer.record_time("Overall_executing");
-    traverse_time_pub_.publish(traverse_timer);
+    traverse_time_pub_->publish(traverse_timer);
     if (is_reach_goal) {
       FARUtil::Timer.end_time("Overall_executing", false);
     }
@@ -332,7 +329,7 @@ void FARMaster::LocalBoundaryHandler(const std::vector<PointPair>& local_boundar
 
   geometry_msgs::msg::PolygonStamped boundary_poly;
   boundary_poly.header.frame_id = master_params_.world_frame;
-  boundary_poly.header.stamp = this->now(); // Using the ROS2 method to get the current time
+  boundary_poly.header.stamp = nh_->now(); // Using the ROS2 method to get the current time
 
   float index_z = robot_pos_.z;
   std::vector<PointPair> sorted_boundary;
@@ -666,7 +663,7 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
   std::string cloud_frame = pc->header.frame_id;
   FARUtil::RemoveNanInfPoints(cloudOut);
   if (!FARUtil::IsSameFrameID(cloud_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) ROS_WARN_ONCE("FARMaster: cloud frame does NOT match with world frame!");
+    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(),"FARMaster: cloud frame does NOT match with world frame!");
     try
     {
       FARUtil::TransformPCLFrame(cloud_frame, 
@@ -676,7 +673,7 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
     }
     catch(tf::TransformException ex)
     {
-      ROS_ERROR("Tracking cloud TF lookup: %s",ex.what());
+      RCLCPP_ERROR_STREAM(nh_->get_logger(), "Tracking cloud TF lookup: %s",ex.what());
       return;
     }
   }
@@ -777,15 +774,15 @@ void FARMaster::ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn,
   scan_handler_.ExtractDyObsCloud(obsCloudIn, dyObsCloudOut);
 }
 
-void FARMaster::WaypointCallBack(const geometry_msgs::PointStamped& route_goal) {
+void FARMaster::WaypointCallBack(const geometry_msgs::msg::PointStamped& route_goal) {
   if (!is_graph_init_) {
-    if (FARUtil::IsDebug) ROS_WARN("FARMaster: wait for v-graph to init before sending any goals");
+    if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(),"FARMaster: wait for v-graph to init before sending any goals");
     return;
   }
   Point3D goal_p(route_goal.point.x, route_goal.point.y, route_goal.point.z);
   const std::string goal_frame = route_goal.header.frame_id;
   if (!FARUtil::IsSameFrameID(goal_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) ROS_WARN_THROTTLE(1.0, "FARMaster: waypoint published is not on world frame!");
+    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(), "FARMaster: waypoint published is not on world frame!");
     FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_listener_, goal_p); 
   }
   graph_planner_.UpdateGoal(goal_p);
