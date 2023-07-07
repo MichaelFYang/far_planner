@@ -68,11 +68,11 @@ void TerrainPlanner::GridVisualCloud() {
             temp_cloud_ptr->points.push_back(this->Ind2PCLPoint(ind));
         }
     }
-    sensor_msgs::PointCloud2 msg_pc;
+    sensor_msgs::msg::PointCloud2 msg_pc;
     pcl::toROSMsg(*temp_cloud_ptr, msg_pc);
     msg_pc.header.frame_id = tp_params_.world_frame;
-    msg_pc.header.stamp = ros::Time::now();
-    terrain_map_pub_.publish(msg_pc);
+    msg_pc.header.stamp = nh_->now();
+    terrain_map_pub_->publish(msg_pc);
 }
 
 bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p, PointStack& path) {
@@ -84,7 +84,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
     const Eigen::Vector3i start_sub = terrain_grids_->Pos2Sub(start_pos);
     const Eigen::Vector3i end_sub   = terrain_grids_->Pos2Sub(end_pos);
     if (!terrain_grids_->InRange(start_sub) || !terrain_grids_->InRange(end_sub)) {
-        if (FARUtil::IsDebug) ROS_WARN("TP: two interval navigation nodes are not in terrain planning range.");
+        if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "TP: two interval navigation nodes are not in terrain planning range.");
         return false;
     }
     const TerrainNodePtr start_node_ptr = terrain_grids_->GetCell(terrain_grids_->Sub2Ind(start_sub));
@@ -172,7 +172,7 @@ void TerrainPlanner::VisualPaths() {
     
     auto DrawPath = [&](const PointStack& path) {
         if (path.size() < 2) return;
-        geometry_msgs::Point last_p = FARUtil::Point3DToGeoMsgPoint(path[0]);
+        geometry_msgs::msg::Point last_p = FARUtil::Point3DToGeoMsgPoint(path[0]);
         for (int i=1; i<path.size(); i++) {
             terrain_paths_marker.points.push_back(last_p);
             last_p = FARUtil::Point3DToGeoMsgPoint(path[i]);
@@ -183,7 +183,7 @@ void TerrainPlanner::VisualPaths() {
     for (const auto& tpath : viz_path_stack_) {
         DrawPath(tpath);
     }
-    local_path_pub_.publish(terrain_paths_marker);
+    local_path_pub_->publish(terrain_paths_marker);
     viz_path_stack_.clear();
 }
 

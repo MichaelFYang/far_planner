@@ -21,6 +21,7 @@ struct DynamicGraphParams {
 
 class DynamicGraph {  
 private:
+    rclcpp::Node::SharedPtr nh_;
     Point3D robot_pos_;
     NavNodePtr odom_node_ptr_     = NULL;
     NavNodePtr cur_internav_ptr_  = NULL;
@@ -432,7 +433,7 @@ public:
     DynamicGraph() = default;
     ~DynamicGraph() = default;
 
-    void Init(const ros::NodeHandle& nh, const DynamicGraphParams& params);
+    void Init(const rclcpp::Node::SharedPtr nh, const DynamicGraphParams& params);
 
     /**
      *  Updtae robot pos and odom node 

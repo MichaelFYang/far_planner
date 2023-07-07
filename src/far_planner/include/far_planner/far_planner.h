@@ -69,6 +69,8 @@ private:
 
 
     rclcpp::TimerBase::SharedPtr planning_event_;
+    rclcpp::TimerBase::SharedPtr main_loop_;
+
     std_msgs::msg::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
@@ -102,7 +104,8 @@ private:
     CTNodeStack new_ctnodes_;
     std::vector<PointStack> realworld_contour_;
 
-    tf::TransformListener* tf_listener_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     /* module objects */
     ContourDetector contour_detector_;
@@ -134,6 +137,9 @@ private:
     
     void PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
                        const PointCloudPtr& cloudOut);
+
+    
+    Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
 
     Point3D ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr);
 
@@ -183,22 +189,22 @@ private:
         }
     }
 
-    inline void ReadFileCommand(const std_msgs::StringConstPtr& msg) {
+    inline void ReadFileCommand(const std_msgs::msg::String::ConstPtr msg) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
         }
     }
 
-    inline void SaveFileCommand(const std_msgs::StringConstPtr& msg) {
+    inline void SaveFileCommand(const std_msgs::msg::String::ConstPtr msg) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
         }
     }
 
-    void ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
-    void WaypointCallBack(const geometry_msgs::PointStamped& route_goal);
+    void ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc);
+    void WaypointCallBack(const geometry_msgs::msg::PointStamped& route_goal);
 
     void ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn, 
                                    const PointCloudPtr& obsCloudIn,

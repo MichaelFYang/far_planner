@@ -40,7 +40,7 @@ public:
     TerrainPlanner() = default;
     ~TerrainPlanner() = default;
 
-    void Init(const rclcpp::Node::SharedPtr& nh, const TerrainPlannerParams& params);
+    void Init(const rclcpp::Node::SharedPtr nh, const TerrainPlannerParams& params);
 
     void UpdateCenterNode(const NavNodePtr& node_ptr);
     

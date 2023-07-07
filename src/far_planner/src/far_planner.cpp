@@ -9,9 +9,14 @@
 #include "far_planner/far_planner.h"
 
 /***************************************************************************************/
-FARMaster::FARMaster() {
+FARMaster::FARMaster()
+{
    /* initialize node */
   nh_ = rclcpp::Node::make_shared("far_planner_node");
+  
+  /* initialize transform buffer and listener */
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 }
 
 void FARMaster::Init() {
@@ -134,26 +139,22 @@ void FARMaster::ResetEnvironmentAndGraph() {
   /* Stop the robot if it is moving */
   goal_waypoint_stamped_.header.stamp = ros::Time::now();
   goal_waypoint_stamped_.point = FARUtil::Point3DToGeoMsgPoint(robot_pos_);
-  goal_pub_.publish(goal_waypoint_stamped_);
+  goal_pub_->publish(goal_waypoint_stamped_);
   NodePtrStack empty_path;
   planner_viz_.VizPath(empty_path);
 }
 
 void FARMaster::Loop() {
-    rclcpp::Rate loop_rate(master_params_.main_run_freq);
-
     nh_->create_wall_timer(std::chrono::milliseconds(int(1000 / master_params_.main_run_freq)), [this]() {
         if (is_reset_env_) {
             this->ResetEnvironmentAndGraph();
             is_reset_env_ = false;
             if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "****************** Graph and Env Reset ******************");
-            loop_rate.sleep();
             return;
         }
 
         rclcpp::spin_some(nh_);
         if (!this->PreconditionCheck()) {
-            loop_rate.sleep();
             return;
         }
 
@@ -161,9 +162,8 @@ void FARMaster::Loop() {
       graph_manager_.UpdateRobotPosition(robot_pos_);
       odom_node_ptr_ = graph_manager_.GetOdomNode();
       if (odom_node_ptr_ == NULL) {
-        ROS_WARN("FAR: Waiting for Odometry...");
-        loop_rate.sleep();
-        continue;
+        RCLCPP_WARN(nh_->get_logger(),"FAR: Waiting for Odometry...");
+        return;
       }
       /* Extract Vertices and new nodes */
       FARUtil::Timer.start_time("Total V-Graph Update");
@@ -240,13 +240,11 @@ void FARMaster::Loop() {
       if (!is_graph_init_ && !nav_graph_.empty()) {
             is_graph_init_ = true;
             RCLCPP_INFO(nh_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
-        }
+      }
 
-        loop_rate.sleep();
     });
 
     rclcpp::spin(nh_);
-  }
 }
 
 void FARMaster::PlanningCallBack() {

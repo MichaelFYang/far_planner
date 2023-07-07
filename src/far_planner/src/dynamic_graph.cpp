@@ -10,7 +10,8 @@
 
 /***************************************************************************************/
 
-void DynamicGraph::Init(const ros::NodeHandle& nh, const DynamicGraphParams& params) {
+void DynamicGraph::Init(const rclcpp::Node::SharedPtr nh, const DynamicGraphParams& params) {
+    nh_ = nh;
     dg_params_ = params;
     CONNECT_ANGLE_COS = cos(dg_params_.kConnectAngleThred);
     NOISE_ANGLE_COS = cos(FARUtil::kAngleNoise);
@@ -30,7 +31,7 @@ void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos) {
     if (odom_node_ptr_ == NULL) {
         this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true);
         this->AddNodeToGraph(odom_node_ptr_);
-        if (FARUtil::IsDebug) ROS_INFO("DG: Odom node has been initilaized.");
+        if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "DG: Odom node has been initilaized.");
     } else {
         this->UpdateNodePosition(odom_node_ptr_, robot_pos_);
     }
@@ -65,7 +66,7 @@ bool DynamicGraph::ExtractGraphNodes(const CTNodeStack& new_ctnodes) {
     NavNodePtr new_node_ptr = NULL;
     new_nodes_.clear();
     if (this->IsInterNavpointNecessary()) { // check wheter or not need inter navigation points
-        if (FARUtil::IsDebug) ROS_INFO("DG: One trajectory node has been created.");
+        if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "DG: One trajectory node has been created.");
         this->CreateNavNodeFromPoint(last_connect_pos_, new_node_ptr, false, true);
         new_nodes_.push_back(new_node_ptr);
         last_connect_pos_ = FARUtil::free_odom_p;
@@ -544,7 +545,7 @@ void DynamicGraph::TopTwoContourConnector(const NavNodePtr& node_ptr) {
     for (const auto& cnode_ptr : node_ptr->potential_contours) {
         const auto it = node_ptr->contour_votes.find(cnode_ptr->id);
         // DEBUG
-        if (it == node_ptr->contour_votes.end()) ROS_ERROR("DG: contour potential node matching error");
+        if (it == node_ptr->contour_votes.end()) RCLCPP_ERROR(nh_->get_logger(), "DG: contour potential node matching error");
         const int itc = std::accumulate(it->second.begin(), it->second.end(), 0);
         if (FARUtil::VoteRankInVotes(itc, votesc) < 2 && FARUtil::IsVoteTrue(it->second, false)) {
             DynamicGraph::AddContourConnect(node_ptr, cnode_ptr);
