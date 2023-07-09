@@ -56,17 +56,18 @@ void FARMaster::Init() {
 
   /*init path generation thred callback*/
   const float duration_time = master_params_.main_run_freq;
+  main_event_     = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::MainLoopCallBack, this));
   planning_event_ = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
 
   /* init Dynamic Planner Processing Objects */
   contour_detector_.Init(cdetect_params_);
-  graph_manager_.Init(nh, graph_params_);
-  graph_planner_.Init(nh, gp_params_);
+  graph_manager_.Init(nh_, graph_params_);
+  graph_planner_.Init(nh_, gp_params_);
   contour_graph_.Init(cg_params_);
-  planner_viz_.Init(nh);
+  planner_viz_.Init(nh_);
   map_handler_.Init(map_params_);
   scan_handler_.Init(scan_params_);
-  graph_msger_.Init(nh, msger_parmas_);
+  graph_msger_.Init(nh_, msger_parmas_);
 
   /* init internal params */
   odom_node_ptr_      = NULL;
@@ -141,107 +142,102 @@ void FARMaster::ResetEnvironmentAndGraph() {
   planner_viz_.VizPath(empty_path);
 }
 
-void FARMaster::Loop() {
-    nh_->create_wall_timer(std::chrono::milliseconds(int(1000 / master_params_.main_run_freq)), [this]() {
-        if (is_reset_env_) {
-            this->ResetEnvironmentAndGraph();
-            is_reset_env_ = false;
-            if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "****************** Graph and Env Reset ******************");
-            return;
-        }
+void FARMaster::MainLoopCallBack() {
+  if (is_reset_env_) {
+      this->ResetEnvironmentAndGraph();
+      is_reset_env_ = false;
+      if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "****************** Graph and Env Reset ******************");
+      return;
+  }
 
-        rclcpp::spin_some(nh_);
-        if (!this->PreconditionCheck()) {
-            return;
-        }
+  if (!this->PreconditionCheck()) {
+      return;
+  }
 
-      /* add main process after this line */
-      graph_manager_.UpdateRobotPosition(robot_pos_);
-      odom_node_ptr_ = graph_manager_.GetOdomNode();
-      if (odom_node_ptr_ == NULL) {
-        RCLCPP_WARN(nh_->get_logger(),"FAR: Waiting for Odometry...");
-        return;
-      }
-      /* Extract Vertices and new nodes */
-      FARUtil::Timer.start_time("Total V-Graph Update");
-      contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
-      contour_graph_.UpdateContourGraph(odom_node_ptr_, realworld_contour_);
-      if (is_graph_init_) {
-        if (!FARUtil::IsDebug) printf("\033[2K");
-        std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
-      }
-      /* Adjust heights with terrain */
-      map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
-      map_handler_.AdjustNodesHeight(nav_graph_);
-      // Truncate for local range nodes
-      graph_manager_.UpdateGlobalNearNodes();
-      near_nav_graph_ = graph_manager_.GetExtendLocalNode();
-      // Match near nav nodes with contour
-      contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
-      if (master_params_.is_visual_opencv) {
-        FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
-        cv::Mat cloud_img = contour_detector_.GetCloudImgMat();
-        contour_detector_.ShowCornerImage(cloud_img, new_vertices_ptr_);
-      }
-      /* update planner graph */
-      new_nodes_.clear();
-      if (!is_stop_update_ && graph_manager_.ExtractGraphNodes(new_ctnodes_)) {
-        new_nodes_ = graph_manager_.GetNewNodes();
-      }
-      if (is_graph_init_) {
-        if (!FARUtil::IsDebug) printf("\033[2K");
-        std::cout<<"    "<< "Number of new vertices adding to global V-Graph: "<< new_nodes_.size()<<std::endl;
-      }
-      /* Graph Updating */
-      graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
+  /* add main process after this line */
+  graph_manager_.UpdateRobotPosition(robot_pos_);
+  odom_node_ptr_ = graph_manager_.GetOdomNode();
+  if (odom_node_ptr_ == NULL) {
+    RCLCPP_WARN(nh_->get_logger(),"FAR: Waiting for Odometry...");
+    return;
+  }
+  /* Extract Vertices and new nodes */
+  FARUtil::Timer.start_time("Total V-Graph Update");
+  contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
+  contour_graph_.UpdateContourGraph(odom_node_ptr_, realworld_contour_);
+  if (is_graph_init_) {
+    if (!FARUtil::IsDebug) printf("\033[2K");
+    std::cout<<"    "<<"Local V-Graph Updated. Number of local vertices: "<<ContourGraph::contour_graph_.size()<<std::endl;
+  }
+  /* Adjust heights with terrain */
+  map_handler_.AdjustCTNodeHeight(ContourGraph::contour_graph_);
+  map_handler_.AdjustNodesHeight(nav_graph_);
+  // Truncate for local range nodes
+  graph_manager_.UpdateGlobalNearNodes();
+  near_nav_graph_ = graph_manager_.GetExtendLocalNode();
+  // Match near nav nodes with contour
+  contour_graph_.MatchContourWithNavGraph(nav_graph_, near_nav_graph_, new_ctnodes_);
+  if (master_params_.is_visual_opencv) {
+    FARUtil::ConvertCTNodeStackToPCL(new_ctnodes_, new_vertices_ptr_);
+    cv::Mat cloud_img = contour_detector_.GetCloudImgMat();
+    contour_detector_.ShowCornerImage(cloud_img, new_vertices_ptr_);
+  }
+  /* update planner graph */
+  new_nodes_.clear();
+  if (!is_stop_update_ && graph_manager_.ExtractGraphNodes(new_ctnodes_)) {
+    new_nodes_ = graph_manager_.GetNewNodes();
+  }
+  if (is_graph_init_) {
+    if (!FARUtil::IsDebug) printf("\033[2K");
+    std::cout<<"    "<< "Number of new vertices adding to global V-Graph: "<< new_nodes_.size()<<std::endl;
+  }
+  /* Graph Updating */
+  graph_manager_.UpdateNavGraph(new_nodes_, is_stop_update_, clear_nodes_);
 
-      runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
-      // runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_); // Unit: ms
-      runtime_pub_->publish(runtimer_);
-    
-      /* Update v-graph in other modules */
-      nav_graph_ = graph_manager_.GetNavGraph();
-      if (is_graph_init_) {
-        if (!FARUtil::IsDebug) printf("\033[2K");
-        std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
+  runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_) / 1000.f; // Unit: second
+  // runtimer_.data = FARUtil::Timer.end_time("Total V-Graph Update", is_graph_init_); // Unit: ms
+  runtime_pub_->publish(runtimer_);
+
+  /* Update v-graph in other modules */
+  nav_graph_ = graph_manager_.GetNavGraph();
+  if (is_graph_init_) {
+    if (!FARUtil::IsDebug) printf("\033[2K");
+    std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
+  }
+  contour_graph_.ExtractGlobalContours();      // Global Polygon Update
+  graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
+  graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
+
+  /* Publish local boundary to lower level local planner */
+  this->LocalBoundaryHandler(ContourGraph::local_boundary_);
+
+  /* Viz Navigation Graph */
+  const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
+  if (last_internav_ptr != NULL) {
+    planner_viz_.VizPoint3D(last_internav_ptr->position, "last_nav_node", VizColor::MAGNA, 1.0);
+  }
+  planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
+  planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
+  planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
+  planner_viz_.VizGraph(nav_graph_);
+  planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
+  planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
+
+  if (is_graph_init_) { 
+    if (FARUtil::IsDebug) {
+      std::cout<<" ========================================================== "<<std::endl;
+    } else { // cleanup outputs in terminal
+      for (int i = 0; i < 6; i++) {
+        printf("\033[A");
       }
-      contour_graph_.ExtractGlobalContours();      // Global Polygon Update
-      graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
-      graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
+    }
+  }
 
-      /* Publish local boundary to lower level local planner */
-      this->LocalBoundaryHandler(ContourGraph::local_boundary_);
+  if (!is_graph_init_ && !nav_graph_.empty()) {
+        is_graph_init_ = true;
+        RCLCPP_INFO(nh_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
+  }
 
-      /* Viz Navigation Graph */
-      const NavNodePtr last_internav_ptr = graph_manager_.GetLastInterNavNode();
-      if (last_internav_ptr != NULL) {
-        planner_viz_.VizPoint3D(last_internav_ptr->position, "last_nav_node", VizColor::MAGNA, 1.0);
-      }
-      planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
-      planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
-      planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
-      planner_viz_.VizGraph(nav_graph_);
-      planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
-      planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
-
-      if (is_graph_init_) { 
-        if (FARUtil::IsDebug) {
-          std::cout<<" ========================================================== "<<std::endl;
-        } else { // cleanup outputs in terminal
-          for (int i = 0; i < 6; i++) {
-            printf("\033[A");
-          }
-        }
-      }
-
-      if (!is_graph_init_ && !nav_graph_.empty()) {
-            is_graph_init_ = true;
-            RCLCPP_INFO(nh_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
-      }
-
-    });
-
-    rclcpp::spin(nh_);
 }
 
 void FARMaster::PlanningCallBack() {
@@ -651,9 +647,8 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
 
 void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
-                             const PointCloudPtr& cloudOut) 
+                              const PointCloudPtr& cloudOut) 
 {
-
   pcl::PointCloud<PCLPoint> temp_cloud;
   pcl::fromROSMsg(*pc, temp_cloud);
   cloudOut->clear(), *cloudOut = temp_cloud;
@@ -667,17 +662,18 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
     try
     {
       FARUtil::TransformPCLFrame(cloud_frame, 
-                                master_params_.world_frame, 
-                                tf_listener_,
-                                cloudOut);
+                                 master_params_.world_frame, 
+                                 tf_buffer_,
+                                 cloudOut);
     }
-    catch(tf::TransformException ex)
+    catch(tf2::TransformException ex)
     {
-      RCLCPP_ERROR_STREAM(nh_->get_logger(), "Tracking cloud TF lookup: %s",ex.what());
+      RCLCPP_ERROR_STREAM(nh_->get_logger(), ("Tracking cloud TF lookup: %s", ex.what()));
       return;
     }
   }
 }
+
 
 void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
   if (master_params_.is_static_env || !is_odom_init_) return;
@@ -737,11 +733,11 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
       FARUtil::FilterCloud(FARUtil::cur_new_cloud_, master_params_.voxel_dim);
     }
     // update world dynamic obstacles
-    FARUtil::StackCloudByTime(FARUtil::cur_dyobs_cloud_, FARUtil::stack_dyobs_cloud_, FARUtil::kObsDecayTime);
+    FARUtil::StackCloudByTime(FARUtil::cur_dyobs_cloud_, FARUtil::stack_dyobs_cloud_, FARUtil::kObsDecayTime, nh_);
   }
   
   // create and update kdtrees
-  FARUtil::StackCloudByTime(FARUtil::cur_new_cloud_, FARUtil::stack_new_cloud_, FARUtil::kNewDecayTime);
+  FARUtil::StackCloudByTime(FARUtil::cur_new_cloud_, FARUtil::stack_new_cloud_, FARUtil::kNewDecayTime, nh_);
   FARUtil::UpdateKdTrees(FARUtil::stack_new_cloud_);
 
   if (!FARUtil::surround_obs_cloud_->empty()) is_cloud_init_ = true;
@@ -783,7 +779,7 @@ void FARMaster::WaypointCallBack(const geometry_msgs::msg::PointStamped& route_g
   const std::string goal_frame = route_goal.header.frame_id;
   if (!FARUtil::IsSameFrameID(goal_frame, master_params_.world_frame)) {
     if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(), "FARMaster: waypoint published is not on world frame!");
-    FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_listener_, goal_p); 
+    FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_buffer_, goal_p); 
   }
   graph_planner_.UpdateGoal(goal_p);
   FARUtil::Timer.start_time("Overall_executing", true);
@@ -878,7 +874,7 @@ int main(int argc, char** argv){
   
   auto far_planner_node = std::make_shared<FARMaster>();
   far_planner_node->Init();
-  far_planner_node->Loop();
+  rclcpp::spin(far_planner_node->GetNodeHandle());
 
   rclcpp::shutdown();
 

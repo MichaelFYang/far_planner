@@ -39,7 +39,7 @@ public:
     ~FARMaster();
 
     void Init(); // ROS initialization
-    void Loop(); // Main Loop Function
+    rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
 
 private:
     rclcpp::Node::SharedPtr nh_;
@@ -69,7 +69,7 @@ private:
 
 
     rclcpp::TimerBase::SharedPtr planning_event_;
-    rclcpp::TimerBase::SharedPtr main_loop_;
+    rclcpp::TimerBase::SharedPtr main_event_;
 
     std_msgs::msg::Float32 runtimer_, plan_timer_;
 
@@ -126,12 +126,14 @@ private:
     MapHandlerParams    map_params_;
     ScanHandlerParams   scan_params_;
     GraphMsgerParams    msger_parmas_;
-    
+
     void LoadROSParams();
 
     void ResetEnvironmentAndGraph();
 
     void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
+
+    void MainLoopCallBack();
 
     void PlanningCallBack();
     

@@ -21,8 +21,8 @@ void GraphPlanner::Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerPara
     is_goal_init_ = false;
     current_graph_.clear();
     // attemptable planning listener
-    attemptable_sub_ = nh_.subscribe("/planning_attemptable", 5, &GraphPlanner::AttemptStatusCallBack, this);
-    // initialize terrian grid
+    attemptable_sub_ = nh_->create_subscription<std_msgs::msg::Bool>("/planning_attemptable", 5, std::bind(&GraphPlanner::AttemptStatusCallBack, this, std::placeholders::_1));
+    // initialize terrain grid
     const int col_num = std::ceil(gp_params_.adjust_radius * 2.0f / FARUtil::kLeafSize);
     Eigen::Vector3i grid_size(col_num, col_num, 1);
     Eigen::Vector3d grid_origin(0,0,0);
@@ -33,7 +33,7 @@ void GraphPlanner::Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerPara
 void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr& goal_ptr) 
 {
     if (odom_node_ptr == NULL || current_graph_.empty()) {
-        ROS_ERROR("GP: Update global graph traversablity fails.");
+        RCLCPP_ERROR(nh_->get_logger(), "GP: Update global graph traversablity fails.");
         return;
     }
     odom_node_ptr_ = odom_node_ptr;
@@ -149,7 +149,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
 {
     if (!is_goal_init_) return false;
     if (odom_node_ptr_ == NULL || goal_ptr == NULL || current_graph_.empty()) {
-        ROS_ERROR("GP: Graph or Goal is not initialized correctly.");
+        RCLCPP_ERROR(nh_->get_logger(), "GP: Graph or Goal is not initialized correctly.");
         return false;
     }
     _is_fail = false, _is_succeed = false;
@@ -166,7 +166,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
     if ((odom_node_ptr_->position - _goal_p).norm() < gp_params_.converge_dist || 
         (odom_node_ptr_->position - origin_goal_pos_).norm() < gp_params_.converge_dist)
     {
-        if (FARUtil::IsDebug) ROS_INFO("GP: *********** Goal Reached! ***********");
+        if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "GP: *********** Goal Reached! ***********");
         global_path.push_back(odom_node_ptr_);
         if ((odom_node_ptr_->position - _goal_p).norm() > gp_params_.converge_dist) {
             _goal_p = origin_goal_pos_;
@@ -204,7 +204,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
                     global_path = recorded_path_;
                     _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
                     path_momentum_counter_ ++;
-                    if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << " Over max: "<< gp_params_.momentum_thred);
+                    if (FARUtil::IsDebug) RCLCPP_INFO_STREAM(nh_->get_logger(), "Momentum path counter: " << path_momentum_counter_ << " Over max: "<< gp_params_.momentum_thred);
                     return true;
                 }
             }
@@ -220,7 +220,7 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
                         global_path = recorded_path_;
                         _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
                         path_momentum_counter_ ++;
-                        if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
+                        if (FARUtil::IsDebug) RCLCPP_INFO_STREAM(nh_->get_logger(), "Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
                         return true;
                     }
                 }
@@ -235,11 +235,11 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
             global_path = recorded_path_;
             _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
             path_momentum_counter_ ++;
-            if (FARUtil::IsDebug) ROS_INFO_STREAM("Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
+            if (FARUtil::IsDebug) RCLCPP_INFO_STREAM(nh_->get_logger(), "Momentum path counter: " << path_momentum_counter_ << "; Over max: "<< gp_params_.momentum_thred);
             return true;
         } else {
             if (gp_params_.is_autoswitch && is_free_nav_goal_) { // autoswitch to attemptable navigation
-                if (FARUtil::IsDebug) ROS_WARN("GP: free navigation fails, auto swiching to attemptable navigation...");
+                if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "GP: free navigation fails, auto swiching to attemptable navigation...");
                 if (is_global_path_init_) {
                     global_path = recorded_path_;
                     _nav_node_ptr = this->NextNavWaypointFromPath(global_path, goal_ptr);
@@ -249,13 +249,13 @@ bool GraphPlanner::PathToGoal(const NavNodePtr& goal_ptr,
                 is_free_nav_goal_ = false;
                 return true;
             }
-            if (FARUtil::IsDebug) ROS_ERROR("****************** FAIL TO REACH GOAL ******************");
+            if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "****************** FAIL TO REACH GOAL ******************");
             this->GoalReset();
             is_goal_init_ = false, _is_fail = true;
             return false;
         }
     }
-    if (FARUtil::IsDebug) ROS_ERROR("GP: unexpected error happend within planning, navigation to goal fails.");
+    if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "GP: unexpected error happend within planning, navigation to goal fails.");
     this->GoalReset();
     is_goal_init_ = false, _is_fail = true;
     return false;
@@ -266,7 +266,7 @@ bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
                                    NodePtrStack& global_path)
 {
     if (goal_node_ptr == NULL || (!is_free_nav && goal_node_ptr->parent == NULL) || (is_free_nav && goal_node_ptr->free_parent == NULL)) {
-        ROS_ERROR("GP: Critical! reconstruct path error: goal node or its parent equals to NULL.");
+        RCLCPP_ERROR(nh_->get_logger(), "GP: Critical! reconstruct path error: goal node or its parent equals to NULL.");
         return false;
     }
     global_path.clear();
@@ -297,7 +297,7 @@ bool GraphPlanner::ReconstructPath(const NavNodePtr& goal_node_ptr,
 
 NavNodePtr GraphPlanner::NextNavWaypointFromPath(const NodePtrStack& global_path, const NavNodePtr goal_ptr) {
     if (global_path.size() < 2) {
-        ROS_ERROR("GP: global path size less than 2.");
+        RCLCPP_ERROR(nh_->get_logger(), "GP: global path size less than 2.");
         return goal_ptr;
     }
     NavNodePtr nav_point_ptr;
@@ -335,7 +335,7 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
         DynamicGraph::CreateNavNodeFromPoint(goal, goal_node_ptr_, false, false, true);
         DynamicGraph::AddNodeToGraph(goal_node_ptr_);
     }
-    if (FARUtil::IsDebug) ROS_INFO("GP: *********** new goal updated ***********");
+    if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "GP: *********** new goal updated ***********");
     is_goal_init_          = true;
     is_global_path_init_   = false;
     is_terrain_associated_ = false;
@@ -401,7 +401,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
             const float pred = (goal_ptr->position - ori_pos_height).norm();
             const float curd = (new_p - ori_pos_height).norm();
             if (abs(curd - pred) > FARUtil::kLeafSize && !ContourGraph::IsEdgeCollideBoundary(goal_ptr->position, new_p)) {
-                if (FARUtil::IsDebug) ROS_INFO_THROTTLE(1.0, "GP: adjusting goal into free space.");
+                if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "GP: adjusting goal into free space.");
                 goal_ptr->position = new_p;
             }
         } 
@@ -410,7 +410,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
             if (ContourGraph::ReprojectPointOutsidePolygons(current_goal_pos, FARUtil::kNearDist)) {
                 if (FARUtil::IsDebug) {
                     const float reproject_dist = (current_goal_pos - origin_goal_pos_).norm_flat();
-                    ROS_WARN_THROTTLE(1.0, "GP: current goal is inside polygon, reproject goal position distance to origin goal: %f.", reproject_dist);
+                    RCLCPP_INFO(nh_->get_logger(),"GP: current goal is inside polygon, reproject goal position distance to origin goal: %f.", reproject_dist);
                 }
                 goal_ptr->position = current_goal_pos;
             }
@@ -418,14 +418,14 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
     }
 }
 
-void GraphPlanner::AttemptStatusCallBack(const std_msgs::Bool& msg) {
-    if (command_is_free_nav_ && msg.data) { // current goal is not attemptable
-        if (FARUtil::IsDebug) ROS_WARN("GP: switch to attemptable planning mode.");
+void GraphPlanner::AttemptStatusCallBack(const std_msgs::msg::Bool::SharedPtr msg) {
+    if (command_is_free_nav_ && msg->data) { // current goal is not attemptable
+        if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "GP: switch to attemptable planning mode.");
         command_is_free_nav_ = false;
         path_momentum_counter_ = gp_params_.momentum_thred;
     } 
-    if (!command_is_free_nav_ && !msg.data) { // current attemptable planning
-        if (FARUtil::IsDebug) ROS_WARN("GP: planning without attempting.");
+    if (!command_is_free_nav_ && !msg->data) { // current attemptable planning
+        if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "GP: planning without attempting.");
         command_is_free_nav_ = true; 
         path_momentum_counter_ = gp_params_.momentum_thred;
     }

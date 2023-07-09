@@ -10,11 +10,11 @@
 
 /***************************************************************************************/
 
-void GraphMsger::Init(const ros::NodeHandle& nh, const GraphMsgerParams& params) {
+void GraphMsger::Init(const rclcpp::Node::SharedPtr nh, const GraphMsgerParams& params) {
     nh_ = nh;
     gm_params_ = params;
-    graph_pub_ = nh_.advertise<visibility_graph_msg::Graph>("/robot_vgraph", 5);
-    graph_sub_ = nh_.subscribe("/decoded_vgraph", 5, &GraphMsger::GraphCallBack, this);
+    graph_pub_ = nh_->create_publisher<visibility_graph_msg::msg::Graph>("/robot_vgraph", 5);
+    graph_sub_ = nh_->create_subscription<visibility_graph_msg::msg::Graph>("/decoded_vgraph", 5, std::bind(&GraphMsger::GraphCallBack, this, std::placeholders::_1));
 
     global_graph_.clear();
     nodes_cloud_ptr_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
@@ -22,16 +22,16 @@ void GraphMsger::Init(const ros::NodeHandle& nh, const GraphMsgerParams& params)
     kdtree_graph_cloud_->setSortedResults(false);
 }
 
-void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
+void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
     graphOut.nodes.clear();
     const std::string frame_id = graphOut.header.frame_id;
     for (const auto& node_ptr : graphIn) {
         if (node_ptr->connect_nodes.empty() || !IsEncodeType(node_ptr)) continue;
-        visibility_graph_msg::Node msg_node;
+        visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
         msg_node.position    = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         msg_node.id          = node_ptr->id;
-        msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
+        msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
@@ -86,18 +86,18 @@ void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
 }
 
 void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
-    visibility_graph_msg::Graph graph_msg;
-    graph_msg.header.frame_id = gm_params_.frame_id;
-    graph_msg.robot_id = gm_params_.robot_id;
-    this->EncodeGraph(graphIn, graph_msg);
-    graph_pub_.publish(graph_msg);
+    auto graph_msg = std::make_shared<visibility_graph_msg::msg::Graph>();
+    graph_msg->header.frame_id = gm_params_.frame_id;
+    graph_msg->robot_id = gm_params_.robot_id;
+    this->EncodeGraph(graphIn, *graph_msg);
+    graph_pub_->publish(*graph_msg);
 }
 
-void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
+void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
     if (msg->nodes.empty()) return;
     NodePtrStack decoded_nodes;
     const std::size_t robot_id = msg->robot_id;
-    const visibility_graph_msg::Graph graph_msg = *msg;
+    const visibility_graph_msg::msg::Graph graph_msg = *msg;
     IdxMap nodeIdx_idx_map;
     // Create nav nodes for decoded graph
     decoded_nodes.clear();
@@ -166,7 +166,7 @@ NavNodePtr GraphMsger::NearestNodePtrOnGraph(const Point3D p, const float radius
     return NULL;
 }
 
-void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr) {
+void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr) {
     const Point3D p = Point3D(vnode.position.x, vnode.position.y, vnode.position.z);
     const bool is_covered  = vnode.is_covered  == 0 ? false : true;
     const bool is_frontier = vnode.is_frontier == 0 ? false : true;
@@ -185,13 +185,13 @@ void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, N
     const PointPair surf_pair = {Point3D(vnode.surface_dirs[0].x, vnode.surface_dirs[0].y, vnode.surface_dirs[0].z),
                                  Point3D(vnode.surface_dirs[1].x, vnode.surface_dirs[1].y, vnode.surface_dirs[1].z)};
     // surf directions
-    node_ptr->free_direct = static_cast<NodeFreeDirect>(vnode.FreeType);
+    node_ptr->free_direct = static_cast<NodeFreeDirect>(vnode.freetype);
     node_ptr->surf_dirs = surf_pair;
     const std::deque<PointPair> surf_queue(gm_params_.pool_size, surf_pair);
     node_ptr->surf_dirs_vec = surf_queue;
 }
 
-void GraphMsger::ExtractConnectIdxs(const visibility_graph_msg::Node& node,
+void GraphMsger::ExtractConnectIdxs(const visibility_graph_msg::msg::Node& node,
                                     IdxStack& connect_idxs,
                                     IdxStack& poly_idxs,
                                     IdxStack& contour_idxs,

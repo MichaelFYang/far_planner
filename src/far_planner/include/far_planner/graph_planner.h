@@ -24,8 +24,8 @@ struct GraphPlannerParams {
 
 class GraphPlanner {
 private:
-ros::NodeHandle nh_;
-ros::Subscriber attemptable_sub_;
+rclcpp::Node::SharedPtr nh_;
+rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr attemptable_sub_;
 GraphPlannerParams gp_params_;
 NavNodePtr odom_node_ptr_  = NULL;
 
@@ -66,7 +66,7 @@ bool IsValidConnectToGoal(const NavNodePtr& node_ptr,
 
 NavNodePtr NextNavWaypointFromPath(const NodePtrStack& global_path, const NavNodePtr goal_ptr);
 
-void AttemptStatusCallBack(const std_msgs::Bool& msg);
+void AttemptStatusCallBack(const std_msgs::msg::Bool::SharedPtr msg);
 
 inline bool IsInvalidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
     if (node_ptr1->is_boundary && node_ptr2->is_boundary) {
@@ -100,7 +100,7 @@ inline void InitNodesStates(const NodePtrStack& graph) {
 
 inline void RecordPathInfo(const NodePtrStack& global_path) {
     if (global_path.size() < 2) {
-        if (FARUtil::IsDebug) ROS_ERROR("GP: recording path for momontum fails, planning path is empty");
+        if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "GP: recording path for momontum fails, planning path is empty");
         return;
     }
     recorded_path_         = global_path;
