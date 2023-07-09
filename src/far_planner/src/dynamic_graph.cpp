@@ -562,7 +562,7 @@ void DynamicGraph::RecordContourVote(const NavNodePtr& node_ptr1, const NavNodeP
     const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
     if (FARUtil::IsDebug) {
         if ((it1 == node_ptr1->contour_votes.end()) != (it2 == node_ptr2->contour_votes.end())) {
-            ROS_ERROR_THROTTLE(1.0, "DG: Critical! Contour edge votes queue error.");
+            RCLCPP_ERROR(nh_->get_logger(), "DG: Critical! Contour edge votes queue error.");
         }
     }
     if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) {
@@ -577,7 +577,7 @@ void DynamicGraph::RecordContourVote(const NavNodePtr& node_ptr1, const NavNodeP
         }
     } else {
         if (FARUtil::IsDebug) {
-            if (it1->second.size() != it2->second.size()) ROS_ERROR_THROTTLE(1.0, "DG: contour connection votes are not equal.");
+            if (it1->second.size() != it2->second.size()) RCLCPP_ERROR(nh_->get_logger(), "DG: contour connection votes are not equal.");
         }
         it1->second.push_back(1), it2->second.push_back(1);
         if (it1->second.size() > dg_params_.votes_size) {
@@ -596,7 +596,7 @@ void DynamicGraph::RecordPolygonVote(const NavNodePtr& node_ptr1,
     const auto it2 = node_ptr2->edge_votes.find(node_ptr1->id);
     if (FARUtil::IsDebug) {
         if ((it1 == node_ptr1->edge_votes.end()) != (it2 == node_ptr2->edge_votes.end())) {
-            RCLCPP_ERROR(nh_->get_logger(), "DG: Critical! Polygon edge votes queue error.");
+           std::cout << "DG: Critical! Polygon edge votes queue error." << std::endl;
         }
     }
     if (it1 == node_ptr1->edge_votes.end() || it2 == node_ptr2->edge_votes.end()) {
@@ -611,7 +611,7 @@ void DynamicGraph::RecordPolygonVote(const NavNodePtr& node_ptr1,
         }
     } else {
         if (FARUtil::IsDebug) {
-            if (it1->second.size() != it2->second.size()) RRCLCPP_WARN(nh_->get_logger(), "DG: Polygon edge votes are not equal.");
+            if (it1->second.size() != it2->second.size()) std::cout << "DG: Polygon edge votes are not equal." << std::endl;
         }
         if (is_reset) it1->second.clear(), it2->second.clear();
         it1->second.push_back(1), it2->second.push_back(1);
@@ -833,7 +833,11 @@ bool DynamicGraph::ReEvaluateCorner(const NavNodePtr node_ptr) {
     if (node_ptr->is_contour_match) {
         is_pos_cov  = this->UpdateNodePosition(node_ptr, node_ptr->ctnode->position);
         is_dirs_cov = this->UpdateNodeSurfDirs(node_ptr, node_ptr->ctnode->surf_dirs);
-        if (FARUtil::IsDebug) ROS_ERROR_COND(node_ptr->free_direct == NodeFreeDirect::UNKNOW, "DG: node free space is unknown.");
+        if (FARUtil::IsDebug) {
+            if(node_ptr->free_direct == NodeFreeDirect::UNKNOW) {
+                RCLCPP_ERROR(nh_->get_logger(), "DG: node free space is unknown.");
+            }
+        }
     }
     if (is_pos_cov && is_dirs_cov) node_ptr->is_finalized = true;
 

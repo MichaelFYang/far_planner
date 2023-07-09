@@ -152,13 +152,13 @@ private:
         const auto it2 = node_ptr2->trajectory_votes.find(node_ptr1->id);
         if (FARUtil::IsDebug) {
             if (it1 == node_ptr1->trajectory_votes.end() || it2 == node_ptr2->trajectory_votes.end() || it1->second != it2->second) {
-                ROS_ERROR("DG: Trajectory votes queue error.");
+                RCLCPP_ERROR(nh_->get_logger(), "DG: Trajectory votes queue error.");
                 return;
             }
         }
         it1->second ++, it2->second ++;
         if (it1->second > dg_params_.finalize_thred) { // clear trajectory connections and votes
-            if (FARUtil::IsDebug) ROS_WARN("DG: Current trajectory edge disconnected, no traversable path found.");
+            if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "DG: Current trajectory edge disconnected, no traversable path found.");
             node_ptr1->trajectory_votes.erase(node_ptr2->id);
             FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->trajectory_connects);
 
@@ -221,7 +221,7 @@ private:
         const auto it2 = node_ptr2->edge_votes.find(node_ptr1->id);
         if (it1 != node_ptr1->edge_votes.end() && it2 != node_ptr2->edge_votes.end()) {
             if (FARUtil::IsVoteTrue(it1->second)) {
-                if (FARUtil::IsDebug && !FARUtil::IsVoteTrue(it2->second)) ROS_ERROR_THROTTLE(1.0, "DG: Polygon edge vote result are not matched.");
+                if (FARUtil::IsDebug && !FARUtil::IsVoteTrue(it2->second)) RCLCPP_ERROR(nh_->get_logger(), "DG: Polygon edge vote result are not matched.");
                 if (IsNodeDirectConnect(node_ptr1, node_ptr2) || it1->second.size() > 2) {
                     return true;
                 }
@@ -602,7 +602,7 @@ public:
     static inline void ClearGoalNodeInGraph(const NavNodePtr& node_ptr) {
         ClearNodeConnectInGraph(node_ptr);
         //DEBUG
-        if (!node_ptr->contour_connects.empty()) ROS_ERROR("DG: Goal node should not have contour connections.");
+        if (!node_ptr->contour_connects.empty()) std::cout << "DG: Goal node should not have contour connections." << std::endl;
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 
@@ -611,7 +611,7 @@ public:
         if (node_ptr != NULL) {
             globalGraphNodes_.push_back(node_ptr);
         } else if (FARUtil::IsDebug) {
-            ROS_WARN_THROTTLE(1.0, "DG: exist new node pointer is NULL, fails to add into graph");
+            std::cout << "DG: exist new node pointer is NULL, fails to add into graph" << std::endl;
         }
     }
 
