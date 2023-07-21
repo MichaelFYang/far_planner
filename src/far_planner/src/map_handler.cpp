@@ -117,7 +117,7 @@ void MapHandler::GetCloudOfPoint(const Point3D& center,
                 } else if (type == CloudType::OBS_CLOUD) {
                     *cloudOut += *(world_obs_cloud_grid_->GetCell(csub));
                 } else {
-                    if (FARUtil::IsDebug) ROS_ERROR("MH: Assigned cloud type invalid.");
+                    if (FARUtil::IsDebug) std::cout << "MH: Assigned cloud type invalid." << std::endl;
                     return;
                 }
             }
@@ -136,7 +136,7 @@ void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
     world_obs_cloud_grid_->SetOrigin(pointcloud_grid_origin);
     world_free_cloud_grid_->SetOrigin(pointcloud_grid_origin);
     is_init_ = true;
-    if (FARUtil::IsDebug) ROS_INFO("MH: Global Cloud Map Grid Initialized.");
+    if (FARUtil::IsDebug) std::cout << "MH: Global Cloud Map Grid Initialized." << std::endl;
 }
 
 void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
@@ -429,7 +429,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
                                                                                     FARUtil::robot_pos.y, 0.0f));
     terrainHeightOut->clear();
     if (!terrain_height_grid_->InRange(robot_sub)) {
-        ROS_ERROR("MH: terrain height analysis error: robot position is not in range");
+        std::cout << "MH: terrain height analysis error: robot position is not in range" << std::endl;
         return;
     }
     const float H_THRED = map_params_.height_voxel_dim;

@@ -38,11 +38,32 @@ private:
     
     void CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr);
 
-    inline bool IsEncodeType(const NavNodePtr& node_ptr);
+    inline bool IsEncodeType(const NavNodePtr& node_ptr) {
+        if (node_ptr->is_odom || !node_ptr->is_finalized || FARUtil::IsOutsideGoal(node_ptr)) {
+            return false;
+        }
+        return true;
+    }
 
-    inline bool IsMismatchFreeNode(const NavNodePtr& nearest_ptr, const visibility_graph_msg::msg::Node& vnode);
+    inline bool IsMismatchFreeNode(const NavNodePtr& nearest_ptr, const visibility_graph_msg::msg::Node& vnode) {
+        if (nearest_ptr == NULL) return false;
+        const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
+        const bool is_boundary = vnode.is_boundary == 0 ? false : true;
+        if (nearest_ptr->is_navpoint != is_navpoint || nearest_ptr->is_boundary != is_boundary) return true;
+        return false;
+    }
+    
 
-    inline NavNodePtr IdToNodePtr(const std::size_t& node_id, const IdxMap& idx_map, const NodePtrStack& node_stack);
+    inline NavNodePtr IdToNodePtr(const std::size_t& node_id, const IdxMap& idx_map, const NodePtrStack& node_stack) {
+        const auto it = idx_map.find(node_id);
+        if (it != idx_map.end()) {
+            const std::size_t idx = it->second;
+            if (idx < node_stack.size()) {
+                return node_stack[idx];
+            }
+        }
+        return NULL;
+    }
 
     NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
 

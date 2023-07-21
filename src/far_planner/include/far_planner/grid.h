@@ -13,6 +13,7 @@
  */
 #pragma once
 
+#include <cfloat>
 #include <vector>
 #include <Eigen/Core>
 #include <algorithm>

@@ -11,7 +11,8 @@
 
 /***************************************************************************************/
 
-void ContourGraph::Init(const ContourGraphParams& params) {
+void ContourGraph::Init(const rclcpp::Node::SharedPtr nh, const ContourGraphParams& params) {
+    nh_ = nh;
     ctgraph_params_ = params;
     ContourGraph::contour_graph_.clear();
     ContourGraph::contour_polygons_.clear();

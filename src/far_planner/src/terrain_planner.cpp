@@ -168,7 +168,7 @@ void TerrainPlanner::ExtractPath(const TerrainNodePtr& end_ptr, PointStack& path
 void TerrainPlanner::VisualPaths() {
     Marker terrain_paths_marker;
     terrain_paths_marker.type = Marker::LINE_LIST;
-    DPVisualizer::SetMarker(VizColor::ORANGE, "terrain_path", 0.3f, 0.85f, terrain_paths_marker);
+    DPVisualizer::SetMarker(nh_, VizColor::ORANGE, "terrain_path", 0.3f, 0.85f, terrain_paths_marker);
     
     auto DrawPath = [&](const PointStack& path) {
         if (path.size() < 2) return;

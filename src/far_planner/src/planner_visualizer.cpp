@@ -32,7 +32,7 @@ void DPVisualizer::VizNodes(const NodePtrStack& node_stack,
 {
     Marker node_marker;
     node_marker.type = Marker::SPHERE_LIST;
-    this->SetMarker(color, ns, scale, alpha, node_marker);
+    this->SetMarker(nh_, color, ns, scale, alpha, node_marker);
     node_marker.points.resize(node_stack.size());
     std::size_t idx = 0;
     for (const auto& node_ptr : node_stack) {
@@ -52,7 +52,7 @@ void DPVisualizer::VizPoint3D(const Point3D& point,
 {
     Marker node_marker;
     node_marker.type = Marker::SPHERE;
-    this->SetMarker(color, ns, scale, alpha, node_marker);
+    this->SetMarker(nh_, color, ns, scale, alpha, node_marker);
     std::size_t idx = 0;
     node_marker.pose.position.x = point.x;
     node_marker.pose.position.y = point.y;
@@ -64,7 +64,7 @@ void DPVisualizer::VizPath(const NodePtrStack& global_path, const bool& is_free_
     Marker path_marker;
     path_marker.type = Marker::LINE_STRIP;
     const VizColor color = is_free_nav ? VizColor::GREEN : VizColor::BLUE;
-    this->SetMarker(color, "global_path", 0.75f, 0.9f, path_marker);
+    this->SetMarker(nh_, color, "global_path", 0.75f, 0.9f, path_marker);
     geometry_msgs::msg::Point geo_p;
     for (const auto& node_ptr : global_path) {
         geo_p = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
@@ -80,10 +80,10 @@ void DPVisualizer::VizViewpointExtend(const NavNodePtr& ori_nav_ptr, const Point
     ray_tracing_marker.type   = Marker::LINE_LIST;
     origin_p_marker.type      = Marker::SPHERE_LIST;
     extend_p_marker.type      = Marker::SPHERE_LIST;
-    this->SetMarker(VizColor::EMERALD, "origin_viewpoint", 0.7f,  0.5f,   origin_p_marker);
-    this->SetMarker(VizColor::RED,     "extend_viewpoint", 0.7f,  0.5f,   extend_p_marker);
-    this->SetMarker(VizColor::YELLOW,  "raytracing_line",  0.3f,  0.5f,   ray_tracing_marker);
-    this->SetMarker(VizColor::MAGNA,   "corner_direct",    0.15f, 0.75f,  corner_direct_marker);
+    this->SetMarker(nh_, VizColor::EMERALD, "origin_viewpoint", 0.7f,  0.5f,   origin_p_marker);
+    this->SetMarker(nh_, VizColor::RED,     "extend_viewpoint", 0.7f,  0.5f,   extend_p_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "raytracing_line",  0.3f,  0.5f,   ray_tracing_marker);
+    this->SetMarker(nh_, VizColor::MAGNA,   "corner_direct",    0.15f, 0.75f,  corner_direct_marker);
     geometry_msgs::msg::Point p_start, p_end;
     p_start = FARUtil::Point3DToGeoMsgPoint(ori_nav_ptr->position);
     p_end   = FARUtil::Point3DToGeoMsgPoint(extend_point);
@@ -119,8 +119,8 @@ void DPVisualizer::VizGlobalPolygons(const std::vector<PointPair>& contour_pairs
     Marker global_contour_marker, unmatched_contour_marker;
     global_contour_marker.type    = Marker::LINE_LIST;
     unmatched_contour_marker.type = Marker::LINE_LIST;
-    this->SetMarker(VizColor::ORANGE, "global_contour",    0.2f,  0.5f, global_contour_marker);
-    this->SetMarker(VizColor::YELLOW, "unmatched_contour", 0.15f, 0.5f, unmatched_contour_marker);
+    this->SetMarker(nh_, VizColor::ORANGE, "global_contour",    0.2f,  0.5f, global_contour_marker);
+    this->SetMarker(nh_, VizColor::YELLOW, "unmatched_contour", 0.15f, 0.5f, unmatched_contour_marker);
     for (const auto& p_pair : contour_pairs) {
         geometry_msgs::msg::Point p_start = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.first);
         geometry_msgs::msg::Point p_end   = FARUtil::FARUtil::Point3DToGeoMsgPoint(p_pair.second);
@@ -149,12 +149,12 @@ void DPVisualizer::VizContourGraph(const CTNodeStack& contour_graph)
     contour_marker.type         = Marker::LINE_LIST;
     contour_surf_marker.type    = Marker::LINE_LIST;
     contour_helper_marker.type  = Marker::CUBE_LIST;
-    this->SetMarker(VizColor::EMERALD, "polygon_vertex",   0.5f, 0.5f,   contour_vertex_marker);
-    this->SetMarker(VizColor::RED,     "matched_vertex",   0.5f, 0.5f,   vertex_matched_marker);
-    this->SetMarker(VizColor::GREEN,   "necessary_vertex", 0.5f, 0.5f,   necessary_vertex_marker);
-    this->SetMarker(VizColor::MAGNA,   "contour",          0.1f, 0.25f,  contour_marker);
-    this->SetMarker(VizColor::BLUE,    "vertex_angle",     0.15f, 0.75f, contour_surf_marker);
-    this->SetMarker(VizColor::BLUE,    "angle_direct",     0.25f, 0.75f, contour_helper_marker);
+    this->SetMarker(nh_, VizColor::EMERALD, "polygon_vertex",   0.5f, 0.5f,   contour_vertex_marker);
+    this->SetMarker(nh_, VizColor::RED,     "matched_vertex",   0.5f, 0.5f,   vertex_matched_marker);
+    this->SetMarker(nh_, VizColor::GREEN,   "necessary_vertex", 0.5f, 0.5f,   necessary_vertex_marker);
+    this->SetMarker(nh_, VizColor::MAGNA,   "contour",          0.1f, 0.25f,  contour_marker);
+    this->SetMarker(nh_, VizColor::BLUE,    "vertex_angle",     0.15f, 0.75f, contour_surf_marker);
+    this->SetMarker(nh_, VizColor::BLUE,    "angle_direct",     0.25f, 0.75f, contour_helper_marker);
 
     auto Draw_Contour = [&](const CTNodePtr& ctnode_ptr) {
         geometry_msgs::msg::Point geo_vertex, geo_connect;
@@ -232,24 +232,24 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
     boundary_edge_marker.type  = visualization_msgs::msg::Marker::LINE_LIST;
     corner_surf_marker.type    = visualization_msgs::msg::Marker::LINE_LIST;
     corner_helper_marker.type  = visualization_msgs::msg::Marker::CUBE_LIST;
-    this->SetMarker(VizColor::WHITE,   "global_vertex",     0.5f,  0.5f,  nav_node_marker);
-    this->SetMarker(VizColor::RED,     "updating_vertex",   0.5f,  0.8f,  unfinal_node_marker);
-    this->SetMarker(VizColor::MAGNA,   "localrange_vertex", 0.5f,  0.8f,  near_node_marker);
-    this->SetMarker(VizColor::BLUE,    "freespace_vertex",  0.5f,  0.8f,  covered_node_marker);
-    this->SetMarker(VizColor::YELLOW,  "trajectory_vertex", 0.5f,  0.8f,  internav_node_marker);
-    this->SetMarker(VizColor::GREEN,   "boundary_vertex",   0.5f,  0.8f,  boundary_node_marker);
-    this->SetMarker(VizColor::ORANGE,  "frontier_vertex",   0.5f,  0.8f,  frontier_node_marker);
-    this->SetMarker(VizColor::WHITE,   "global_vgraph",     0.1f,  0.2f,  edge_marker);
-    this->SetMarker(VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.25f, free_edge_marker);
-    this->SetMarker(VizColor::EMERALD, "visibility_edge",   0.1f,  0.25f, visual_edge_marker);
-    this->SetMarker(VizColor::RED,     "polygon_edge",      0.15f, 0.25f, contour_edge_marker);
-    this->SetMarker(VizColor::ORANGE,  "boundary_edge",     0.2f,  0.25f, boundary_edge_marker);
-    this->SetMarker(VizColor::ORANGE,  "odom_edge",         0.1f,  0.15f, odom_edge_marker);
-    this->SetMarker(VizColor::YELLOW,  "to_goal_edge",      0.1f,  0.15f, goal_edge_marker);
-    this->SetMarker(VizColor::GREEN,   "trajectory_edge",   0.1f,  0.5f,  traj_edge_marker);
-    this->SetMarker(VizColor::YELLOW,  "vertex_angle",      0.15f, 0.75f, corner_surf_marker);
-    this->SetMarker(VizColor::YELLOW,  "angle_direct",      0.25f, 0.75f, corner_helper_marker);
-    this->SetMarker(VizColor::YELLOW,  "vertices_matches",  0.1f,  0.75f, contour_align_marker);
+    this->SetMarker(nh_, VizColor::WHITE,   "global_vertex",     0.5f,  0.5f,  nav_node_marker);
+    this->SetMarker(nh_, VizColor::RED,     "updating_vertex",   0.5f,  0.8f,  unfinal_node_marker);
+    this->SetMarker(nh_, VizColor::MAGNA,   "localrange_vertex", 0.5f,  0.8f,  near_node_marker);
+    this->SetMarker(nh_, VizColor::BLUE,    "freespace_vertex",  0.5f,  0.8f,  covered_node_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "trajectory_vertex", 0.5f,  0.8f,  internav_node_marker);
+    this->SetMarker(nh_, VizColor::GREEN,   "boundary_vertex",   0.5f,  0.8f,  boundary_node_marker);
+    this->SetMarker(nh_, VizColor::ORANGE,  "frontier_vertex",   0.5f,  0.8f,  frontier_node_marker);
+    this->SetMarker(nh_, VizColor::WHITE,   "global_vgraph",     0.1f,  0.2f,  edge_marker);
+    this->SetMarker(nh_, VizColor::EMERALD, "freespace_vgraph",  0.1f,  0.25f, free_edge_marker);
+    this->SetMarker(nh_, VizColor::EMERALD, "visibility_edge",   0.1f,  0.25f, visual_edge_marker);
+    this->SetMarker(nh_, VizColor::RED,     "polygon_edge",      0.15f, 0.25f, contour_edge_marker);
+    this->SetMarker(nh_, VizColor::ORANGE,  "boundary_edge",     0.2f,  0.25f, boundary_edge_marker);
+    this->SetMarker(nh_, VizColor::ORANGE,  "odom_edge",         0.1f,  0.15f, odom_edge_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "to_goal_edge",      0.1f,  0.15f, goal_edge_marker);
+    this->SetMarker(nh_, VizColor::GREEN,   "trajectory_edge",   0.1f,  0.5f,  traj_edge_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "vertex_angle",      0.15f, 0.75f, corner_surf_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "angle_direct",      0.25f, 0.75f, corner_helper_marker);
+    this->SetMarker(nh_, VizColor::YELLOW,  "vertices_matches",  0.1f,  0.75f, contour_align_marker);
     /* Lambda Function */
     auto Draw_Contour_Align = [&](const NavNodePtr& node_ptr) {
         if (node_ptr->is_odom || !node_ptr->is_contour_match) return;
@@ -390,8 +390,8 @@ void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointSt
     visualization_msgs::msg::Marker neighbor_marker, occupancy_marker;
     neighbor_marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
     occupancy_marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
-    this->SetMarker(VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.3f,  neighbor_marker);
-    this->SetMarker(VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.2f, occupancy_marker);
+    this->SetMarker(nh_, VizColor::GREEN, "neighbor_grids",  ceil_length / FARUtil::kVizRatio, 0.3f,  neighbor_marker);
+    this->SetMarker(nh_, VizColor::RED,   "occupancy_grids", ceil_length / FARUtil::kVizRatio, 0.2f, occupancy_marker);
     neighbor_marker.scale.z = occupancy_marker.scale.z = ceil_height;
     const std::size_t N1 = neighbor_centers.size();
     const std::size_t N2 = occupancy_centers.size();
@@ -409,7 +409,8 @@ void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointSt
     viz_map_pub_->publish(map_grid_marker_array);
 }
 
-void DPVisualizer::SetMarker(const VizColor& color, 
+void DPVisualizer::SetMarker(const rclcpp::Node::SharedPtr nh,
+                             const VizColor& color, 
                              const std::string& ns,
                              const float& scale,
                              const float& alpha,  
@@ -417,7 +418,7 @@ void DPVisualizer::SetMarker(const VizColor& color,
                              const float& scale_ratio) 
 {
     scan_marker.header.frame_id = FARUtil::worldFrameId;
-    scan_marker.header.stamp = nh_->now();
+    scan_marker.header.stamp = nh->now();
     scan_marker.id = 0;
     scan_marker.ns = ns;
     scan_marker.action = visualization_msgs::msg::Marker::ADD;

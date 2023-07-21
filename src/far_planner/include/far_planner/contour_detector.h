@@ -17,6 +17,7 @@ struct ContourDetectParams {
 
 class ContourDetector {
 private:
+    rclcpp::Node::SharedPtr nh_;
     Point3D odom_pos_;
     cv::Point2f free_odom_resized_;
     ContourDetectParams cd_params_;
@@ -171,7 +172,7 @@ private:
         std::string filename = std::to_string(img_counter_);
         std::string img_name = cd_params_.img_path + filename + ".tiff";
         cv::imwrite(img_name, img_save);
-        if (FARUtil::IsDebug) ROS_WARN_THROTTLE(1.0, "CD: image save success!");
+        if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "CD: image save success!");
         img_counter_ ++;
     }
 

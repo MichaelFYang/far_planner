@@ -29,8 +29,8 @@ private:
     // Utility Cloud 
     PointCloudPtr point_cloud_ptr_;
     // rviz publisher 
-    rclcpp::Publisher<MarkerArray>::SharedPtr viz_node_pub_, viz_path_pub_, viz_poly_pub_, viz_graph_pub_;
-    rclcpp::Publisher<MarkerArray>::SharedPtr viz_contour_pub_, viz_map_pub_, viz_view_extend;
+    rclcpp::Publisher<Marker>::SharedPtr viz_node_pub_, viz_path_pub_;
+    rclcpp::Publisher<MarkerArray>::SharedPtr viz_graph_pub_, viz_poly_pub_, viz_contour_pub_, viz_map_pub_, viz_view_extend;
 
 public:
     DPVisualizer() = default;
@@ -70,12 +70,13 @@ public:
     void VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr viz_pub, 
                        const PointCloudPtr& pc);
 
-    static void SetMarker(const VizColor& color, 
-                   const std::string& ns,
-                   const float& scale, 
-                   const float& alpha, 
-                   Marker& scan_marker,
-                   const float& scale_ratio=FARUtil::kVizRatio);
+    static void SetMarker(const rclcpp::Node::SharedPtr nh,
+                          const VizColor& color, 
+                          const std::string& ns,
+                          const float& scale, 
+                          const float& alpha, 
+                          Marker& scan_marker,
+                          const float& scale_ratio=FARUtil::kVizRatio);
 
     static void SetColor(const VizColor& color, const float& alpha, Marker& scan_marker);
 

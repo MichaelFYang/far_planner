@@ -20,7 +20,7 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/empty.hpp>
@@ -55,7 +55,7 @@
 
 /* PCL + ROS2 Library*/
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_sensor_msgs/tf2_sensor_msgs.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 
 /* Utility Header Timer */
 #include "time_measure.h"
@@ -323,7 +323,7 @@ public:
     static Point3D AveragePoints(const T_vec& point_stack) {
         Point3D mean_p(0,0,0);
         if (point_stack.empty()) {
-            ROS_WARN("FARUtil: Averaging points fails, stack is empty");
+            std::cout << "FARUtil: Averaging points fails, stack is empty" << std::endl;
             return mean_p;
         }
         for (const auto& pos : point_stack) {
@@ -411,7 +411,7 @@ public:
         if (norm > FARUtil::kEpsilon) {
             return_p.x /= norm, return_p.y /= norm;
         } else {
-            if (FARUtil::IsDebug) ROS_WARN("FARUtil: Point XY normalization fails, vector norm is too small.");
+            if (FARUtil::IsDebug) std::cout << "FARUtil: Point XY normalization fails, vector norm is too small." << std::endl;
         }
         return return_p;
     }
@@ -422,7 +422,7 @@ public:
         int i, j, c = 0;
         int npol = poly.size();
         if (npol < 3) {
-            if (FARUtil::IsDebug) ROS_WARN("FARUtil: The vertices number of a polygon is less than 3.");
+            if (FARUtil::IsDebug) std::cout << "FARUtil: The vertices number of a polygon is less than 3." <<std::endl;
             return false;
         }
         for (i = 0, j = npol-1; i < npol; j = i++) {

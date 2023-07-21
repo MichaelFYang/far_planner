@@ -63,7 +63,7 @@ void FARMaster::Init() {
   contour_detector_.Init(cdetect_params_);
   graph_manager_.Init(nh_, graph_params_);
   graph_planner_.Init(nh_, gp_params_);
-  contour_graph_.Init(cg_params_);
+  contour_graph_.Init(nh_, cg_params_);
   planner_viz_.Init(nh_);
   map_handler_.Init(map_params_);
   scan_handler_.Init(scan_params_);

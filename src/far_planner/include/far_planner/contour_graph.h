@@ -52,7 +52,7 @@ public:
     static std::vector<PointPair> boundary_contour_;
     static std::vector<PointPair> local_boundary_;
 
-    void Init(const ContourGraphParams& params);
+    void Init(const rclcpp::Node::SharedPtr nh, const ContourGraphParams& params);
     
     // static functions
     void UpdateContourGraph(const NavNodePtr& odom_node_ptr,
@@ -109,7 +109,7 @@ public:
     void ResetCurrentContour();
 
 private:
-
+    rclcpp::Node::SharedPtr nh_;
     static CTNodeStack polys_ctnodes_;
     static PolygonStack contour_polygons_;
     ContourGraphParams ctgraph_params_;
@@ -125,7 +125,7 @@ private:
     /* static private functions */
     inline void AddCTNodeToGraph(const CTNodePtr& ctnode_ptr) {
         if (ctnode_ptr == NULL && ctnode_ptr->free_direct == NodeFreeDirect::UNKNOW) {
-            if (FARUtil::IsDebug) ROS_ERROR_THROTTLE(1.0, "CG: Add ctnode to contour graph fails, ctnode is invaild.");
+            if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "CG: Add ctnode to contour graph fails, ctnode is invaild.");
             return;
         }
         ContourGraph::contour_graph_.push_back(ctnode_ptr);
@@ -133,7 +133,7 @@ private:
 
     inline void AddPolyToContourPolygon(const PolygonPtr& poly_ptr) {
         if (poly_ptr == NULL || poly_ptr->vertices.empty()) {
-            if (FARUtil::IsDebug) ROS_ERROR_THROTTLE(1.0, "CG: Add polygon fails, polygon is invaild.");
+            if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "CG: Add polygon fails, polygon is invaild.");
             return;
         }
         ContourGraph::contour_polygons_.push_back(poly_ptr);
