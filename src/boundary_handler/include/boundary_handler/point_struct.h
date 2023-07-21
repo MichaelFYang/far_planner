@@ -14,9 +14,6 @@
 #include <pcl/common/distances.h>
 #include <boost/functional/hash.hpp>
 
-// ROS message support
-#include <ros/console.h>
-
 
 typedef pcl::PointXYZI PCLPoint;
 typedef pcl::PointCloud<PCLPoint> PointCloud;

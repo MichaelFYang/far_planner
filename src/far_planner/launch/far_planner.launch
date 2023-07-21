@@ -1,18 +1,56 @@
-<launch>
-    <arg name="odom_topic" default="/state_estimation"/>
-    <arg name="terrain_cloud_topic" default="/terrain_map_ext"/>
-    <arg name="terrain_local_topic" default="/terrain_map"/>
-    <arg name="scan_cloud_topic" default="/registered_scan"/>
-    <arg name="config" default="default"/>
-    <node pkg="far_planner" type="far_planner" name="far_planner" output="screen">
-        <rosparam command="load" file="$(find far_planner)/config/$(arg config).yaml" />
-        <remap from="/odom_world" to="$(arg odom_topic)"/> 
-        <remap from="/terrain_cloud" to="$(arg terrain_cloud_topic)"/>
-        <remap from="/scan_cloud" to="$(arg scan_cloud_topic)"/>
-        <remap from="/terrain_local_cloud" to="$(arg terrain_local_topic)"/>
-    </node>
-    <node type="rviz" name="far_rviz" pkg="rviz" args="-d $(find far_planner)/rviz/$(arg config).rviz" respawn="true"/>
+import launch
+from launch import LaunchDescription
+from launch_ros.actions import Node
+import launch.substitutions
+import launch_ros.substitutions
 
-    <!-- Launch Graph Manager for saving and loading graph -->
-    <include file="$(find graph_decoder)/launch/decoder.launch" />
-</launch>
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare arguments
+        launch.actions.DeclareLaunchArgument(
+            'odom_topic', default_value='/state_estimation', description='Odom topic'
+        ),
+        launch.actions.DeclareLaunchArgument(
+            'terrain_cloud_topic', default_value='/terrain_map_ext', description='Terrain cloud topic'
+        ),
+        launch.actions.DeclareLaunchArgument(
+            'terrain_local_topic', default_value='/terrain_map', description='Terrain local topic'
+        ),
+        launch.actions.DeclareLaunchArgument(
+            'scan_cloud_topic', default_value='/registered_scan', description='Scan cloud topic'
+        ),
+        launch.actions.DeclareLaunchArgument(
+            'config', default_value='default', description='Config for far planner'
+        ),
+
+        # Launch far_planner node
+        Node(
+            package='far_planner',
+            executable='far_planner',
+            name='far_planner',
+            output='screen',
+            parameters=[launch.substitutions.LaunchConfiguration('config')],
+            remappings=[
+                ('/odom_world', launch.substitutions.LaunchConfiguration('odom_topic')),
+                ('/terrain_cloud', launch.substitutions.LaunchConfiguration('terrain_cloud_topic')),
+                ('/scan_cloud', launch.substitutions.LaunchConfiguration('scan_cloud_topic')),
+                ('/terrain_local_cloud', launch.substitutions.LaunchConfiguration('terrain_local_topic'))
+            ]
+        ),
+
+        # Launch RViz
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='far_rviz',
+            respawn=True,
+            arguments=['-d', launch.substitutions.LaunchConfiguration('config')]
+        ),
+
+        # Launch graph decoder
+        launch.actions.IncludeLaunchDescription(
+            launch.launch_description_sources.PythonLaunchDescriptionSource(
+                [launch.substitutions.ThisLaunchFileDir(), '/decoder_launch.py']
+            )
+        )
+    ])

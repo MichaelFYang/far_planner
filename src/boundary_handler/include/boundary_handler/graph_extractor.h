@@ -9,8 +9,8 @@
 
 #include <std_msgs/msg/string.hpp>
 
-#include <visibility_graph_msg/Graph.h>
-#include <visibility_graph_msg/Node.h>
+#include <visibility_graph_msg/msg/graph.hpp> 
+#include <visibility_graph_msg/msg/node.hpp> 
 
 #include <std_srvs/srv/trigger.hpp>  // instead of std_srvs/Trigger.h
 
@@ -21,8 +21,8 @@
 
 #include "boundary_handler/point_struct.h"
 
-typedef visualization_msgs::Marker Marker;
-typedef visualization_msgs::MarkerArray MarkerArray;
+typedef visualization_msgs::msg::Marker Marker;
+typedef visualization_msgs::msg::MarkerArray MarkerArray;
 
 typedef std::pair<Point3D, Point3D> PointPair;
 typedef std::vector<Point3D> PointStack;
@@ -98,16 +98,19 @@ struct GraphExtractorParams {
 
 class GraphExtractor {
 public:
-    GraphExtractor(rclcpp::Node::SharedPtr nh)  = default;
+    GraphExtractor();
     ~GraphExtractor() = default;
 
     void Init();
     void Run();
     void Loop();
 
+    rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
+
 private:
     rclcpp::Node::SharedPtr nh_;
-    ros::Publisher  graph_viz_pub_, viz_node_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr graph_viz_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr viz_node_pub_;
 
     std::size_t id_ = 0;
 
@@ -174,10 +177,10 @@ private:
      * @param graphIn current stored v-graph
      * @param graphOut [out] the encoded v-graph message
      */
-    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut);
+    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
     template <typename Point>
-    geometry_msgs::Point inline ToGeoMsgP(const Point& p) {
+    geometry_msgs::msg::Point inline ToGeoMsgP(const Point& p) {
         geometry_msgs::Point geo_p;
         geo_p.x = p.x;
         geo_p.y = p.y; 
@@ -235,9 +238,9 @@ private:
         poly_ptr->is_robot_inside = this->PointInsideAPoly(poly_points, free_p);
     }
 
-    inline void ConvertGraphToMsg(const NodePtrStack& graph, visibility_graph_msg::Graph& graph_msg) {
+    inline void ConvertGraphToMsg(const NodePtrStack& graph, visibility_graph_msg::msg::Graph& graph_msg) {
         graph_msg.header.frame_id = ge_params_.frame_id;
-        graph_msg.header.stamp = ros::Time::now();
+        graph_msg.header.stamp = nh_->now();
         graph_msg.robot_id = robot_id_;
         EncodeGraph(graph, graph_msg);
     }

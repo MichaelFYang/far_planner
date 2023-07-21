@@ -12,8 +12,10 @@
 /***************************************************************************************/
 
 
-void GraphExtractor::GraphExtractor(rclcpp::Node::SharedPtr nh) {
-    nh_ = nh;
+GraphExtractor::GraphExtractor() 
+{
+     /* initialize node */
+    nh_ = rclcpp::Node::make_shared("boundary_handler");
     Init();
 }
 
@@ -33,21 +35,34 @@ void GraphExtractor::Init() {
 
 
 void GraphExtractor::LoadParmas() {
-    const std::string prefix = "/boundary_handler/";
-    nh_->get_parameter(prefix + "/world_frame", ge_params_.frame_id);
+    const std::string prefix = "boundary_handler";
+    
+    // Declare parameters if they haven't been declared yet
+    nh_->declare_parameter(prefix + ".world_frame", "map");
+    nh_->declare_parameter(prefix + ".folder_path", "/home/workspace/src/boundary_handler/data/");
+    nh_->declare_parameter(prefix + ".boundary_file", "boundary.pcd");
+    nh_->declare_parameter(prefix + ".traj_file", "traj.txt");
+    nh_->declare_parameter(prefix + ".graph_file", "graph.txt");
+    nh_->declare_parameter(prefix + ".visual_scale_ratio", 1.0f);
+    nh_->declare_parameter(prefix + ".height_tolz", 1.0f);
+
+    // Fetch parameters
+    nh_->get_parameter(prefix + ".world_frame", ge_params_.frame_id);
 
     std::string folder_path;
-    nh_->get_parameter(prefix + "/folder_path", folder_path);
-    nh_->get_parameter(prefix + "/boundary_file", ge_params_.bd_file_path);
-    nh_->get_parameter(prefix + "/traj_file", ge_params_.traj_file_path);
-    nh_->get_parameter(prefix + "/graph_file", ge_params_.vgraph_path);
-    nh_->get_parameter_or(prefix + "/visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0f);
-    nh_->get_parameter_or(prefix + "/height_tolz", ge_params_.height_tolz, 1.0f);
+    nh_->get_parameter(prefix + ".folder_path", folder_path);
+    nh_->get_parameter(prefix + ".boundary_file", ge_params_.bd_file_path);
+    nh_->get_parameter(prefix + ".traj_file", ge_params_.traj_file_path);
+    nh_->get_parameter(prefix + ".graph_file", ge_params_.vgraph_path);
+    nh_->get_parameter(prefix + ".visual_scale_ratio", ge_params_.viz_scale_ratio);
+    nh_->get_parameter(prefix + ".height_tolz", ge_params_.height_tolz);
 
+    // Append folder_path to the paths
     ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
     ge_params_.bd_file_path   = folder_path + ge_params_.bd_file_path;
     ge_params_.traj_file_path = folder_path + ge_params_.traj_file_path;
 }
+
 
 void GraphExtractor::SetMarker(const VizColor& color, 
                              const std::string& ns,
@@ -56,7 +71,7 @@ void GraphExtractor::SetMarker(const VizColor& color,
                              Marker& scan_marker) 
 { 
     scan_marker.header.frame_id = ge_params_.frame_id;
-    scan_marker.header.stamp = ros::Time::now();
+    scan_marker.header.stamp = nh_->now();
     scan_marker.id = 0;
     scan_marker.ns = ns;
     scan_marker.action = Marker::ADD;
@@ -75,7 +90,7 @@ void GraphExtractor::SetColor(const VizColor& color,
                             const float alpha, 
                             Marker& scan_marker)
 {
-    std_msgs::ColorRGBA c;
+    std_msgs::msg::ColorRGBA c;
     c.a = alpha;
     if (color == VizColor::RED) {
     c.r = 0.9f, c.g = c.b = 0.f;
@@ -112,13 +127,13 @@ void GraphExtractor::SetColor(const VizColor& color,
 
 void GraphExtractor::Run() {
     /* Main Running Function */
-    ROS_INFO("Start reading boundary file ...");
+    RCLCPP_INFO(nh_->get_logger(), "Start reading boundary file ...");
     this->ReadBoundaryFile(boundary_ptr_, extracted_polys_);
-    ROS_INFO("Boundary reading success, constructing V-Graph ...");
+    RCLCPP_INFO(nh_->get_logger(), "Boundary reading success, constructing V-Graph ...");
     this->ConstructVGraph(extracted_polys_, extracted_graph_);
-    ROS_INFO("V-Graph constructed.");
+    RCLCPP_INFO(nh_->get_logger(), "V-Graph constructed.");
     this->SaveVGraph(extracted_graph_);
-    ROS_INFO("V-Graph saved, process terminated.");
+    RCLCPP_INFO(nh_->get_logger(), "V-Graph saved, process terminated.");
 }
 
 void GraphExtractor::Loop() {
@@ -292,15 +307,15 @@ void GraphExtractor::CreateNavNode(const Point3D& p, NavNodePtr& node_ptr) {
 
 }
 
-void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
+void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
     graphOut.nodes.clear();
     const std::string frame_id = graphOut.header.frame_id;
     for (const auto& node_ptr : graphIn) {
-        visibility_graph_msg::Node msg_node;
+        visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
         msg_node.position    = ToGeoMsgP(node_ptr->position);
         msg_node.id          = node_ptr->id;
-        msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
+        msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
@@ -472,7 +487,7 @@ void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {
     node_marker.pose.position.x = free_p.x;
     node_marker.pose.position.y = free_p.y;
     node_marker.pose.position.z = free_p.z;
-    viz_node_pub_.publish(node_marker);
+    viz_node_pub_->publish(node_marker);
 }
 
 void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
@@ -505,7 +520,7 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
     this->SetMarker(VizColor::YELLOW,  "angle_direct",      0.25f, 0.75f, corner_helper_marker);
     /* Lambda Function */
     auto Draw_Edge = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2;
+        geometry_msgs::msg::Point p1, p2;
         p1 = ToGeoMsgP(node_ptr->position);
         for (const auto& cnode : node_ptr->connect_nodes) {
             p2 = ToGeoMsgP(cnode->position);
@@ -541,7 +556,7 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
         }
     };
     auto Draw_Surf_Dir = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2, p3;
+        geometry_msgs::msg::Point p1, p2, p3;
         p1 = ToGeoMsgP(node_ptr->position);
         Point3D end_p;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -564,7 +579,7 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
         if (nav_node_ptr == NULL) {
             continue;
         }
-        const geometry_msgs::Point cpoint = ToGeoMsgP(nav_node_ptr->position);
+        const geometry_msgs::msg::Point cpoint = ToGeoMsgP(nav_node_ptr->position);
         nav_node_marker.points[idx] = cpoint;
         if (nav_node_ptr->is_navpoint) {
             internav_node_marker.points.push_back(cpoint);
@@ -592,18 +607,22 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
     graph_marker_array.markers.push_back(traj_edge_marker);
     graph_marker_array.markers.push_back(corner_surf_marker);
     graph_marker_array.markers.push_back(corner_helper_marker);
-    graph_viz_pub_.publish(graph_marker_array);
+    graph_viz_pub_->publish(graph_marker_array);
 }
 
 int main(int argc, char** argv){
-  ros::init(argc, argv, "boundary_graph_node");
-  GraphExtractor ge_node;
-  ge_node.Init();
-  ge_node.Run();
-  ros::Rate loop_rate(1.0);
-    while (ros::ok()) {
-        ros::spinOnce();
+    rclcpp::init(argc, argv);
+    
+    GraphExtractor ge_node;
+    ge_node.Run();
+
+    rclcpp::Rate loop_rate(1.0);
+    while (rclcpp::ok()) {
         ge_node.Loop();
+        rclcpp::spin_some(ge_node.GetNodeHandle());
         loop_rate.sleep();
     }
+
+    rclcpp::shutdown();
+    return 0;
 }
