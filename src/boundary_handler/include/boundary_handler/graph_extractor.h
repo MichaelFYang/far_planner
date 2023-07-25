@@ -181,7 +181,7 @@ private:
 
     template <typename Point>
     geometry_msgs::msg::Point inline ToGeoMsgP(const Point& p) {
-        geometry_msgs::Point geo_p;
+        geometry_msgs::msg::Point geo_p;
         geo_p.x = p.x;
         geo_p.y = p.y; 
         geo_p.z = p.z;
@@ -279,7 +279,7 @@ private:
         int i, j, c = 0;
         int npol = poly.size();
         if (npol < 3) {
-            ROS_WARN("The vertices number of a polygon is less than 3.");
+            RCLCPP_INFO(nh_->get_logger(), "The vertices number of a polygon is less than 3.");
             return false;
         }
         for (i = 0, j = npol-1; i < npol; j = i++) {

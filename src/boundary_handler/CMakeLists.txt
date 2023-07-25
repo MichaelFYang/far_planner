@@ -1,75 +1,61 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(boundary_handler)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-## Find catkin macros and libraries
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  std_msgs
-  sensor_msgs
-  visibility_graph_msg
-  pcl_ros
-)
-
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visibility_graph_msg REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
-###################################
-## catkin specific configuration ##
-###################################
-
-catkin_package(
-  CATKIN_DEPENDS
-  roscpp
-  std_msgs
-  sensor_msgs
-  pcl_ros
-)
-
-###########
-## Build ##
-###########
-
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
 include_directories(
-  ${catkin_INCLUDE_DIRS}
+  include
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
-  "${PROJECT_SOURCE_DIR}/include"
-  /usr/local/include # Location when using 'make system_install'
-  /usr/include       # More usual location (e.g. when installing using a package)
+  /usr/local/include
+  /usr/include
 )
 
-## Specify additional locations for library files
 link_directories(
-  /usr/local/lib # Location when using 'make system_install'
-  /usr/lib       # More usual location (e.g. when installing using a package)
+  /usr/local/lib
+  /usr/lib
 )
 
-## Depedent cpp files
-set(SOURCES ${SOURCES}
+set(SOURCES
+  # Add your source files here if any
 )
 
-## Declare executables
 add_executable(${PROJECT_NAME} src/graph_extractor.cpp ${SOURCES})
-add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  std_msgs
+  std_srvs
+  sensor_msgs
+  visualization_msgs
+  visibility_graph_msg
+)
 
-## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+# Make sure to link against the PCL libraries and any other libraries you need
+target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
 install(TARGETS ${PROJECT_NAME}
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY launch/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+  DESTINATION share/${PROJECT_NAME}/launch
 )
+
+ament_package()
