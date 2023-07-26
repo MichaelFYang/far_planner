@@ -12,28 +12,52 @@
 
 
 void GraphDecoder::Init() {
-    /* initialize subscriber and publisher */
-    graph_sub_     = nh.subscribe("/robot_vgraph", 5, &GraphDecoder::GraphCallBack, this);
-    graph_pub_     = nh.advertise<visibility_graph_msg::Graph>("decoded_vgraph", 5);
-    graph_viz_pub_ = nh.advertise<MarkerArray>("/graph_decoder_viz",5);
+     /* initialize node */
+    nh_ = rclcpp::Node::make_shared("graph_decoder_node");
+    // Initializing subscribers and publishers in ROS 2:
+    
+    graph_sub_ = nh_->create_subscription<visibility_graph_msg::msg::Graph>(
+        "/robot_vgraph", 
+        rclcpp::QoS(5),
+        std::bind(&GraphDecoder::GraphCallBack, this, std::placeholders::_1)
+    );
+
+    graph_pub_ = nh_->create_publisher<visibility_graph_msg::msg::Graph>("decoded_vgraph", rclcpp::QoS(5));
+
+    graph_viz_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/graph_decoder_viz", rclcpp::QoS(5));
 
     this->LoadParmas();
-    save_graph_sub_ = nh.subscribe("/save_file_dir", 5, &GraphDecoder::SaveGraphCallBack, this);
-    read_graph_sub_ = nh.subscribe("/read_file_dir", 5, &GraphDecoder::ReadGraphCallBack, this);
-    request_graph_service_  = nh.advertiseService("/request_graph_service",  &GraphDecoder::RequestGraphService, this);
+
+    save_graph_sub_ = nh_->create_subscription<std_msgs::msg::String>(
+        "/save_file_dir", 
+        rclcpp::QoS(5),
+        std::bind(&GraphDecoder::SaveGraphCallBack, this, std::placeholders::_1)
+    );
+
+    read_graph_sub_ = nh_->create_subscription<std_msgs::msg::String>(
+        "/read_file_dir", 
+        rclcpp::QoS(5),
+        std::bind(&GraphDecoder::ReadGraphCallBack, this, std::placeholders::_1)
+    );
+
+    request_graph_service_ = nh_->create_service<std_srvs::srv::Trigger>(
+        "/request_graph_service",
+        std::bind(&GraphDecoder::RequestGraphService, this, std::placeholders::_1, std::placeholders::_2)
+    );
+
     robot_id_ = 0;
     this->ResetGraph(received_graph_);
 }
 
 
-void GraphDecoder::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
-    const visibility_graph_msg::Graph shared_graph = *msg;
+void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
+    // Directly use the msg without dereferencing, as it's now a shared pointer
     this->ResetGraph(received_graph_);
-    NavNodePtr temp_node_ptr = NULL;
+    NavNodePtr temp_node_ptr = nullptr;  // Use nullptr in C++ instead of NULL
     robot_id_ = msg->robot_id;
     std::unordered_map<std::size_t, std::size_t> nodeIdx_idx_map;
-    for (std::size_t i=0; i<shared_graph.nodes.size(); i++) {
-        const auto node = shared_graph.nodes[i];
+    for (std::size_t i=0; i<msg->nodes.size(); i++) {
+        const auto& node = msg->nodes[i];  // Use a reference here to avoid unnecessary copying
         CreateNavNode(node, temp_node_ptr);
         if (AddNodePtrToGraph(temp_node_ptr, received_graph_)) {
             nodeIdx_idx_map.insert({node.id, i});
@@ -46,9 +70,10 @@ void GraphDecoder::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg)
         AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->contour_idxs, node_ptr->contour_connects);
         AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->traj_idxs, node_ptr->traj_connects);
     }
-    // ROS_INFO("Graph extraction completed. Total size of graph nodes: %ld", received_graph_.size());
+    RCLCPP_INFO(nh_->get_logger(), "Graph extraction completed. Total size of graph nodes: %ld", received_graph_.size());
     this->VisualizeGraph(received_graph_);
 }
+
 
 void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std::size_t>& idxs_map,
                                       const NodePtrStack& graph,
@@ -69,15 +94,14 @@ void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std:
     node_idxs = clean_idx;
 }
 
-void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
-                                 NavNodePtr& node_ptr)
+void GraphDecoder::CreateNavNode(const visibility_graph_msg::msg::Node& msg, NavNodePtr& node_ptr)
 {
     node_ptr = std::make_shared<NavNode>();
     node_ptr->position = Point3D(msg.position.x, msg.position.y, msg.position.z);
     node_ptr->id = msg.id;
-    node_ptr->free_direct = static_cast<NodeFreeDirect>(msg.FreeType);
+    node_ptr->free_direct = static_cast<NodeFreeDirect>(msg.freetype);
     if (msg.surface_dirs.size() != 2) {
-        ROS_ERROR_THROTTLE(1.0, "node surface directions error.");
+        RCLCPP_ERROR(nh_->get_logger(), "node surface directions error.");
         node_ptr->surf_dirs.first = node_ptr->surf_dirs.second = Point3D(0,0,-1);
     } else {
         node_ptr->surf_dirs.first  = Point3D(msg.surface_dirs[0].x,
@@ -108,10 +132,15 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
 
 
 void GraphDecoder::LoadParmas() {
-    const std::string prefix = "/graph_decoder/";
-    nh.param<std::string>(prefix + "world_frame", gd_params_.frame_id, "map");
-    nh.param<float>(prefix + "visual_scale_ratio", gd_params_.viz_scale_ratio, 1.0);
+    const std::string prefix = "graph_decoder.";
 
+    // Declare the parameters
+    nh_->declare_parameter(prefix + "world_frame", "map");
+    nh_->declare_parameter(prefix + "visual_scale_ratio", 1.0f);
+
+    // Retrieve the parameters
+    nh_->get_parameter(prefix + "world_frame", gd_params_.frame_id);
+    nh_->get_parameter(prefix + "visual_scale_ratio", gd_params_.viz_scale_ratio);
 }
 
 void GraphDecoder::SetMarker(const VizColor& color, 
@@ -121,7 +150,7 @@ void GraphDecoder::SetMarker(const VizColor& color,
                              Marker& scan_marker) 
 {
     scan_marker.header.frame_id = gd_params_.frame_id;
-    scan_marker.header.stamp = ros::Time::now();
+    scan_marker.header.stamp = nh_->now();
     scan_marker.id = 0;
     scan_marker.ns = ns;
     scan_marker.action = Marker::ADD;
@@ -140,7 +169,7 @@ void GraphDecoder::SetColor(const VizColor& color,
                             const float alpha, 
                             Marker& scan_marker)
 {
-    std_msgs::ColorRGBA c;
+    std_msgs::msg::ColorRGBA c;
     c.a = alpha;
     if (color == VizColor::RED) {
     c.r = 0.9f, c.g = c.b = 0.f;
@@ -173,14 +202,6 @@ void GraphDecoder::SetColor(const VizColor& color,
     c.r = c.b = 0.5f, c.g = 0.f;
     }
     scan_marker.color = c;
-}
-
-void GraphDecoder::Loop() {
-    ros::Rate loop_rate(10.0);
-    while (ros::ok()) {
-        ros::spinOnce();
-        loop_rate.sleep();
-    }
 }
 
 void GraphDecoder::CreateNavNode(std::string str, NavNodePtr& node_ptr) {
@@ -242,15 +263,15 @@ void GraphDecoder::CreateNavNode(std::string str, NavNodePtr& node_ptr) {
     }
 }
 
-void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
+void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
     graphOut.nodes.clear();
     const std::string frame_id = graphOut.header.frame_id;
     for (const auto& node_ptr : graphIn) {
-        visibility_graph_msg::Node msg_node;
+        visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
         msg_node.position    = ToGeoMsgP(node_ptr->position);
         msg_node.id          = node_ptr->id;
-        msg_node.FreeType    = static_cast<int>(node_ptr->free_direct);
+        msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
@@ -280,7 +301,7 @@ void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg
     graphOut.size = graphOut.nodes.size();
 }
 
-void GraphDecoder::ReadGraphCallBack(const std_msgs::StringConstPtr& msg) {
+void GraphDecoder::ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg) {
     const std::string file_path = msg->data;
     if (file_path == "") return;
     std::ifstream graph_file(file_path);
@@ -304,12 +325,12 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::StringConstPtr& msg) {
         AssignConnectNodes(nodeIdx_idx_map, loaded_graph, node_ptr->traj_idxs, node_ptr->traj_connects);
     }
     this->VisualizeGraph(loaded_graph);
-    visibility_graph_msg::Graph graph_msg;
+    visibility_graph_msg::msg::Graph graph_msg;
     ConvertGraphToMsg(loaded_graph, graph_msg);
-    graph_pub_.publish(graph_msg);
+    graph_pub_->publish(graph_msg);
 }
 
-void GraphDecoder::SaveGraphCallBack(const std_msgs::StringConstPtr& msg) {
+void GraphDecoder::SaveGraphCallBack(const std_msgs::msg::String::SharedPtr msg) {
     if (received_graph_.empty()) return;
     const std::string file_path = msg->data;
     if (file_path == "") return;
@@ -351,13 +372,17 @@ void GraphDecoder::SaveGraphCallBack(const std_msgs::StringConstPtr& msg) {
     graph_file.close();
 }
 
-bool GraphDecoder::RequestGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res) {
-    res.success = false;
-    visibility_graph_msg::Graph graph_msg;
+bool GraphDecoder::RequestGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
+                                       const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                                       std::shared_ptr<std_srvs::srv::Trigger::Response> res)
+{
+    
+    res->success = false;
+    visibility_graph_msg::msg::Graph graph_msg; 
     ConvertGraphToMsg(received_graph_, graph_msg);
-    graph_pub_.publish(graph_msg);
-    res.message = "Decoded graph published; Total graph size: " + std::to_string(graph_msg.size);
-    res.success = true;
+    graph_pub_->publish(graph_msg);
+    res->message = "Decoded graph published; Total graph size: " + std::to_string(graph_msg.size);
+    res->success = true;
     return true;
 }
 
@@ -391,7 +416,7 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
     this->SetMarker(VizColor::YELLOW,  "angle_direct",      0.25f, 0.75f, corner_helper_marker);
     /* Lambda Function */
     auto Draw_Edge = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2;
+        geometry_msgs::msg::Point p1, p2;
         p1 = ToGeoMsgP(node_ptr->position);
         for (const auto& cnode : node_ptr->connect_nodes) {
             p2 = ToGeoMsgP(cnode->position);
@@ -427,7 +452,7 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
         }
     };
     auto Draw_Surf_Dir = [&](const NavNodePtr& node_ptr) {
-        geometry_msgs::Point p1, p2, p3;
+        geometry_msgs::msg::Point p1, p2, p3;
         p1 = ToGeoMsgP(node_ptr->position);
         Point3D end_p;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -450,7 +475,7 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
         if (nav_node_ptr == NULL) {
             continue;
         }
-        const geometry_msgs::Point cpoint = ToGeoMsgP(nav_node_ptr->position);
+        const geometry_msgs::msg::Point cpoint = ToGeoMsgP(nav_node_ptr->position);
         nav_node_marker.points[idx] = cpoint;
         if (nav_node_ptr->is_navpoint) {
             internav_node_marker.points.push_back(cpoint);
@@ -478,12 +503,17 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
     graph_marker_array.markers.push_back(traj_edge_marker);
     graph_marker_array.markers.push_back(corner_surf_marker);
     graph_marker_array.markers.push_back(corner_helper_marker);
-    graph_viz_pub_.publish(graph_marker_array);
+    graph_viz_pub_->publish(graph_marker_array);
 }
 
 int main(int argc, char** argv){
-  ros::init(argc, argv, "graph_decoder_node");
-  GraphDecoder gd_node;
-  gd_node.Init();
-  gd_node.Loop();
+  rclcpp::init(argc, argv);
+
+  auto gd_node = std::make_shared<GraphDecoder>();
+  gd_node->Init();
+
+  rclcpp::spin(gd_node->GetNodeHandle());
+
+  rclcpp::shutdown();
+  return 0;
 }

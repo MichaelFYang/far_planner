@@ -1,24 +1,24 @@
 #ifndef GRAPH_DECODER_H
 #define GRAPH_DECODER_H
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <unordered_map>
-#include <std_msgs/String.h>
-#include <visibility_graph_msg/Graph.h>
-#include <visibility_graph_msg/Node.h>
-#include <std_srvs/Trigger.h>
-#include <geometry_msgs/Point.h>
+#include <std_msgs/msg/string.hpp>
+#include <visibility_graph_msg/msg/graph.hpp>
+#include <visibility_graph_msg/msg/node.hpp>
+#include <std_srvs/srv/trigger.hpp>
+#include <geometry_msgs/msg/point.hpp>
 
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "graph_decoder/point_struct.h"
 
-typedef visualization_msgs::Marker Marker;
-typedef visualization_msgs::MarkerArray MarkerArray;
+typedef visualization_msgs::msg::Marker Marker;
+typedef visualization_msgs::msg::MarkerArray MarkerArray;
 
 typedef std::pair<Point3D, Point3D> PointPair;
 
@@ -76,19 +76,23 @@ struct GraphDecoderParams {
 
 class GraphDecoder {
 public:
-    GraphDecoder() = default;
+    GraphDecoder();
     ~GraphDecoder() = default;
 
-    void Init();
+    void Init(); // ROS init
+    rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
+
     void Loop();
 
 private:
-    ros::NodeHandle nh;
-    ros::Subscriber graph_sub_;
-    ros::Subscriber save_graph_sub_, read_graph_sub_;
-    ros::Publisher  graph_pub_, graph_viz_pub_;
+    rclcpp::Node::SharedPtr nh_;
 
-    ros::ServiceServer request_graph_service_;
+    rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr save_graph_sub_, read_graph_sub_;
+    rclcpp::Publisher<MarkerArray>::SharedPtr graph_viz_pub_;
+    rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr graph_pub_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr request_graph_service_;
+
     GraphDecoderParams gd_params_;
     NodePtrStack received_graph_;
     MarkerArray graph_marker_array_;
@@ -104,25 +108,34 @@ private:
     
     void SetColor(const VizColor& color, const float alpha, Marker& scan_marker);
 
-    void GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg);
+    // Topic Callbacks
+    void GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg);
 
-    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut);
+    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
-    void SaveGraphCallBack(const std_msgs::StringConstPtr& msg);
+    void SaveGraphCallBack(const std_msgs::msg::String::SharedPtr msg);
 
-    void ReadGraphCallBack(const std_msgs::StringConstPtr& msg);
+    void ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg);
 
-    bool SaveGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
+    // Service Callbacks
+    void SaveGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
+                        const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                        std::shared_ptr<std_srvs::srv::Trigger::Response> res);
 
-    bool ReadGraphFromFile(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
+    void ReadGraphFromFile(const std::shared_ptr<rmw_request_id_t> request_header,
+                        const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                        std::shared_ptr<std_srvs::srv::Trigger::Response> res);
 
-    bool RequestGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res); 
+    bool RequestGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
+                            const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                            std::shared_ptr<std_srvs::srv::Trigger::Response> res);
+
 
     void VisualizeGraph(const NodePtrStack& graphIn);
 
     void CreateNavNode(std::string str, NavNodePtr& node_ptr);
 
-    void CreateNavNode(const visibility_graph_msg::Node& msg, NavNodePtr& node_ptr);
+    void CreateNavNode(const visibility_graph_msg::msg::Node& msg, NavNodePtr& node_ptr);
 
     void AssignConnectNodes(const std::unordered_map<std::size_t, std::size_t>& idxs_map,
                             const NodePtrStack& graph,
@@ -130,8 +143,8 @@ private:
                             std::vector<NavNodePtr>& connects);
 
     template <typename Point>
-    geometry_msgs::Point inline ToGeoMsgP(const Point& p) {
-        geometry_msgs::Point geo_p;
+    geometry_msgs::msg::Point inline ToGeoMsgP(const Point& p) {
+        geometry_msgs::msg::Point geo_p;
         geo_p.x = p.x;
         geo_p.y = p.y; 
         geo_p.z = p.z;
@@ -150,9 +163,9 @@ private:
         graphOut.clear();
     }
 
-    inline void ConvertGraphToMsg(const NodePtrStack& graph, visibility_graph_msg::Graph& graph_msg) {
+    inline void ConvertGraphToMsg(const NodePtrStack& graph, visibility_graph_msg::msg::Graph& graph_msg) {
         graph_msg.header.frame_id = gd_params_.frame_id;
-        graph_msg.header.stamp = ros::Time::now();
+        graph_msg.header.stamp = nh_->now();
         graph_msg.robot_id = robot_id_;
         EncodeGraph(graph, graph_msg);
     }

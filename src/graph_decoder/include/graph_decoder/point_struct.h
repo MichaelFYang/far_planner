@@ -1,6 +1,8 @@
 #ifndef POINT_STRUCT_H
 #define POINT_STRUCT_H
 
+#define EPSILON 1e-7f
+
 #include <math.h>
 #include <vector>
 #include <utility>
@@ -8,14 +10,11 @@
 #include <stdlib.h>
 #include <deque>
 #include <unordered_map>
-#include "Eigen/Core"
+#include <Eigen/Core>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/common/distances.h>
 #include <boost/functional/hash.hpp>
-
-// ROS message support
-#include <ros/console.h>
 
 
 typedef pcl::PointXYZI PCLPoint;
@@ -39,12 +38,16 @@ struct Point3D {
 
   bool operator ==(const Point3D& pt) const
   {
-      return x == pt.x && y == pt.y && z == pt.z;
+    return fabs(x - pt.x) < EPSILON &&
+           fabs(y - pt.y) < EPSILON &&
+           fabs(z - pt.z) < EPSILON;
   }
 
   bool operator !=(const Point3D& pt) const
   {
-    return x != pt.x || y != pt.y || z != pt.z;
+    return fabs(x - pt.x) > EPSILON ||
+           fabs(y - pt.y) > EPSILON ||
+           fabs(z - pt.z) > EPSILON;
   }
 
   float operator *(const Point3D& pt) const
@@ -88,11 +91,9 @@ struct Point3D {
   Point3D normalize() const 
   {
     const float n = std::hypotf(x, std::hypotf(y,z));
-    if (n > 1e-7f) {
+    if (n > EPSILON) {
       return Point3D(x/n, y/n, z/n);
     } else {
-      // DEBUG
-      // ROS_WARN("Point3D: vector normalization fails, vector norm is too small.");
       return Point3D(0,0,0);
     }
   };
@@ -100,11 +101,9 @@ struct Point3D {
   Point3D normalize_flat() const 
   {
     const float n = std::hypotf(x, y);
-    if (n > 1e-7f) {
+    if (n > EPSILON) {
       return Point3D(x/n, y/n, 0.0f);
     } else {
-      // DEBUG
-      // ROS_WARN("Point3D: flat vector normalization fails, vector norm is too small.");
       return Point3D(0,0,0);
     }
   };
@@ -113,9 +112,7 @@ struct Point3D {
   {
     const float n1 = std::hypotf(x, std::hypotf(y,z));
     const float n2 = std::hypotf(p.x, std::hypotf(p.y,p.z));
-    if (n1 < 1e-7f || n2 < 1e-7f) {
-      // DEBUG
-      // ROS_WARN("Point3D: vector norm dot fails, vector norm is too small.");
+    if (n1 < EPSILON || n2 < EPSILON) {
       return 0.f;
     }
     const float dot_value = (x * p.x + y * p.y + z * p.z) / (n1 * n2);
@@ -126,9 +123,7 @@ struct Point3D {
   {
     const float n1 = std::hypotf(x, y);
     const float n2 = std::hypotf(p.x, p.y);
-    if (n1 < 1e-7f || n2 < 1e-7f) {
-      // DEBUG
-      // ROS_WARN("Point3D: flat vector norm dot fails, vector norm is too small.");
+    if (n1 < EPSILON || n2 < EPSILON) {
       return 0.f;
     }
     const float dot_value = (x * p.x + y * p.y) / (n1 * n2);
@@ -165,7 +160,7 @@ struct point_comp
 {
   bool operator()(const Point3D& p1, const Point3D& p2) const
   {
-    return p1.x == p2.x && p1.y == p2.y && p1.z == p2.z;
+    return p1 == p2;
   }
 };
 
