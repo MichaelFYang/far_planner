@@ -9,6 +9,9 @@
 #include "graph_decoder/decoder_node.h"
 
 /***************************************************************************************/
+GraphDecoder::GraphDecoder() {
+    this->Init();
+}
 
 
 void GraphDecoder::Init() {
@@ -372,8 +375,7 @@ void GraphDecoder::SaveGraphCallBack(const std_msgs::msg::String::SharedPtr msg)
     graph_file.close();
 }
 
-bool GraphDecoder::RequestGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
-                                       const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+bool GraphDecoder::RequestGraphService(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                                        std::shared_ptr<std_srvs::srv::Trigger::Response> res)
 {
     

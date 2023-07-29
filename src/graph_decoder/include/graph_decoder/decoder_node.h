@@ -118,16 +118,7 @@ private:
     void ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg);
 
     // Service Callbacks
-    void SaveGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
-                        const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
-                        std::shared_ptr<std_srvs::srv::Trigger::Response> res);
-
-    void ReadGraphFromFile(const std::shared_ptr<rmw_request_id_t> request_header,
-                        const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
-                        std::shared_ptr<std_srvs::srv::Trigger::Response> res);
-
-    bool RequestGraphService(const std::shared_ptr<rmw_request_id_t> request_header,
-                            const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+    bool RequestGraphService(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                             std::shared_ptr<std_srvs::srv::Trigger::Response> res);
 
 
