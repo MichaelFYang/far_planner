@@ -1,38 +1,57 @@
-#include "goalpoint_tool.h"
+#include <goalpoint_tool.hpp>
 
-namespace rviz
+#include <string>
+
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/logging.hpp>
+#include <rviz_common/properties/string_property.hpp>
+#include <rviz_common/properties/qos_profile_property.hpp>
+
+namespace goalpoint_rviz_plugin
 {
-GoalPointTool::GoalPointTool()
+GoalpointTool::GoalpointTool()
+: rviz_default_plugins::tools::PoseTool(), qos_profile_(5)
 {
   shortcut_key_ = 'w';
 
-  topic_property_ = new StringProperty("Topic", "goalpoint", "The topic on which to publish goal waypiont for dynamic route planner.",
+  topic_property_ = new rviz_common::properties::StringProperty("Topic", "goalpoint", "The topic on which to publish navigation waypionts.",
                                        getPropertyContainer(), SLOT(updateTopic()), this);
+  
+  qos_profile_property_ = new rviz_common::properties::QosProfileProperty(
+    topic_property_, qos_profile_);
 }
 
-void GoalPointTool::onInitialize()
+GoalpointTool::~GoalpointTool() = default;
+
+void GoalpointTool::onInitialize()
 {
-  PoseTool::onInitialize();
+  rviz_default_plugins::tools::PoseTool::onInitialize();
+  qos_profile_property_->initialize(
+    [this](rclcpp::QoS profile) {this->qos_profile_ = profile;});
   setName("Goalpoint");
   updateTopic();
   vehicle_z = 0;
 }
 
-void GoalPointTool::updateTopic()
+void GoalpointTool::updateTopic()
 {
-  sub_ = nh_.subscribe<nav_msgs::Odometry> ("/state_estimation", 5, &GoalPointTool::odomHandler, this);
-  pub_ = nh_.advertise<geometry_msgs::PointStamped>("/goal_point", 5);
-  pub_joy_ = nh_.advertise<sensor_msgs::Joy>("/joy", 5);
+  rclcpp::Node::SharedPtr raw_node =
+    context_->getRosNodeAbstraction().lock()->get_raw_node();
+  sub_ = raw_node->template create_subscription<nav_msgs::msg::Odometry>("/state_estimation", 5 ,std::bind(&GoalpointTool::odomHandler,this,std::placeholders::_1));
+  
+  pub_ = raw_node->template create_publisher<geometry_msgs::msg::PointStamped>("/way_point", qos_profile_);
+  pub_joy_ = raw_node->template create_publisher<sensor_msgs::msg::Joy>("/joy", qos_profile_);
+  clock_ = raw_node->get_clock();
 }
 
-void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr& odom)
+void GoalpointTool::odomHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
 {
   vehicle_z = odom->pose.pose.position.z;
 }
 
-void GoalPointTool::onPoseSet(double x, double y, double theta)
+void GoalpointTool::onPoseSet(double x, double y, double theta)
 {
-  sensor_msgs::Joy joy;
+  sensor_msgs::msg::Joy joy;
 
   joy.axes.push_back(0);
   joy.axes.push_back(0);
@@ -55,24 +74,22 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
   joy.buttons.push_back(0);
   joy.buttons.push_back(0);
 
-  joy.header.stamp = ros::Time::now();
+  joy.header.stamp = clock_->now();
   joy.header.frame_id = "goalpoint_tool";
-  
-  geometry_msgs::PointStamped goal_point;
-  goal_point.header.frame_id = "map";
-  goal_point.header.stamp = ros::Time::now();
-  goal_point.point.x = x;
-  goal_point.point.y = y;
-  goal_point.point.z = vehicle_z;
+  pub_joy_->publish(joy);
 
-  pub_.publish(goal_point);
+  geometry_msgs::msg::PointStamped goalpoint;
+  goalpoint.header.frame_id = "map";
+  goalpoint.header.stamp = joy.header.stamp;
+  goalpoint.point.x = x;
+  goalpoint.point.y = y;
+  goalpoint.point.z = vehicle_z;
+
+  pub_->publish(goalpoint);
   usleep(10000);
-  pub_.publish(goal_point);
-  
-  usleep(10000); // set to 1000000us (1s) on real robot
-  pub_joy_.publish(joy);
+  pub_->publish(goalpoint);
 }
-}  // end namespace rviz
+}
 
-#include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(rviz::GoalPointTool, rviz::Tool)
+#include <pluginlib/class_list_macros.hpp> 
+PLUGINLIB_EXPORT_CLASS(goalpoint_rviz_plugin::GoalpointTool, rviz_common::Tool)
