@@ -1,24 +1,27 @@
-<package>
+<?xml version="1.0"?>
+<package format="3">
   <name>teleop_rviz_plugin</name>
   <version>0.0.1</version>
-  <description>
-      Teleop RVIZ Plugin
-  </description>
+  <description>Teleop RVIZ Plugin</description>
   <maintainer email="zhangji@cmu.edu">Ji Zhang</maintainer>
   <license>BSD</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>qtbase5-dev</build_depend>
-  <build_depend>rviz</build_depend>
+  <depend>qtbase5-dev</depend>
+  <depend>rviz2</depend>
+  <depend>rviz_common</depend>
+  <depend>Qt5</depend>
 
-  <run_depend>libqt5-core</run_depend>
-  <run_depend>libqt5-gui</run_depend>
-  <run_depend>libqt5-widgets</run_depend>
-  <run_depend>rviz</run_depend>
+  <build_depend>libqt5-core</build_depend>
+  <build_depend>libqt5-gui</build_depend>
+  <build_depend>libqt5-widgets</build_depend>
+
+  <exec_depend>libqt5-core</exec_depend>
+  <exec_depend>libqt5-gui</exec_depend>
+  <exec_depend>libqt5-widgets</exec_depend>
 
   <export>
-      <rosdoc config="${prefix}/rosdoc.yaml"/>
       <rviz plugin="${prefix}/plugin_description.xml"/>
   </export>
 </package>

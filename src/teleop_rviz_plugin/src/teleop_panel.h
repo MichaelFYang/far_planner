@@ -2,9 +2,8 @@
 #define TELEOP_PANEL_H
 
 #ifndef Q_MOC_RUN
-# include <ros/ros.h>
-
-# include <rviz/panel.h>
+# include <rclcpp/rclcpp.hpp>
+# include <rviz_common/panel.hpp>
 #endif
 
 #include <stdio.h>
@@ -17,10 +16,10 @@
 #include <QCheckBox>
 #include <QFileDialog>
 
-#include <std_msgs/Empty.h>
-#include <std_msgs/Bool.h>
-#include <std_msgs/String.h>
-#include <sensor_msgs/Joy.h>
+#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <sensor_msgs/msg/joy.hpp>
 
 class QLineEdit;
 
@@ -29,13 +28,13 @@ namespace teleop_rviz_plugin
 
 class DriveWidget;
 
-class TeleopPanel: public rviz::Panel
+class TeleopPanel: public rviz_common::Panel
 {
 Q_OBJECT
 public:
   TeleopPanel( QWidget* parent = 0 );
-  virtual void load( const rviz::Config& config );
-  virtual void save( rviz::Config config ) const;
+  virtual void load( const rviz_common::Config& config );
+  virtual void save( rviz_common::Config config ) const;
 
 public Q_SLOTS:
   void setVel( float linear_velocity_, float angular_velocity_, bool mouse_pressed_ );
@@ -51,13 +50,18 @@ protected Q_SLOTS:
 
 protected:
   DriveWidget* drive_widget_;
-  ros::Publisher velocity_publisher_;
-  ros::Publisher attemptable_publisher_;
-  ros::Publisher update_publisher_;
-  ros::Publisher reset_publisher_;
-  ros::Publisher read_publisher_;
-  ros::Publisher save_publisher_;
-  ros::NodeHandle nh_;
+
+  // ROS2 uses smart pointers for publishers and subscribers
+  rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr velocity_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr attemptable_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr update_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr reset_publisher_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr read_publisher_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr save_publisher_;
+
+
+  // Use shared pointer for the node
+  rclcpp::Node::SharedPtr node_;
 
   QPushButton *push_button_1_;
   QPushButton *push_button_2_;
