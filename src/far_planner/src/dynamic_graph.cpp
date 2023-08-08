@@ -306,7 +306,7 @@ bool DynamicGraph::IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNode
         }
         bool is_match;
         float minH, maxH;
-        const float avg_h = MapHandler::NearestHeightOfRadius(mid_p, FARUtil::kMatchDist, minH, maxH, is_match);
+        MapHandler::NearestHeightOfRadius(mid_p, FARUtil::kMatchDist, minH, maxH, is_match);
         if (!is_match && (is_contour || !node_ptr1->is_frontier || !node_ptr2->is_frontier)) {
             if (!is_contour) RemoveInvaildTerrainConnect(node_ptr1, node_ptr2);
             return false;
@@ -318,7 +318,7 @@ bool DynamicGraph::IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNode
         if (!is_contour) {
             if (is_match) RecordVaildTerrainConnect(node_ptr1, node_ptr2);
             const auto it = node_ptr1->terrain_votes.find(node_ptr2->id);
-            if (it != node_ptr1->terrain_votes.end() && it->second > dg_params_.finalize_thred) {
+            if (it != node_ptr1->terrain_votes.end() && int(it->second) > dg_params_.finalize_thred) {
                 return false;
             }
         }
@@ -358,11 +358,11 @@ bool DynamicGraph::IsFrontierNode(const NavNodePtr& node_ptr) {
     } else if (!FARUtil::IsPointInMarginRange(node_ptr->position)) { // if not in margin range, the node won't be deleted
         node_ptr->frontier_votes.push_back(0); // non convex frontier
     }
-    if (node_ptr->frontier_votes.size() > dg_params_.finalize_thred) {
+    if (int(node_ptr->frontier_votes.size()) > dg_params_.finalize_thred) {
         node_ptr->frontier_votes.pop_front();
     }
     bool is_frontier = FARUtil::IsVoteTrue(node_ptr->frontier_votes);
-    if (!node_ptr->is_frontier && is_frontier && node_ptr->frontier_votes.size() == dg_params_.finalize_thred) {
+    if (!node_ptr->is_frontier && is_frontier && int(node_ptr->frontier_votes.size()) == dg_params_.finalize_thred) {
         if (!FARUtil::IsPointNearNewPoints(node_ptr->position, true)) {
             is_frontier = false;
         }
@@ -470,7 +470,7 @@ bool DynamicGraph::UpdateNodePosition(const NavNodePtr& node_ptr,
     }
     if (node_ptr->is_finalized) return true; // finalized node 
     node_ptr->pos_filter_vec.push_back(new_pos);
-    if (node_ptr->pos_filter_vec.size() > dg_params_.pool_size) {
+    if (int(node_ptr->pos_filter_vec.size()) > dg_params_.pool_size) {
         node_ptr->pos_filter_vec.pop_front();
     }
     // calculate mean nav node position using RANSACS
@@ -478,7 +478,7 @@ bool DynamicGraph::UpdateNodePosition(const NavNodePtr& node_ptr,
     Point3D mean_p = FARUtil::RANSACPoisiton(node_ptr->pos_filter_vec, dg_params_.filter_pos_margin, inlier_size);
     if (node_ptr->pos_filter_vec.size() > 1) mean_p.z = node_ptr->position.z; // keep z value with terrain updates
     node_ptr->position = mean_p;
-    if (inlier_size > dg_params_.finalize_thred) {
+    if (int(inlier_size) > dg_params_.finalize_thred) {
         return true;
     }
     return false;
@@ -500,7 +500,7 @@ bool DynamicGraph::UpdateNodeSurfDirs(const NavNodePtr& node_ptr, PointPair cur_
     if (node_ptr->is_finalized) return true; // finalized node 
     FARUtil::CorrectDirectOrder(node_ptr->surf_dirs, cur_dirs);
     node_ptr->surf_dirs_vec.push_back(cur_dirs);
-    if (node_ptr->surf_dirs_vec.size() > dg_params_.pool_size) {
+    if (int(node_ptr->surf_dirs_vec.size()) > dg_params_.pool_size) {
         node_ptr->surf_dirs_vec.pop_front();
     }
     // calculate mean surface corner direction using RANSACS
@@ -513,7 +513,7 @@ bool DynamicGraph::UpdateNodeSurfDirs(const NavNodePtr& node_ptr, PointPair cur_
         node_ptr->surf_dirs = mean_dir;
         this->ReEvaluateConvexity(node_ptr);
     }
-    if (inlier_size > dg_params_.finalize_thred) {
+    if (int(inlier_size) > dg_params_.finalize_thred) {
         return true;
     }
     return false;       
@@ -580,7 +580,7 @@ void DynamicGraph::RecordContourVote(const NavNodePtr& node_ptr1, const NavNodeP
             if (it1->second.size() != it2->second.size()) RCLCPP_ERROR(nh_->get_logger(), "DG: contour connection votes are not equal.");
         }
         it1->second.push_back(1), it2->second.push_back(1);
-        if (it1->second.size() > dg_params_.votes_size) {
+        if (int(it1->second.size()) > dg_params_.votes_size) {
             it1->second.pop_front(), it2->second.pop_front();
         }
     }
@@ -615,7 +615,7 @@ void DynamicGraph::RecordPolygonVote(const NavNodePtr& node_ptr1,
         }
         if (is_reset) it1->second.clear(), it2->second.clear();
         it1->second.push_back(1), it2->second.push_back(1);
-        if (it1->second.size() > queue_size) {
+        if (int(it1->second.size()) > queue_size) {
             it1->second.pop_front(), it2->second.pop_front();
         }
     }
@@ -702,7 +702,7 @@ void DynamicGraph::DeletePolygonVote(const NavNodePtr& node_ptr1,
     if (it1 == node_ptr1->edge_votes.end() || it2 == node_ptr2->edge_votes.end()) return;
     if (is_reset) it1->second.clear(), it2->second.clear();
     it1->second.push_back(0), it2->second.push_back(0);
-    if (it1->second.size() > queue_size) {
+    if (int(it1->second.size()) > queue_size) {
         it1->second.pop_front(), it2->second.pop_front();
     }
 }
@@ -713,7 +713,7 @@ void DynamicGraph::DeleteContourVote(const NavNodePtr& node_ptr1, const NavNodeP
     const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
     if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) return; // no connection (not counter init) in the first place 
     it1->second.push_back(0), it2->second.push_back(0);
-    if (it1->second.size() > dg_params_.votes_size) {
+    if (int(it1->second.size()) > dg_params_.votes_size) {
         it1->second.pop_front(), it2->second.pop_front();
     }
 }

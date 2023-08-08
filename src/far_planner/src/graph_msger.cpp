@@ -73,7 +73,7 @@ void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
     } else {
         nodes_cloud_ptr_->resize(global_graph_.size());
         std::size_t idx = 0;
-        for (const auto node_ptr : global_graph_) {
+        for (const auto& node_ptr : global_graph_) {
             if (node_ptr->is_odom || FARUtil::IsOutsideGoal(node_ptr)) continue;
             PCLPoint pcl_p = FARUtil::Point3DToPCLPoint(node_ptr->position);
             pcl_p.intensity = node_ptr->id;
@@ -96,7 +96,7 @@ void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
 void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
     if (msg->nodes.empty()) return;
     NodePtrStack decoded_nodes;
-    const std::size_t robot_id = msg->robot_id;
+    // const std::size_t robot_id = msg->robot_id;
     const visibility_graph_msg::msg::Graph graph_msg = *msg;
     IdxMap nodeIdx_idx_map;
     // Create nav nodes for decoded graph

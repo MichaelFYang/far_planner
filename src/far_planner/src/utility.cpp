@@ -243,7 +243,7 @@ void FARUtil::ClearKdTree(const PointCloudPtr& cloud_ptr,
 }
 
 bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
-  const std::size_t near_c = FARUtil::PointInNewCounter(p, FARUtil::kMatchDist);
+  const int near_c = FARUtil::PointInNewCounter(p, FARUtil::kMatchDist);
   const int counter_limit = is_creation ? std::round(FARUtil::KNewPointC / 2.0f) : FARUtil::KNewPointC;
   return (near_c > counter_limit) ? true : false;
 }
@@ -444,7 +444,6 @@ void FARUtil::InflateCloud(const PointCloudPtr& obsCloudInOut,
 }
 
 float FARUtil::NoiseCosValue(const float& dot_value, const bool& is_large, const float& noise) {
-  const float crop_value = FARUtil::ClampAbsRange(dot_value, 1.0f);
   const float theta = std::acos(dot_value);
   const int sign = is_large ? 1 : -1;
   double margin_theta = theta + sign * noise;
@@ -780,7 +779,7 @@ bool FARUtil::IsVoteTrue(const std::deque<int>& votes, const bool& is_balance) {
 
 int FARUtil::VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes) {
   int idx = 0;
-  while (idx < ordered_votes.size() && c < ordered_votes[idx]) {
+  while (idx < int(ordered_votes.size()) && c < ordered_votes[idx]) {
       idx ++;
   }
   return idx;
@@ -882,7 +881,7 @@ struct {
   bool operator() (const PointPair& edge1, const PointPair& edge2) const {
     const Point3D center1 = (edge1.first + edge1.second) / 2.0f;
     const Point3D center2 = (edge2.first + edge2.second) / 2.0f;
-    return FARUtil::ClockwiseLess(center1, center1); 
+    return FARUtil::ClockwiseLess(center1, center2); 
   }
 } EdgeClockwiseLess;
 

@@ -63,7 +63,7 @@ public:
         if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) {
             float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity;
             minH = maxH = avgH;
-            for (int i=1; i<pIdxK.size(); i++) {
+            for (std::size_t i=1; i<pIdxK.size(); i++) {
                 const float temp = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[i]].intensity;
                 if (temp < minH) minH = temp;
                 if (temp > maxH) maxH = temp;

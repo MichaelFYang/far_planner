@@ -43,7 +43,7 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
             CTNodeStack ctnode_stack;
             ctnode_stack.clear();
             const int N = poly_ptr->vertices.size();
-            for (std::size_t idx=0; idx<N; idx++) {
+            for (int idx=0; idx<N; idx++) {
                 this->CreateCTNode(poly_ptr->vertices[idx], new_ctnode_ptr, poly_ptr, false);
                 ctnode_stack.push_back(new_ctnode_ptr);
             }
@@ -395,7 +395,6 @@ void ContourGraph::CreatePolygon(const PointStack& poly_points, PolygonPtr& poly
 }
 
 NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, const NodePtrStack& near_nodes) {
-    float nearest_dist = FARUtil::kINF;
     NavNodePtr nearest_node = NULL;
     float min_edist = FARUtil::kINF;
     const float dir_thred = 0.5f; //cos(pi/3);

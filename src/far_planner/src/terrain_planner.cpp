@@ -173,7 +173,7 @@ void TerrainPlanner::VisualPaths() {
     auto DrawPath = [&](const PointStack& path) {
         if (path.size() < 2) return;
         geometry_msgs::msg::Point last_p = FARUtil::Point3DToGeoMsgPoint(path[0]);
-        for (int i=1; i<path.size(); i++) {
+        for (std::size_t i=1; i<path.size(); i++) {
             terrain_paths_marker.points.push_back(last_p);
             last_p = FARUtil::Point3DToGeoMsgPoint(path[i]);
             terrain_paths_marker.points.push_back(last_p);

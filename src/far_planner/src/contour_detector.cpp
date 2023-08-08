@@ -89,8 +89,7 @@ void ContourDetector::ConvertContoursToRealWorld(const std::vector<CVPointStack>
 }
 
 
-void ContourDetector::ShowCornerImage(const cv::Mat& img_mat,
-                                     const PointCloudPtr& pc) {
+void ContourDetector::ShowCornerImage(const cv::Mat& img_mat, const PointCloudPtr& pc) {
     cv::Mat dst = cv::Mat::zeros(MAT_RESIZE, MAT_RESIZE, CV_8UC3);
     const int circle_size = (int)(cd_params_.kRatio*1.5);
     for (std::size_t i=0; i<pc->size(); i++) {
@@ -156,7 +155,7 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
     if (!remove_idxs.empty()) { // clear contour with vertices size less that 3
         std::vector<CVPointStack> temp_contours = contoursInOut;
         contoursInOut.clear();
-        for (int i=0; i<temp_contours.size(); i++) {
+        for (std::size_t i=0; i<temp_contours.size(); i++) {
             if (remove_idxs.find(i) != remove_idxs.end()) continue;
             contoursInOut.push_back(temp_contours[i]);
         }
@@ -165,7 +164,7 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
 
 void ContourDetector::TopoFilterContours(std::vector<CVPointStack>& contoursInOut) {
     std::unordered_set<int> remove_idxs;
-    for (int i=0; i<contoursInOut.size(); i++) {
+    for (std::size_t i=0; i<contoursInOut.size(); i++) {
         if (remove_idxs.find(i) != remove_idxs.end()) continue;
         const auto poly = contoursInOut[i];
         if (poly.size() < 3) {
@@ -177,7 +176,7 @@ void ContourDetector::TopoFilterContours(std::vector<CVPointStack>& contoursInOu
     if (!remove_idxs.empty()) {
         std::vector<CVPointStack> temp_contours = contoursInOut;
         contoursInOut.clear();
-        for (int i=0; i<temp_contours.size(); i++) {
+        for (std::size_t i=0; i<temp_contours.size(); i++) {
             if (remove_idxs.find(i) != remove_idxs.end()) continue;
             contoursInOut.push_back(temp_contours[i]);
         }

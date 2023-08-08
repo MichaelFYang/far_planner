@@ -137,8 +137,7 @@ private:
 
     void PlanningCallBack();
     
-    void PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
-                       const PointCloudPtr& cloudOut);
+    void PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut);
 
     
     Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
@@ -191,14 +190,14 @@ private:
         }
     }
 
-    inline void ReadFileCommand(const std_msgs::msg::String::ConstPtr msg) {
+    inline void ReadFileCommand(const std_msgs::msg::String::SharedPtr msg) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
         }
     }
 
-    inline void SaveFileCommand(const std_msgs::msg::String::ConstPtr msg) {
+    inline void SaveFileCommand(const std_msgs::msg::String::SharedPtr msg) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();

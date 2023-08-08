@@ -115,7 +115,7 @@ inline bool IsResetBlockStatus(const NavNodePtr& node_ptr, const NavNodePtr& goa
     if (node_ptr->is_odom || (node_ptr->is_near_nodes && (!node_ptr->is_finalized || node_ptr->is_frontier))) return true;
     if (!FARUtil::IsStaticEnv && node_ptr->is_near_nodes) return true;
     const auto it = node_ptr->edge_votes.find(goal_ptr->id);
-    if (node_ptr->is_near_nodes && it != node_ptr->edge_votes.end() && it->second.size() < gp_params_.votes_size) {
+    if (node_ptr->is_near_nodes && it != node_ptr->edge_votes.end() && int(it->second.size()) < gp_params_.votes_size) {
         return true;
     }
     return false;

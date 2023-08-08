@@ -97,7 +97,7 @@ private:
                                     const std::size_t& cur_idx,
                                     std::unordered_set<int>& remove_idxs)
     {
-        if (cur_idx == -1) return;
+        if (int(cur_idx) == -1) return;
         int next_idx = cur_idx;
         while (next_idx != -1) {
             remove_idxs.insert(next_idx);

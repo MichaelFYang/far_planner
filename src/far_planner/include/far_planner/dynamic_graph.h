@@ -157,7 +157,7 @@ private:
             }
         }
         it1->second ++, it2->second ++;
-        if (it1->second > dg_params_.finalize_thred) { // clear trajectory connections and votes
+        if (int(it1->second) > dg_params_.finalize_thred) { // clear trajectory connections and votes
             if (FARUtil::IsDebug) RCLCPP_ERROR(nh_->get_logger(), "DG: Current trajectory edge disconnected, no traversable path found.");
             node_ptr1->trajectory_votes.erase(node_ptr2->id);
             FARUtil::EraseNodeFromStack(node_ptr2, node_ptr1->trajectory_connects);
@@ -519,7 +519,7 @@ public:
         if (it1 == node_ptr1->terrain_votes.end()) {
             node_ptr1->terrain_votes.insert({node_ptr2->id, 1});
             node_ptr2->terrain_votes.insert({node_ptr1->id, 1});
-        } else if (it1->second < dg_params_.finalize_thred * 2) {
+        } else if (int(it1->second) < dg_params_.finalize_thred * 2) {
             const auto it2 = node_ptr2->terrain_votes.find(node_ptr1->id);
             it1->second ++, it2->second ++;
         }

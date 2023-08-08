@@ -230,7 +230,7 @@ public:
     static bool IsPointInToleratedHeight(const Point& p, const float& height=FARUtil::kTolerZ) {
         if (abs(p.z - FARUtil::robot_pos.z) < height) return true;
         return false;
-    };
+    }
 
     template <typename _T>
     static int Signum(const _T x) {
@@ -312,7 +312,7 @@ public:
     static Point3D SurfTopoDirect(const PointPair& dirs);
 
     template <typename NodeType1, typename NodeType2>
-    static inline bool IsAtSameLayer(const NodeType1& node_ptr1, const NodeType2& node_ptr2, const bool& is_large=false) {
+    static inline bool IsAtSameLayer(const NodeType1& node_ptr1, const NodeType2& node_ptr2) {
         if (FARUtil::IsMultiLayer && abs(node_ptr1->position.z - node_ptr2->position.z) > FARUtil::kTolerZ) {
             return false;
         }

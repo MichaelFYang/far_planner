@@ -53,7 +53,6 @@ void DPVisualizer::VizPoint3D(const Point3D& point,
     Marker node_marker;
     node_marker.type = Marker::SPHERE;
     this->SetMarker(nh_, color, ns, scale, alpha, node_marker);
-    std::size_t idx = 0;
     node_marker.pose.position.x = point.x;
     node_marker.pose.position.y = point.y;
     node_marker.pose.position.z = point.z;

@@ -382,14 +382,14 @@ Point3D FARMaster::ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavN
 }
 
 Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist) {
-  if (nav_node_ptr_->free_direct != NodeFreeDirect::CONVEX || obsCloudIn->empty()) return nav_node_ptr_->position;
-  FARUtil::CropPCLCloud(obsCloudIn, viewpoint_around_ptr_, nav_node_ptr_->position, free_dist + FARUtil::kNearDist);
-  float maxR = std::min((nav_node_ptr_->position - robot_pos_).norm(), free_dist) - FARUtil::kNearDist;
+  if (nav_node_ptr->free_direct != NodeFreeDirect::CONVEX || obsCloudIn->empty()) return nav_node_ptr->position;
+  FARUtil::CropPCLCloud(obsCloudIn, viewpoint_around_ptr_, nav_node_ptr->position, free_dist + FARUtil::kNearDist);
+  float maxR = std::min((nav_node_ptr->position - robot_pos_).norm(), free_dist) - FARUtil::kNearDist;
   maxR = std::max(maxR, 0.0f);
   bool is_wall = false;
-  const Point3D direct = -FARUtil::SurfTopoDirect(nav_node_ptr_->surf_dirs, is_wall);
+  const Point3D direct = -FARUtil::SurfTopoDirect(nav_node_ptr->surf_dirs, is_wall);
   if (!is_wall) {
-    Point3D waypoint = nav_node_ptr_->position;
+    Point3D waypoint = nav_node_ptr->position;
     if (viewpoint_around_ptr_->empty()) {
       waypoint = waypoint + direct * maxR;
     } else {
@@ -399,25 +399,25 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
       // ray tracing
       Point3D start_p = waypoint + direct * FARUtil::kNearDist;
       float ray_dist  = FARUtil::kNearDist; 
-      bool is_occupied = FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_) > N_Thred;
+      bool is_occupied = int(FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_)) > N_Thred;
       waypoint = start_p;
       while (!is_occupied && ray_dist < free_dist) {
         start_p = start_p + direct * FARUtil::kNearDist;
         ray_dist += FARUtil::kNearDist;
-        is_occupied = FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_) > N_Thred;
+        is_occupied = int(FARUtil::PointInXCounter(start_p, R, kdtree_viewpoint_obs_cloud_)) > N_Thred;
         if (ray_dist < maxR) {
           waypoint = start_p;
         }
       }
       if (is_occupied) {
-        waypoint = (nav_node_ptr_->position + waypoint - direct * FARUtil::kNearDist) / 2.0f;
-        waypoint.z = nav_node_ptr_->position.z;
+        waypoint = (nav_node_ptr->position + waypoint - direct * FARUtil::kNearDist) / 2.0f;
+        waypoint.z = nav_node_ptr->position.z;
         free_dist = ray_dist - FARUtil::kNearDist;
       }
       return waypoint;
     }
   }
-  return nav_node_ptr_->position;
+  return nav_node_ptr->position;
 }
 
 
@@ -646,8 +646,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 }
 
 
-void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
-                              const PointCloudPtr& cloudOut) 
+void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) 
 {
   pcl::PointCloud<PCLPoint> temp_cloud;
   pcl::fromROSMsg(*pc, temp_cloud);
@@ -666,9 +665,9 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::ConstPtr pc,
                                  tf_buffer_,
                                  cloudOut);
     }
-    catch(tf2::TransformException ex)
+    catch(const tf2::TransformException& ex)
     {
-      RCLCPP_ERROR_STREAM(nh_->get_logger(), ("Tracking cloud TF lookup: %s", ex.what()));
+      RCLCPP_ERROR_STREAM(nh_->get_logger(), "Tracking cloud TF lookup: " << ex.what());
       return;
     }
   }
@@ -722,7 +721,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
                                     FARUtil::surround_obs_cloud_, 
                                     FARUtil::surround_free_cloud_, 
                                     FARUtil::cur_dyobs_cloud_);
-    if (FARUtil::cur_dyobs_cloud_->size() > FARUtil::kDyObsThred) {
+    if (int(FARUtil::cur_dyobs_cloud_->size()) > FARUtil::kDyObsThred) {
       if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
       FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true);
       map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_);

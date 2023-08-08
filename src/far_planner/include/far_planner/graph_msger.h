@@ -73,8 +73,6 @@ private:
 
     void PublishGlobalGraph(const NodePtrStack& graphIn);
 
-    bool PublishGraphService(const std::shared_ptr<std_srvs::srv::Trigger::Request> req, std::shared_ptr<std_srvs::srv::Trigger::Response> res);
-
     void ExtractConnectIdxs(const visibility_graph_msg::msg::Node& node,
                             IdxStack& connect_idxs,
                             IdxStack& poly_idxs,

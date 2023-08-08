@@ -347,7 +347,7 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
     const float H_MIN = FARUtil::robot_pos.z - FARUtil::kTolerZ;
     for (auto& ctnode_ptr : ctnodes) {
         float min_th, max_th;
-        const float avg_h = NearestHeightOfRadius(ctnode_ptr->position, FARUtil::kMatchDist, min_th, max_th, ctnode_ptr->is_ground_associate);
+        NearestHeightOfRadius(ctnode_ptr->position, FARUtil::kMatchDist, min_th, max_th, ctnode_ptr->is_ground_associate);
         if (ctnode_ptr->is_ground_associate) {
             ctnode_ptr->position.z = min_th + FARUtil::vehicle_height;
             ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN);
@@ -364,12 +364,10 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
     neighbor_obs.clear();
     const float R = map_params_.cell_length * 0.7071f; // sqrt(2)/2
     for (const auto& idx : neighbor_copy) {
-        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); 
-        const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(pos.x, pos.y, 0.0f));
-        const int terrain_ind = terrain_height_grid_->Sub2Ind(sub);
+        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx));
         bool inRange = false;
         float minH, maxH;
-        const float avgH = NearestHeightOfRadius(pos, R, minH, maxH, inRange);
+        NearestHeightOfRadius(pos, R, minH, maxH, inRange);
         if (inRange && pos.z + map_params_.cell_height > minH &&
                        pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
         {
@@ -412,7 +410,6 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
             terrain_grid_occupy_list_[ind] = 1;
         }
     }
-    const int N = terrain_grid_occupy_list_.size();
     this->TraversableAnalysis(terrainHeightOut);
     if (terrainHeightOut->empty()) { // set terrain height kdtree
         FARUtil::ClearKdTree(flat_terrain_cloud_, kdtree_terrain_clould_);

@@ -86,7 +86,7 @@ private:
     }
 
     inline void AllocateGridNodes() {
-        for (std::size_t i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
             terrain_grids_->GetCell(i) = std::make_shared<TerrainNode>();
             terrain_grids_->GetCell(i)->id = i;
         }
@@ -94,21 +94,21 @@ private:
 
     inline void ResetGridsOccupancy() {
         if (!is_grids_init_) return;
-        for (std::size_t i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
             terrain_grids_->GetCell(i)->is_occupied = false;
         }
     }
 
     inline void ResetGridsPositions() {
         if (!is_grids_init_) return;
-        for (std::size_t i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
             terrain_grids_->GetCell(i)->position = Point3D(terrain_grids_->Ind2Pos(i));
         }
     }
 
     inline void ResetGridsPlanStatus() {
         if (!is_grids_init_) return;
-        for (std::size_t i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
             terrain_grids_->GetCell(i)->fscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->gscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->parent = NULL;
