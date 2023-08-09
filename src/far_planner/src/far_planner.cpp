@@ -17,6 +17,8 @@ FARMaster::FARMaster()
   /* initialize transform buffer and listener */
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+  // RCLCPP_INFO(nh_->get_logger(), "FAR Planner Node Initiated");
 }
 
 void FARMaster::Init() {
@@ -52,12 +54,21 @@ void FARMaster::Init() {
   new_PCL_pub_         = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_new_debug",1);
   terrain_height_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_terrain_height_debug",1);
 
+  //print publisher and subscriber init complete
+  // RCLCPP_INFO(nh_->get_logger(), "FAR Planner Subscriber and Publisher Initiated");
+
   this->LoadROSParams();
+
+  //print ROS params load complete
+  RCLCPP_INFO(nh_->get_logger(), "FAR Planner ROS Params Initiated");
 
   /*init path generation thred callback*/
   const float duration_time = master_params_.main_run_freq;
   main_event_     = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::MainLoopCallBack, this));
   planning_event_ = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
+
+  //print callback init complete
+  RCLCPP_INFO(nh_->get_logger(), "FAR Planner Callback Initiated");
 
   /* init Dynamic Planner Processing Objects */
   contour_detector_.Init(cdetect_params_);
@@ -68,6 +79,9 @@ void FARMaster::Init() {
   map_handler_.Init(map_params_);
   scan_handler_.Init(scan_params_);
   graph_msger_.Init(nh_, msger_parmas_);
+
+  //print processing objects init complete
+  RCLCPP_INFO(nh_->get_logger(), "FAR Planner Processing Objects Initiated");
 
   /* init internal params */
   odom_node_ptr_      = NULL;
@@ -107,7 +121,7 @@ void FARMaster::Init() {
   robot_pos_   = Point3D(0,0,0);
   nav_heading_ = Point3D(0,0,0);
   goal_waypoint_stamped_.header.frame_id = master_params_.world_frame;
-  printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
+  // printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
   std::cout<<std::endl;
   if (master_params_.is_static_env) {
     std::cout<<"\033[1;33m **************** STATIC ENV PLANNING **************** \033[0m\n"<<std::endl;
@@ -437,7 +451,7 @@ void FARMaster::LoadROSParams() {
   nh_->declare_parameter<float>("voxel_dim", 0.2);
   nh_->declare_parameter<float>("robot_dim", 0.8);
   nh_->declare_parameter<float>("vehicle_height", 0.75);
-  nh_->declare_parameter<float>("sensor_range", 50.0);
+  nh_->declare_parameter<float>("sensor_range", 30.0);
   nh_->declare_parameter<float>("terrain_range", 15.0);
   nh_->declare_parameter<float>("local_planner_range", 5.0);
   nh_->declare_parameter<float>("visualize_ratio", 1.0);
@@ -470,16 +484,22 @@ void FARMaster::LoadROSParams() {
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
   // Declare map parameters
-  nh_->declare_parameter<float>(map_prefix + ".floor_height", 2.0);
-  nh_->declare_parameter<float>(map_prefix + ".cell_length", 5.0);
-  nh_->declare_parameter<float>(map_prefix + ".map_grid_max_length", 5000.0);
-  nh_->declare_parameter<float>(map_prefix + ".map_grad_max_height", 100.0);
+  nh_->declare_parameter<float>(map_prefix + "/floor_height", 2.0);
+  nh_->declare_parameter<float>(map_prefix + "/cell_length", 5.0);
+  nh_->declare_parameter<float>(map_prefix + "/map_grid_max_length", 1000.0);
+  nh_->declare_parameter<float>(map_prefix + "/map_grad_max_height", 100.0);
 
   // Get map parameters
-  nh_->get_parameter(map_prefix + ".floor_height", map_params_.floor_height);
-  nh_->get_parameter(map_prefix + ".cell_length", map_params_.cell_length);
-  nh_->get_parameter(map_prefix + ".map_grid_max_length", map_params_.grid_max_length);
-  nh_->get_parameter(map_prefix + ".map_grad_max_height", map_params_.grid_max_height);
+  nh_->get_parameter(map_prefix + "/floor_height", map_params_.floor_height);
+  nh_->get_parameter(map_prefix + "/cell_length", map_params_.cell_length);
+  nh_->get_parameter(map_prefix + "/map_grid_max_length", map_params_.grid_max_length);
+  nh_->get_parameter(map_prefix + "/map_grad_max_height", map_params_.grid_max_height);
+
+  // print floor height
+  RCLCPP_INFO(nh_->get_logger(), "floor_height: %f", map_params_.floor_height);
+  RCLCPP_INFO(nh_->get_logger(), "cell_length: %f", map_params_.cell_length);
+  RCLCPP_INFO(nh_->get_logger(), "map_grid_max_length: %f", map_params_.grid_max_length);
+  RCLCPP_INFO(nh_->get_logger(), "map_grad_max_height: %f", map_params_.grid_max_height);
 
   // Compute dependent parameters
   map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
@@ -487,28 +507,28 @@ void FARMaster::LoadROSParams() {
   map_params_.sensor_range = master_params_.sensor_range;
 
   // Declare utility parameters
-  nh_->declare_parameter<float>(utility_prefix + ".angle_noise", 15.0);
-  nh_->declare_parameter<float>(utility_prefix + ".accept_max_align_angle", 15.0);
-  nh_->declare_parameter<float>(utility_prefix + ".new_intensity_thred", 2.0);
-  nh_->declare_parameter<float>(utility_prefix + ".nav_clear_dist", 0.5);
-  nh_->declare_parameter<float>(utility_prefix + ".terrain_free_Z", 0.1);
-  nh_->declare_parameter<int>(utility_prefix + ".dyosb_update_thred", 4);
-  nh_->declare_parameter<int>(utility_prefix + ".new_point_counter", 10);
-  nh_->declare_parameter<float>(utility_prefix + ".dynamic_obs_dacay_time", 10.0);
-  nh_->declare_parameter<float>(utility_prefix + ".new_points_decay_time", 2.0);
-  nh_->declare_parameter<int>(utility_prefix + ".obs_inflate_size", 2);
+  nh_->declare_parameter<float>(utility_prefix + "/angle_noise", 15.0);
+  nh_->declare_parameter<float>(utility_prefix + "/accept_max_align_angle", 15.0);
+  nh_->declare_parameter<float>(utility_prefix + "/new_intensity_thred", 2.0);
+  nh_->declare_parameter<float>(utility_prefix + "/nav_clear_dist", 0.5);
+  nh_->declare_parameter<float>(utility_prefix + "/terrain_free_Z", 0.1);
+  nh_->declare_parameter<int>(utility_prefix   + "/dyosb_update_thred", 4);
+  nh_->declare_parameter<int>(utility_prefix   + "/new_point_counter", 10);
+  nh_->declare_parameter<float>(utility_prefix + "/dynamic_obs_dacay_time", 10.0);
+  nh_->declare_parameter<float>(utility_prefix + "/new_points_decay_time", 2.0);
+  nh_->declare_parameter<int>(utility_prefix   + "/obs_inflate_size", 2);
 
   // Get utility parameters
-  nh_->get_parameter(utility_prefix + ".angle_noise", FARUtil::kAngleNoise);
-  nh_->get_parameter(utility_prefix + ".accept_max_align_angle", FARUtil::kAcceptAlign);
-  nh_->get_parameter(utility_prefix + ".new_intensity_thred", FARUtil::kNewPIThred);
-  nh_->get_parameter(utility_prefix + ".nav_clear_dist", FARUtil::kNavClearDist);
-  nh_->get_parameter(utility_prefix + ".terrain_free_Z", FARUtil::kFreeZ);
-  nh_->get_parameter(utility_prefix + ".dyosb_update_thred", FARUtil::kDyObsThred);
-  nh_->get_parameter(utility_prefix + ".new_point_counter", FARUtil::KNewPointC);
-  nh_->get_parameter(utility_prefix + ".dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
-  nh_->get_parameter(utility_prefix + ".new_points_decay_time", FARUtil::kNewDecayTime);
-  nh_->get_parameter(utility_prefix + ".obs_inflate_size", FARUtil::kObsInflate);
+  nh_->get_parameter(utility_prefix + "/angle_noise", FARUtil::kAngleNoise);
+  nh_->get_parameter(utility_prefix + "/accept_max_align_angle", FARUtil::kAcceptAlign);
+  nh_->get_parameter(utility_prefix + "/new_intensity_thred", FARUtil::kNewPIThred);
+  nh_->get_parameter(utility_prefix + "/nav_clear_dist", FARUtil::kNavClearDist);
+  nh_->get_parameter(utility_prefix + "/terrain_free_Z", FARUtil::kFreeZ);
+  nh_->get_parameter(utility_prefix + "/dyosb_update_thred", FARUtil::kDyObsThred);
+  nh_->get_parameter(utility_prefix + "/new_point_counter", FARUtil::KNewPointC);
+  nh_->get_parameter(utility_prefix + "/dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
+  nh_->get_parameter(utility_prefix + "/new_points_decay_time", FARUtil::kNewDecayTime);
+  nh_->get_parameter(utility_prefix + "/obs_inflate_size", FARUtil::kObsInflate);
   FARUtil::kLeafSize       = master_params_.voxel_dim;
   FARUtil::kNearDist       = master_params_.robot_dim;
   FARUtil::kHeightVoxel    = map_params_.height_voxel_dim;
@@ -534,17 +554,17 @@ void FARMaster::LoadROSParams() {
   FARUtil::kLocalPlanRange = master_params_.local_planner_range;
 
   // graph planner params
-  nh_->declare_parameter<float>(planner_prefix + ".converge_distance", 1.0);
-  nh_->declare_parameter<float>(planner_prefix + ".goal_adjust_radius", 10.0);
-  nh_->declare_parameter<int>(planner_prefix + ".free_counter_thred", 5);
-  nh_->declare_parameter<int>(planner_prefix + ".reach_goal_vote_size", 5);
-  nh_->declare_parameter<int>(planner_prefix + ".path_momentum_thred", 5);
+  nh_->declare_parameter<float>(planner_prefix + "/converge_distance", 1.0);
+  nh_->declare_parameter<float>(planner_prefix + "/goal_adjust_radius", 10.0);
+  nh_->declare_parameter<int>(planner_prefix   + "/free_counter_thred", 5);
+  nh_->declare_parameter<int>(planner_prefix   + "/reach_goal_vote_size", 5);
+  nh_->declare_parameter<int>(planner_prefix   + "/path_momentum_thred", 5);
   
-  nh_->get_parameter(planner_prefix + ".converge_distance", gp_params_.converge_dist);
-  nh_->get_parameter(planner_prefix + ".goal_adjust_radius", gp_params_.adjust_radius);
-  nh_->get_parameter(planner_prefix + ".free_counter_thred", gp_params_.free_thred);
-  nh_->get_parameter(planner_prefix + ".reach_goal_vote_size", gp_params_.votes_size);
-  nh_->get_parameter(planner_prefix + ".path_momentum_thred", gp_params_.momentum_thred);
+  nh_->get_parameter(planner_prefix + "/converge_distance", gp_params_.converge_dist);
+  nh_->get_parameter(planner_prefix + "/goal_adjust_radius", gp_params_.adjust_radius);
+  nh_->get_parameter(planner_prefix + "/free_counter_thred", gp_params_.free_thred);
+  nh_->get_parameter(planner_prefix + "/reach_goal_vote_size", gp_params_.votes_size);
+  nh_->get_parameter(planner_prefix + "/path_momentum_thred", gp_params_.momentum_thred);
 
   gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
@@ -553,19 +573,19 @@ void FARMaster::LoadROSParams() {
   cg_params_.kPillarPerimeter = master_params_.robot_dim * 4.0f;
 
   // dynamic graph params
-  nh_->declare_parameter<int>(graph_prefix + ".connect_votes_size", 10);
-  nh_->declare_parameter<int>(graph_prefix + ".clear_dumper_thred", 3);
-  nh_->declare_parameter<int>(graph_prefix + ".node_finalize_thred", 3);
-  nh_->declare_parameter<int>(graph_prefix + ".filter_pool_size", 12);
-  nh_->declare_parameter<float>(graph_prefix + ".connect_angle_thred", 10.0);
-  nh_->declare_parameter<float>(graph_prefix + ".dirs_filter_margin", 10.0);
+  nh_->declare_parameter<int>(graph_prefix   + "/connect_votes_size", 10);
+  nh_->declare_parameter<int>(graph_prefix   + "/clear_dumper_thred", 3);
+  nh_->declare_parameter<int>(graph_prefix   + "/node_finalize_thred", 3);
+  nh_->declare_parameter<int>(graph_prefix   + "/filter_pool_size", 12);
+  nh_->declare_parameter<float>(graph_prefix + "/connect_angle_thred", 10.0);
+  nh_->declare_parameter<float>(graph_prefix + "/dirs_filter_margin", 10.0);
 
-  nh_->get_parameter(graph_prefix + ".connect_votes_size", graph_params_.votes_size);
-  nh_->get_parameter(graph_prefix + ".clear_dumper_thred", graph_params_.dumper_thred);
-  nh_->get_parameter(graph_prefix + ".node_finalize_thred", graph_params_.finalize_thred);
-  nh_->get_parameter(graph_prefix + ".filter_pool_size", graph_params_.pool_size);
-  nh_->get_parameter(graph_prefix + ".connect_angle_thred", graph_params_.kConnectAngleThred);
-  nh_->get_parameter(graph_prefix + ".dirs_filter_margin", graph_params_.filter_dirs_margin);
+  nh_->get_parameter(graph_prefix + "/connect_votes_size", graph_params_.votes_size);
+  nh_->get_parameter(graph_prefix + "/clear_dumper_thred", graph_params_.dumper_thred);
+  nh_->get_parameter(graph_prefix + "/node_finalize_thred", graph_params_.finalize_thred);
+  nh_->get_parameter(graph_prefix + "/filter_pool_size", graph_params_.pool_size);
+  nh_->get_parameter(graph_prefix + "/connect_angle_thred", graph_params_.kConnectAngleThred);
+  nh_->get_parameter(graph_prefix + "/dirs_filter_margin", graph_params_.filter_dirs_margin);
 
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
@@ -573,8 +593,8 @@ void FARMaster::LoadROSParams() {
   graph_params_.frontier_perimeter_thred = FARUtil::kMatchDist * 4.0f;
 
   // graph messager params
-  nh_->declare_parameter<int>(msger_prefix + ".robot_id", 0);
-  nh_->get_parameter(msger_prefix + ".robot_id", msger_parmas_.robot_id);
+  nh_->declare_parameter<int>(msger_prefix + "/robot_id", 0);
+  nh_->get_parameter(msger_prefix + "/robot_id", msger_parmas_.robot_id);
 
   msger_parmas_.frame_id    = master_params_.world_frame;
   msger_parmas_.votes_size  = graph_params_.votes_size;
@@ -587,15 +607,15 @@ void FARMaster::LoadROSParams() {
   scan_params_.ceil_height   = map_params_.floor_height;
 
   // contour detector params
-  nh_->declare_parameter<float>(cdetect_prefix + ".resize_ratio", 5.0);
-  nh_->declare_parameter<int>(cdetect_prefix + ".filter_count_value", 5);
-  nh_->declare_parameter<bool>(cdetect_prefix + ".is_save_img", false);
-  nh_->declare_parameter<std::string>(cdetect_prefix + ".img_folder_path", "");
+  nh_->declare_parameter<float>(cdetect_prefix + "/resize_ratio", 5.0);
+  nh_->declare_parameter<int>(cdetect_prefix   + "/filter_count_value", 5);
+  nh_->declare_parameter<bool>(cdetect_prefix  + "/is_save_img", false);
+  nh_->declare_parameter<std::string>(cdetect_prefix + "/img_folder_path", "");
 
-  nh_->get_parameter(cdetect_prefix + ".resize_ratio", cdetect_params_.kRatio);
-  nh_->get_parameter(cdetect_prefix + ".filter_count_value", cdetect_params_.kThredValue);
-  nh_->get_parameter(cdetect_prefix + ".is_save_img", cdetect_params_.is_save_img);
-  nh_->get_parameter(cdetect_prefix + ".img_folder_path", cdetect_params_.img_path);
+  nh_->get_parameter(cdetect_prefix + "/resize_ratio", cdetect_params_.kRatio);
+  nh_->get_parameter(cdetect_prefix + "/filter_count_value", cdetect_params_.kThredValue);
+  nh_->get_parameter(cdetect_prefix + "/is_save_img", cdetect_params_.is_save_img);
+  nh_->get_parameter(cdetect_prefix + "/img_folder_path", cdetect_params_.img_path);
 
   cdetect_params_.kBlurSize    = (int)std::round(FARUtil::kNavClearDist / master_params_.voxel_dim);
   cdetect_params_.sensor_range = master_params_.sensor_range;

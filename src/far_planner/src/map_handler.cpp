@@ -17,7 +17,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
     int level_num = std::ceil(map_params_.grid_max_height / map_params_.cell_height);
     neighbor_Lnum_ = std::ceil(map_params_.sensor_range * 2.0f / map_params_.cell_length) + 1; 
     neighbor_Hnum_ = 5; 
-    if (level_num % 2 == 0) level_num ++;         // force to odd number, robot will be at center
+    if (level_num % 2 == 0) level_num ++;           // force to odd number, robot will be at center
     if (neighbor_Lnum_ % 2 == 0) neighbor_Lnum_ ++; // force to odd number
 
     // inlitialize grid 
