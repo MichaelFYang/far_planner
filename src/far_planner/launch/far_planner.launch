@@ -38,13 +38,13 @@ def generate_launch_description():
             ]
         ),
         
-        # Node(
-        #     package='rviz2',
-        #     executable='rviz2',
-        #     name='far_rviz',
-        #     arguments=['-d', LaunchConfiguration('find far_planner') + '/rviz/default.rviz'],
-        #     respawn=True
-        # ),
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='far_rviz',
+            arguments=['-d', get_package_share_directory('far_planner') + '/rviz/default.rviz'],
+            respawn=False,
+        ),
 
         # Including another launch file
         IncludeLaunchDescription(
