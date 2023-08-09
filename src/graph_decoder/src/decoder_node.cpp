@@ -144,7 +144,6 @@ void GraphDecoder::LoadParmas() {
     nh_->get_parameter("world_frame", gd_params_.frame_id);
     nh_->get_parameter("visual_scale_ratio", gd_params_.viz_scale_ratio);
 
-    RCLCPP_INFO(nh_->get_logger(), "GraphDecoder parameters loaded.");
     // output the parameters
     RCLCPP_INFO(nh_->get_logger(), "GraphDecoder parameters: ");
     RCLCPP_INFO(nh_->get_logger(), "world_frame: %s", gd_params_.frame_id.c_str());

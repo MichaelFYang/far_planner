@@ -422,52 +422,51 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
 
 
 void FARMaster::LoadROSParams() {
-  const std::string master_prefix   = "far_planner";
-  const std::string map_prefix      = master_prefix + ".map_handler";
-  const std::string scan_prefix     = master_prefix + ".scan_handler";
-  const std::string cdetect_prefix  = master_prefix + ".c_detector";
-  const std::string graph_prefix    = master_prefix + ".graph";
-  const std::string viz_prefix      = master_prefix + ".viz";
-  const std::string utility_prefix  = master_prefix + ".util";
-  const std::string planner_prefix  = master_prefix + ".g_planner";
-  const std::string contour_prefix  = master_prefix + ".contour_graph";
-  const std::string msger_prefix    = master_prefix + ".graph_msger";
+  const std::string map_prefix      = "map_handler";
+  const std::string scan_prefix     = "scan_handler";
+  const std::string cdetect_prefix  = "c_detector";
+  const std::string graph_prefix    = "graph";
+  const std::string viz_prefix      = "viz";
+  const std::string utility_prefix  = "util";
+  const std::string planner_prefix  = "g_planner";
+  const std::string contour_prefix  = "contour_graph";
+  const std::string msger_prefix    = "graph_msger";
 
    // master params
-  nh_->declare_parameter<float>(master_prefix + ".main_run_freq", 5.0);
-  nh_->declare_parameter<float>(master_prefix + ".voxel_dim", 0.2);
-  nh_->declare_parameter<float>(master_prefix + ".robot_dim", 0.8);
-  nh_->declare_parameter<float>(master_prefix + ".vehicle_height", 0.75);
-  nh_->declare_parameter<float>(master_prefix + ".sensor_range", 50.0);
-  nh_->declare_parameter<float>(master_prefix + ".terrain_range", 15.0);
-  nh_->declare_parameter<float>(master_prefix + ".local_planner_range", 5.0);
-  nh_->declare_parameter<float>(master_prefix + ".visualize_ratio", 1.0);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_viewpoint_extend", true);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_multi_layer", false);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_opencv_visual", true);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_static_env", true);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_pub_boundary", true);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_debug_output", false);
-  nh_->declare_parameter<bool>(master_prefix  + ".is_attempt_autoswitch", true);
-  nh_->declare_parameter<std::string>(master_prefix + ".world_frame", "map");
+  nh_->declare_parameter<float>("main_run_freq", 5.0);
+  nh_->declare_parameter<float>("voxel_dim", 0.2);
+  nh_->declare_parameter<float>("robot_dim", 0.8);
+  nh_->declare_parameter<float>("vehicle_height", 0.75);
+  nh_->declare_parameter<float>("sensor_range", 50.0);
+  nh_->declare_parameter<float>("terrain_range", 15.0);
+  nh_->declare_parameter<float>("local_planner_range", 5.0);
+  nh_->declare_parameter<float>("visualize_ratio", 1.0);
+  nh_->declare_parameter<bool>("is_viewpoint_extend", true);
+  nh_->declare_parameter<bool>("is_multi_layer", false);
+  nh_->declare_parameter<bool>("is_opencv_visual", true);
+  nh_->declare_parameter<bool>("is_static_env", true);
+  nh_->declare_parameter<bool>("is_pub_boundary", true);
+  nh_->declare_parameter<bool>("is_debug_output", false);
+  nh_->declare_parameter<bool>("is_attempt_autoswitch", true);
+  nh_->declare_parameter<std::string>("world_frame", "map");
   
   // Get parameters
-  nh_->get_parameter(master_prefix + ".main_run_freq", master_params_.main_run_freq);
-  nh_->get_parameter(master_prefix + ".voxel_dim", master_params_.voxel_dim);
-  nh_->get_parameter(master_prefix + ".robot_dim", master_params_.robot_dim);
-  nh_->get_parameter(master_prefix + ".vehicle_height", master_params_.vehicle_height);
-  nh_->get_parameter(master_prefix + ".sensor_range", master_params_.sensor_range);
-  nh_->get_parameter(master_prefix + ".terrain_range", master_params_.terrain_range);
-  nh_->get_parameter(master_prefix + ".local_planner_range", master_params_.local_planner_range);
-  nh_->get_parameter(master_prefix + ".visualize_ratio", master_params_.viz_ratio);
-  nh_->get_parameter(master_prefix  + ".is_viewpoint_extend", master_params_.is_viewpoint_extend);
-  nh_->get_parameter(master_prefix  + ".is_multi_layer", master_params_.is_multi_layer);
-  nh_->get_parameter(master_prefix  + ".is_opencv_visual", master_params_.is_visual_opencv);
-  nh_->get_parameter(master_prefix  + ".is_static_env", master_params_.is_static_env);
-  nh_->get_parameter(master_prefix  + ".is_pub_boundary", master_params_.is_pub_boundary);
-  nh_->get_parameter(master_prefix  + ".is_debug_output", master_params_.is_debug_output);
-  nh_->get_parameter(master_prefix  + ".is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
-  nh_->get_parameter<std::string>(master_prefix + ".world_frame", master_params_.world_frame);
+  nh_->get_parameter("main_run_freq", master_params_.main_run_freq);
+  nh_->get_parameter("voxel_dim", master_params_.voxel_dim);
+  nh_->get_parameter("robot_dim", master_params_.robot_dim);
+  nh_->get_parameter("vehicle_height", master_params_.vehicle_height);
+  nh_->get_parameter("sensor_range", master_params_.sensor_range);
+  nh_->get_parameter("terrain_range", master_params_.terrain_range);
+  nh_->get_parameter("local_planner_range", master_params_.local_planner_range);
+  nh_->get_parameter("visualize_ratio", master_params_.viz_ratio);
+  nh_->get_parameter("is_viewpoint_extend", master_params_.is_viewpoint_extend);
+  nh_->get_parameter("is_multi_layer", master_params_.is_multi_layer);
+  nh_->get_parameter("is_opencv_visual", master_params_.is_visual_opencv);
+  nh_->get_parameter("is_static_env", master_params_.is_static_env);
+  nh_->get_parameter("is_pub_boundary", master_params_.is_pub_boundary);
+  nh_->get_parameter("is_debug_output", master_params_.is_debug_output);
+  nh_->get_parameter("is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
+  nh_->get_parameter<std::string>("world_frame", master_params_.world_frame);
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
   // Declare map parameters
