@@ -72,7 +72,7 @@ void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedP
         AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->contour_idxs, node_ptr->contour_connects);
         AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->traj_idxs, node_ptr->traj_connects);
     }
-    RCLCPP_INFO(nh_->get_logger(), "Graph extraction completed. Total size of graph nodes: %ld", received_graph_.size());
+    // RCLCPP_INFO(nh_->get_logger(), "Graph extraction completed. Total size of graph nodes: %ld", received_graph_.size());
     this->VisualizeGraph(received_graph_);
 }
 

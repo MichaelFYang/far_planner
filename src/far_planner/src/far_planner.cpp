@@ -92,6 +92,7 @@ void FARMaster::Init() {
   is_graph_init_      = false;
   is_reset_env_       = false;
   is_stop_update_     = false;
+  is_init_completed_  = false;
 
   // allocate memory to pointers
   new_vertices_ptr_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
@@ -133,6 +134,9 @@ void FARMaster::Init() {
     std::cout<< "\033[1;33m **************** DYNAMIC ENV PLANNING **************** \033[0m\n" << std::endl;
   }
   std::cout<<"\n"<<std::endl;
+
+  // init complete
+  is_init_completed_ = true;
 }
 
 void FARMaster::ResetEnvironmentAndGraph() {
@@ -161,6 +165,9 @@ void FARMaster::ResetEnvironmentAndGraph() {
 }
 
 void FARMaster::MainLoopCallBack() {
+  if (!is_init_completed_) {
+    return;
+  }
   if (is_reset_env_) {
       this->ResetEnvironmentAndGraph();
       is_reset_env_ = false;
@@ -252,14 +259,15 @@ void FARMaster::MainLoopCallBack() {
   }
 
   if (!is_graph_init_ && !nav_graph_.empty()) {
-        is_graph_init_ = true;
-        RCLCPP_INFO(nh_->get_logger(), "\033[1;32m V-Graph Initialized \033[0m\n");
+    is_graph_init_ = true;
+    printf("\033[A"), printf("\033[A"), printf("\033[2K");
+    std::cout<< "\033[1;32m V-Graph Initialized \033[0m\n" << std::endl;
   }
 
 }
 
 void FARMaster::PlanningCallBack() {
-  if (!is_graph_init_) return;
+  if (!is_init_completed_ || !is_graph_init_) return;
   const NavNodePtr goal_ptr = graph_planner_.GetGoalNodePtr();
   if (goal_ptr == NULL) {
     /* Graph Traversablity Update */

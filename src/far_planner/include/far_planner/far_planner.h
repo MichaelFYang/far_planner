@@ -75,7 +75,7 @@ private:
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
 
-    bool is_reset_env_, is_stop_update_;
+    bool is_reset_env_, is_stop_update_, is_init_completed_;
 
     geometry_msgs::msg::PointStamped goal_waypoint_stamped_;
 
