@@ -24,7 +24,6 @@ find_package(rviz_ogre_vendor REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(rclcpp REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -35,10 +34,6 @@ set(HDR_FILES
 foreach(header "${HDR_FILES}")
   qt5_wrap_cpp(rviz_plugins_moc_files "${header}")
 endforeach()
-
-set(HDR_FILES
-    include/goalpoint_tool.hpp
-)
 
 set(SRC_FILES
   src/goalpoint_tool.cpp
@@ -58,7 +53,7 @@ ament_target_dependencies(${PROJECT_NAME}
   "rviz_default_plugins"
   "rviz2"
   "std_msgs"
-  )
+)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   ${Qt5Widgets_INCLUDE_DIRS})

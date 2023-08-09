@@ -2,7 +2,7 @@
   <name>goalpoint_rviz_plugin</name>
   <version>0.0.1</version>
   <description>Goalpoint RVIZ Plugin</description>
-  <maintainer email="fanyang2@cmu.edu">Fan Yang</maintainer>
+  <maintainer email="fanyang1@ethz.ch">Fan Yang</maintainer>
   <license>BSD</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
