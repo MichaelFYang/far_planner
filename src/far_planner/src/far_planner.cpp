@@ -63,7 +63,7 @@ void FARMaster::Init() {
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner ROS Params Initiated");
 
   /*init path generation thred callback*/
-  const float duration_time = master_params_.main_run_freq;
+  const float duration_time = 1.0f / master_params_.main_run_freq;
   main_event_     = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::MainLoopCallBack, this));
   planning_event_ = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
 
@@ -121,7 +121,11 @@ void FARMaster::Init() {
   robot_pos_   = Point3D(0,0,0);
   nav_heading_ = Point3D(0,0,0);
   goal_waypoint_stamped_.header.frame_id = master_params_.world_frame;
-  // printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
+
+  // waiting for one second
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
   std::cout<<std::endl;
   if (master_params_.is_static_env) {
     std::cout<<"\033[1;33m **************** STATIC ENV PLANNING **************** \033[0m\n"<<std::endl;
