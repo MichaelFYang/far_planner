@@ -18,7 +18,7 @@ FARMaster::FARMaster()
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  // RCLCPP_INFO(nh_->get_logger(), "FAR Planner Node Initiated");
+  RCLCPP_INFO(nh_->get_logger(), "FAR Planner Node Initiated");
 }
 
 void FARMaster::Init() {
@@ -137,6 +137,7 @@ void FARMaster::Init() {
 
   // init complete
   is_init_completed_ = true;
+  RCLCPP_INFO(nh_->get_logger(), "FAR Planner Initiated Complete");
 }
 
 void FARMaster::ResetEnvironmentAndGraph() {
@@ -506,12 +507,6 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(map_prefix + "/cell_length", map_params_.cell_length);
   nh_->get_parameter(map_prefix + "/map_grid_max_length", map_params_.grid_max_length);
   nh_->get_parameter(map_prefix + "/map_grad_max_height", map_params_.grid_max_height);
-
-  // print floor height
-  RCLCPP_INFO(nh_->get_logger(), "floor_height: %f", map_params_.floor_height);
-  RCLCPP_INFO(nh_->get_logger(), "cell_length: %f", map_params_.cell_length);
-  RCLCPP_INFO(nh_->get_logger(), "map_grid_max_length: %f", map_params_.grid_max_length);
-  RCLCPP_INFO(nh_->get_logger(), "map_grad_max_height: %f", map_params_.grid_max_height);
 
   // Compute dependent parameters
   map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;

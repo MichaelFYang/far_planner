@@ -49,6 +49,9 @@ void GraphDecoder::Init() {
 
     robot_id_ = 0;
     this->ResetGraph(received_graph_);
+
+    // print init complete
+    RCLCPP_INFO(nh_->get_logger(), "Graph Decoder Node Initialized");
 }
 
 
@@ -143,11 +146,6 @@ void GraphDecoder::LoadParmas() {
     // Retrieve the parameters
     nh_->get_parameter("world_frame", gd_params_.frame_id);
     nh_->get_parameter("visual_scale_ratio", gd_params_.viz_scale_ratio);
-
-    // output the parameters
-    RCLCPP_INFO(nh_->get_logger(), "GraphDecoder parameters: ");
-    RCLCPP_INFO(nh_->get_logger(), "world_frame: %s", gd_params_.frame_id.c_str());
-    RCLCPP_INFO(nh_->get_logger(), "visual_scale_ratio: %f", gd_params_.viz_scale_ratio);
 }
 
 void GraphDecoder::SetMarker(const VizColor& color, 
