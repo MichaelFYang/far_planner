@@ -20,4 +20,8 @@
   <!-- The below dependencies are system dependencies and may need to be reflected in the CMake as well. -->
   <depend>PCL</depend>
   <depend>OpenCV</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

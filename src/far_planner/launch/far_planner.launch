@@ -1,56 +1,43 @@
-import launch
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-import launch.substitutions
-import launch_ros.substitutions
 
 def generate_launch_description():
     return LaunchDescription([
-        # Declare arguments
-        launch.actions.DeclareLaunchArgument(
-            'odom_topic', default_value='/state_estimation', description='Odom topic'
-        ),
-        launch.actions.DeclareLaunchArgument(
-            'terrain_cloud_topic', default_value='/terrain_map_ext', description='Terrain cloud topic'
-        ),
-        launch.actions.DeclareLaunchArgument(
-            'terrain_local_topic', default_value='/terrain_map', description='Terrain local topic'
-        ),
-        launch.actions.DeclareLaunchArgument(
-            'scan_cloud_topic', default_value='/registered_scan', description='Scan cloud topic'
-        ),
-        launch.actions.DeclareLaunchArgument(
-            'config', default_value='default', description='Config for far planner'
-        ),
+        DeclareLaunchArgument('odom_topic', default_value='/state_estimation'),
+        DeclareLaunchArgument('terrain_cloud_topic', default_value='/terrain_map_ext'),
+        DeclareLaunchArgument('terrain_local_topic', default_value='/terrain_map'),
+        DeclareLaunchArgument('scan_cloud_topic', default_value='/registered_scan'),
+        DeclareLaunchArgument('config', default_value='default'),
 
-        # Launch far_planner node
         Node(
             package='far_planner',
             executable='far_planner',
             name='far_planner',
             output='screen',
-            parameters=[launch.substitutions.LaunchConfiguration('config')],
+            parameters=[
+                LaunchConfiguration('find far_planner') + '/config/' + LaunchConfiguration('config') + '.yaml'
+            ],
             remappings=[
-                ('/odom_world', launch.substitutions.LaunchConfiguration('odom_topic')),
-                ('/terrain_cloud', launch.substitutions.LaunchConfiguration('terrain_cloud_topic')),
-                ('/scan_cloud', launch.substitutions.LaunchConfiguration('scan_cloud_topic')),
-                ('/terrain_local_cloud', launch.substitutions.LaunchConfiguration('terrain_local_topic'))
+                ('/odom_world', LaunchConfiguration('odom_topic')),
+                ('/terrain_cloud', LaunchConfiguration('terrain_cloud_topic')),
+                ('/scan_cloud', LaunchConfiguration('scan_cloud_topic')),
+                ('/terrain_local_cloud', LaunchConfiguration('terrain_local_topic'))
             ]
         ),
 
-        # Launch RViz
         Node(
             package='rviz2',
             executable='rviz2',
             name='far_rviz',
-            respawn=True,
-            arguments=['-d', launch.substitutions.LaunchConfiguration('config')]
+            arguments=['-d', LaunchConfiguration('find far_planner') + '/rviz/' + LaunchConfiguration('config') + '.rviz'],
+            respawn=True
         ),
 
-        # Launch graph decoder
-        launch.actions.IncludeLaunchDescription(
-            launch.launch_description_sources.PythonLaunchDescriptionSource(
-                [launch.substitutions.ThisLaunchFileDir(), '/decoder_launch.py']
-            )
+        # Including another launch file
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([LaunchConfiguration('find graph_decoder'), '/launch/decoder.launch'])
         )
     ])

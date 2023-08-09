@@ -20,4 +20,7 @@
   <!-- Optional: Test dependencies -->
   <!-- <test_depend>ament_lint_auto</test_depend> -->
 
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

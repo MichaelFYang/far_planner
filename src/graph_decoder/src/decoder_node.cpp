@@ -13,7 +13,6 @@ GraphDecoder::GraphDecoder() {
     this->Init();
 }
 
-
 void GraphDecoder::Init() {
      /* initialize node */
     nh_ = rclcpp::Node::make_shared("graph_decoder_node");
@@ -138,12 +137,18 @@ void GraphDecoder::LoadParmas() {
     const std::string prefix = "graph_decoder.";
 
     // Declare the parameters
-    nh_->declare_parameter(prefix + "world_frame", "map");
-    nh_->declare_parameter(prefix + "visual_scale_ratio", 1.0f);
+    nh_->declare_parameter("world_frame", "map");
+    nh_->declare_parameter("visual_scale_ratio", 1.0f);
 
     // Retrieve the parameters
-    nh_->get_parameter(prefix + "world_frame", gd_params_.frame_id);
-    nh_->get_parameter(prefix + "visual_scale_ratio", gd_params_.viz_scale_ratio);
+    nh_->get_parameter("world_frame", gd_params_.frame_id);
+    nh_->get_parameter("visual_scale_ratio", gd_params_.viz_scale_ratio);
+
+    RCLCPP_INFO(nh_->get_logger(), "GraphDecoder parameters loaded.");
+    // output the parameters
+    RCLCPP_INFO(nh_->get_logger(), "GraphDecoder parameters: ");
+    RCLCPP_INFO(nh_->get_logger(), "world_frame: %s", gd_params_.frame_id.c_str());
+    RCLCPP_INFO(nh_->get_logger(), "visual_scale_ratio: %f", gd_params_.viz_scale_ratio);
 }
 
 void GraphDecoder::SetMarker(const VizColor& color, 
@@ -510,12 +515,9 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
   rclcpp::init(argc, argv);
-
   auto gd_node = std::make_shared<GraphDecoder>();
-  gd_node->Init();
-
+  
   rclcpp::spin(gd_node->GetNodeHandle());
-
   rclcpp::shutdown();
   return 0;
 }
