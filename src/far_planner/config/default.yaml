@@ -1,56 +1,58 @@
-# Dynamic Planner Default Params
-main_run_freq                           : 2.5
-voxel_dim                               : 0.15  # Unit: meter
-robot_dim                               : 0.8   # Unit: meter
-vehicle_height                          : 0.75  # Unit: meter
-sensor_range                            : 30.0  # Unit: meter
-terrain_range                           : 15.0  # Unit: meter
-local_planner_range                     : 5.0   # Unit: meter
-visualize_ratio                         : 0.75
-is_viewpoint_extend                     : true
-is_multi_layer                          : false
-is_opencv_visual                        : false # Obstalce Image Display
-is_static_env                           : true
-is_pub_boundary                         : false
-is_debug_output                         : false
-is_attempt_autoswitch                   : true  # Auto switch to attemptable navigation
-world_frame                             : map
+far_planner:
+  ros__parameters:
+    # Dynamic Planner Default Params
+    main_run_freq: 2.5
+    voxel_dim: 0.15  # Unit: meter
+    robot_dim: 0.8   # Unit: meter
+    vehicle_height: 0.75  # Unit: meter
+    sensor_range: 30.0  # Unit: meter
+    terrain_range: 15.0  # Unit: meter
+    local_planner_range: 5.0   # Unit: meter
+    visualize_ratio: 0.75
+    is_viewpoint_extend: true
+    is_multi_layer: false
+    is_opencv_visual: false # Obstacle Image Display
+    is_static_env: true
+    is_pub_boundary: false
+    is_debug_output: false
+    is_attempt_autoswitch: true  # Auto switch to attemptable navigation
+    world_frame: map
 
-# Graph Messager
-graph_msger/robot_id                     : 1  # graph from robot id "0" is extracted from files
+    # Graph Messager
+    graph_msger/robot_id: 1  # graph from robot id "0" is extracted from files
 
-# Map Handler Params
-map_handler/floor_height                 : 2.5     # Unit: meter
-map_handler/cell_length                  : 5.0     # Unit: meter
-map_handler/map_grid_max_length          : 1000.0   # Unit: meter
-map_handler/map_grad_max_height          : 100.0   # Unit: meter
+    # Map Handler Params
+    map_handler/floor_height: 2.5     # Unit: meter
+    map_handler/cell_length: 5.0     # Unit: meter
+    map_handler/map_grid_max_length: 1000.0   # Unit: meter
+    map_handler/map_grad_max_height: 100.0   # Unit: meter
 
-# Dynamic Planner Utility Params
-util/angle_noise                        : 15.0 # Unit: degree
-util/accept_max_align_angle             : 4.0  # Unit: degree
-util/obs_inflate_size                   : 1
-util/new_intensity_thred                : 2.0
-util/terrain_free_Z                     : 0.2
-util/dyosb_update_thred                 : 4
-util/new_point_counter                  : 5
-util/dynamic_obs_dacay_time             : 10.0 # Unit: second
-util/new_points_decay_time              : 1.0  # Unit: second
+    # Dynamic Planner Utility Params
+    util/angle_noise: 15.0 # Unit: degree
+    util/accept_max_align_angle: 4.0  # Unit: degree
+    util/obs_inflate_size: 1
+    util/new_intensity_thred: 2.0
+    util/terrain_free_Z: 0.2
+    util/dyosb_update_thred: 4
+    util/new_point_counter: 5
+    util/dynamic_obs_dacay_time: 10.0 # Unit: second
+    util/new_points_decay_time: 1.0  # Unit: second
 
-# Dynamic Graph Params
-graph/connect_votes_size                : 10
-graph/clear_dumper_thred                : 4
-graph/node_finalize_thred               : 6
-graph/filter_pool_size                  : 12
+    # Dynamic Graph Params
+    graph/connect_votes_size: 10
+    graph/clear_dumper_thred: 4
+    graph/node_finalize_thred: 6
+    graph/filter_pool_size: 12
 
-# Corner Detector Params
-c_detector/resize_ratio                  : 3.0
-c_detector/filter_count_value            : 3
-c_detector/is_save_img                   : false
-c_detector/img_folder_path               : /path
+    # Corner Detector Params
+    c_detector/resize_ratio: 3.0
+    c_detector/filter_count_value: 3
+    c_detector/is_save_img: false
+    c_detector/img_folder_path: /path
 
-# Graph Planner Params
-g_planner/converge_distance              : 0.5  # Unit: meter
-g_planner/goal_adjust_radius             : 2.0  # Unit: meter
-g_planner/free_counter_thred             : 7
-g_planner/reach_goal_vote_size           : 3
-g_planner/path_momentum_thred            : 3
+    # Graph Planner Params
+    g_planner/converge_distance: 0.5  # Unit: meter
+    g_planner/goal_adjust_radius: 2.0  # Unit: meter
+    g_planner/free_counter_thred: 7
+    g_planner/reach_goal_vote_size: 3
+    g_planner/path_momentum_thred: 3

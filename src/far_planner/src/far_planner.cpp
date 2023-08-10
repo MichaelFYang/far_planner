@@ -496,6 +496,9 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter<std::string>("world_frame", master_params_.world_frame);
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
+  // print voxel_dim paramter in ROS2
+  RCLCPP_INFO(nh_->get_logger(), "voxel_dim: %f", master_params_.voxel_dim);
+
   // Declare map parameters
   nh_->declare_parameter<float>(map_prefix + "/floor_height", 2.0);
   nh_->declare_parameter<float>(map_prefix + "/cell_length", 5.0);

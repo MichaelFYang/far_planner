@@ -5,18 +5,9 @@ from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from launch.substitutions import PythonExpression
 
 def generate_launch_description():
-    # Determine the path to the configuration file
-    far_planner_path = get_package_share_directory('far_planner')
-    config_path = far_planner_path + '/config/default.yaml'
-
-    # Load the YAML file
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-
-    print("Debug here 1")
-
     return LaunchDescription([
         DeclareLaunchArgument('odom_topic', default_value='/state_estimation'),
         DeclareLaunchArgument('terrain_cloud_topic', default_value='/terrain_map_ext'),
@@ -29,7 +20,14 @@ def generate_launch_description():
             executable='far_planner',
             name='far_planner',
             output='screen',
-            parameters=[config],
+            parameters=[
+                PythonExpression([
+                '"', 
+                get_package_share_directory('far_planner'), 
+                '/config/', 
+                LaunchConfiguration('config'), 
+                '.yaml"'])
+            ],
             remappings=[
                 ('/odom_world', LaunchConfiguration('odom_topic')),
                 ('/terrain_cloud', LaunchConfiguration('terrain_cloud_topic')),
@@ -42,7 +40,14 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='far_rviz',
-            arguments=['-d', get_package_share_directory('far_planner') + '/rviz/default.rviz'],
+            arguments=['-d', 
+                PythonExpression([
+                '"', 
+                get_package_share_directory('far_planner'), 
+                '/rviz/', 
+                LaunchConfiguration('config'), 
+                '.rviz"'])
+            ],
             respawn=False,
         ),
 
