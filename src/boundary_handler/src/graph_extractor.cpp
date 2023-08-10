@@ -14,9 +14,13 @@
 
 GraphExtractor::GraphExtractor() 
 {
-     /* initialize node */
+    /* initialize node */
     nh_ = rclcpp::Node::make_shared("boundary_handler");
+
     Init();
+
+    //print init complete
+    RCLCPP_INFO(nh_->get_logger(), "Graph Extractor Initialized");
 }
 
 void GraphExtractor::Init() {
@@ -35,27 +39,24 @@ void GraphExtractor::Init() {
 
 
 void GraphExtractor::LoadParmas() {
-    const std::string prefix = "boundary_handler";
-    
     // Declare parameters if they haven't been declared yet
-    nh_->declare_parameter(prefix + ".world_frame", "map");
-    nh_->declare_parameter(prefix + ".folder_path", "/home/workspace/src/boundary_handler/data/");
-    nh_->declare_parameter(prefix + ".boundary_file", "boundary.pcd");
-    nh_->declare_parameter(prefix + ".traj_file", "traj.txt");
-    nh_->declare_parameter(prefix + ".graph_file", "graph.txt");
-    nh_->declare_parameter(prefix + ".visual_scale_ratio", 1.0f);
-    nh_->declare_parameter(prefix + ".height_tolz", 1.0f);
+    nh_->declare_parameter("world_frame", "map");
+    nh_->declare_parameter("folder_path", "/home/workspace/src/boundary_handler/data/");
+    nh_->declare_parameter("boundary_file", "boundary.pcd");
+    nh_->declare_parameter("traj_file", "traj.txt");
+    nh_->declare_parameter("graph_file", "graph.txt");
+    nh_->declare_parameter("visual_scale_ratio", 1.0f);
+    nh_->declare_parameter("height_tolz", 1.0f);
 
     // Fetch parameters
-    nh_->get_parameter(prefix + ".world_frame", ge_params_.frame_id);
-
     std::string folder_path;
-    nh_->get_parameter(prefix + ".folder_path", folder_path);
-    nh_->get_parameter(prefix + ".boundary_file", ge_params_.bd_file_path);
-    nh_->get_parameter(prefix + ".traj_file", ge_params_.traj_file_path);
-    nh_->get_parameter(prefix + ".graph_file", ge_params_.vgraph_path);
-    nh_->get_parameter(prefix + ".visual_scale_ratio", ge_params_.viz_scale_ratio);
-    nh_->get_parameter(prefix + ".height_tolz", ge_params_.height_tolz);
+    nh_->get_parameter("world_frame", ge_params_.frame_id);
+    nh_->get_parameter("folder_path", folder_path);
+    nh_->get_parameter("boundary_file", ge_params_.bd_file_path);
+    nh_->get_parameter("traj_file", ge_params_.traj_file_path);
+    nh_->get_parameter("graph_file", ge_params_.vgraph_path);
+    nh_->get_parameter("visual_scale_ratio", ge_params_.viz_scale_ratio);
+    nh_->get_parameter("height_tolz", ge_params_.height_tolz);
 
     // Append folder_path to the paths
     ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
@@ -613,13 +614,13 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
 int main(int argc, char** argv){
     rclcpp::init(argc, argv);
     
-    GraphExtractor ge_node;
-    ge_node.Run();
+    auto ge_node = std::make_shared<GraphExtractor>();
+    ge_node->Run();
 
     rclcpp::Rate loop_rate(1.0);
     while (rclcpp::ok()) {
-        ge_node.Loop();
-        rclcpp::spin_some(ge_node.GetNodeHandle());
+        ge_node->Loop();
+        rclcpp::spin_some(ge_node->GetNodeHandle());
         loop_rate.sleep();
     }
 
