@@ -877,7 +877,7 @@ struct {
   bool operator() (const PointPair& edge1, const PointPair& edge2) const {
     const Point3D center1 = (edge1.first + edge1.second) / 2.0f;
     const Point3D center2 = (edge2.first + edge2.second) / 2.0f;
-    return FARUtil::ClockwiseLess(center1, center1); 
+    return FARUtil::ClockwiseLess(center1, center2); 
   }
 } EdgeClockwiseLess;
 
