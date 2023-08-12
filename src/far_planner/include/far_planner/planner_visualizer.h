@@ -9,6 +9,16 @@
 typedef visualization_msgs::msg::Marker Marker;
 typedef visualization_msgs::msg::MarkerArray MarkerArray;
 
+// create hash for Marker
+struct MarkerHash {
+    std::size_t operator()(const Marker& marker) const {
+        std::size_t seed = 0;
+        boost::hash_combine(seed, marker.type);
+        boost::hash_combine(seed, marker.ns);
+        boost::hash_combine(seed, marker.id);
+        return seed;
+    }
+};
 
 enum VizColor {
     RED     = 0,
@@ -29,9 +39,11 @@ private:
     // Utility Cloud 
     PointCloudPtr point_cloud_ptr_;
     // rviz publisher 
-    rclcpp::Publisher<Marker>::SharedPtr viz_node_pub_, viz_path_pub_;
-    rclcpp::Publisher<MarkerArray>::SharedPtr viz_graph_pub_, viz_poly_pub_, viz_contour_pub_, viz_map_pub_, viz_view_extend;
+    rclcpp::Publisher<Marker>::SharedPtr viz_path_pub_;
+    rclcpp::Publisher<MarkerArray>::SharedPtr viz_node_pub_, viz_graph_pub_, viz_poly_pub_, viz_contour_pub_, viz_map_pub_, viz_view_extend;
 
+    // marker set for nodes visualization based on MarkerHash
+    std::unordered_set<Marker, MarkerHash> marker_set_;
 public:
     DPVisualizer() = default;
     ~DPVisualizer() = default;
@@ -69,6 +81,15 @@ public:
 
     void VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr viz_pub, 
                        const PointCloudPtr& pc);
+
+    inline void PubNodesVisualization() {
+        MarkerArray marker_array;
+        for (auto& marker : marker_set_) {
+            marker_array.markers.push_back(marker);
+        }
+        viz_node_pub_->publish(marker_array);
+        marker_set_.clear();
+    }
 
     static void SetMarker(const rclcpp::Node::SharedPtr nh,
                           const VizColor& color, 

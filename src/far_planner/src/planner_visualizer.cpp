@@ -15,13 +15,15 @@ void DPVisualizer::Init(const rclcpp::Node::SharedPtr nh) {
     nh_ = nh;
     point_cloud_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     // Rviz Publisher
-    viz_node_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>("/viz_node_topic", 5);
     viz_path_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>("/viz_path_topic", 5);
+    viz_node_pub_    = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_node_topic", 5);
     viz_poly_pub_    = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_poly_topic", 5);
     viz_graph_pub_   = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_graph_topic", 5);
     viz_contour_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_contour_topic", 5);
     viz_map_pub_     = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_grid_map_topic", 5);
     viz_view_extend  = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/viz_viewpoint_extend_topic", 5);
+    // init marker set
+    marker_set_.clear();
 }
 
 void DPVisualizer::VizNodes(const NodePtrStack& node_stack, 
@@ -41,7 +43,7 @@ void DPVisualizer::VizNodes(const NodePtrStack& node_stack,
         idx ++;
     }
     node_marker.points.resize(idx);
-    viz_node_pub_->publish(node_marker);
+    marker_set_.insert(node_marker);
 }
 
 void DPVisualizer::VizPoint3D(const Point3D& point, 
@@ -56,7 +58,7 @@ void DPVisualizer::VizPoint3D(const Point3D& point,
     node_marker.pose.position.x = point.x;
     node_marker.pose.position.y = point.y;
     node_marker.pose.position.z = point.z;
-    viz_node_pub_->publish(node_marker);
+    marker_set_.insert(node_marker);
 }
 
 void DPVisualizer::VizPath(const NodePtrStack& global_path, const bool& is_free_nav) {

@@ -249,6 +249,9 @@ void FARMaster::MainLoopCallBack() {
   planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
   planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
 
+  // publish nodes visualization
+  planner_viz_.PubNodesVisualization();
+
   if (is_graph_init_) { 
     if (FARUtil::IsDebug) {
       std::cout<<" ========================================================== "<<std::endl;

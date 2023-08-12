@@ -5,8 +5,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /VGraph1/Namespaces1
+        - /GoalNodes1/Namespaces1
       Splitter Ratio: 0.8294117450714111
-    Tree Height: 441
+    Tree Height: 666
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -251,7 +252,7 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz_default_plugins/PointStamped
       Color: 204; 41; 204
-      Enabled: true
+      Enabled: false
       History Length: 1
       Name: GoalPoint
       Radius: 0.75
@@ -262,7 +263,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /goal_point
-      Value: true
+      Value: false
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 0; 255; 0
@@ -416,7 +417,7 @@ Visualization Manager:
       Enabled: true
       Name: GlobalPath
       Namespaces:
-        {}
+        global_path: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -454,6 +455,24 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /viz_graph_topic
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: GoalNodes
+      Namespaces:
+        clear_nodes: false
+        free_goal: true
+        free_odom_position: false
+        last_nav_node: false
+        original_goal: true
+        out_contour: false
+        waypoint: false
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz_node_topic
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
@@ -476,7 +495,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 33.347450256347656
+      Distance: 22.94806480407715
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -494,7 +513,7 @@ Visualization Manager:
       Pitch: 1.5697963237762451
       Target Frame: map
       Value: Orbit (rviz_default_plugins)
-      Yaw: -1.577795386314392
+      Yaw: 4.705389976501465
     Saved: ~
 Window Geometry:
   Displays:
@@ -516,5 +535,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1447
-  X: 58
+  X: 64
   Y: 27
