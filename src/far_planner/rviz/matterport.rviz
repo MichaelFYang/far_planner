@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /VGraph1/Namespaces1
-        - /GoalNodes1/Namespaces1
       Splitter Ratio: 0.8294117450714111
     Tree Height: 666
   - Class: rviz_common/Selection
@@ -249,21 +248,24 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 1
-      Class: rviz_default_plugins/PointStamped
-      Color: 204; 41; 204
-      Enabled: false
-      History Length: 1
-      Name: GoalPoint
-      Radius: 0.75
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Goalpoint
+      Namespaces:
+        clear_nodes: false
+        free_goal: true
+        free_odom_position: false
+        last_nav_node: false
+        original_goal: true
+        out_contour: false
+        waypoint: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
-        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /goal_point
-      Value: false
+        Value: /viz_node_topic
+      Value: true
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 0; 255; 0
@@ -457,21 +459,18 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: GoalNodes
+      Name: ViewpointExtend
       Namespaces:
-        clear_nodes: false
-        free_goal: true
-        free_odom_position: false
-        last_nav_node: false
-        original_goal: true
-        out_contour: false
-        waypoint: false
+        corner_direct: true
+        extend_viewpoint: true
+        origin_viewpoint: true
+        raytracing_line: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /viz_node_topic
+        Value: /viz_viewpoint_extend_topic
       Value: true
   Enabled: true
   Global Options:
@@ -495,16 +494,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 22.94806480407715
+      Distance: 33.7242431640625
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 10.817322731018066
-        Y: -1.1259232759475708
-        Z: 2.2376065254211426
+        X: 10.864870071411133
+        Y: -0.9383349418640137
+        Z: 2.2377946376800537
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -535,5 +534,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1447
-  X: 64
+  X: 58
   Y: 27
