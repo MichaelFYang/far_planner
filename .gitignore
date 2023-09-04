@@ -6,6 +6,8 @@ install
 
 logs
 
+log
+
 .catkin_workspace
 
 .catkin_tools
