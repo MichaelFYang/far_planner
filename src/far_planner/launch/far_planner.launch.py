@@ -27,7 +27,7 @@ def generate_launch_description():
                 '.yaml"'])
             ],
             remappings=[
-                ('/odom_world', '/state_estimation'),
+                ('/odom_world', '/odom'),
                 ('/terrain_cloud', '/terrain_map_ext'),
                 ('/scan_cloud', '/terrain_map'),
                 ('/terrain_local_cloud', '/registered_scan')
@@ -42,9 +42,7 @@ def generate_launch_description():
                 PythonExpression([
                 '"', 
                 get_package_share_directory('far_planner'), 
-                '/rviz/', 
-                LaunchConfiguration('config'), 
-                '.rviz"'])
+                '/rviz/far_planner.rviz"'])  # 直接指定文件名
             ],
             respawn=False,
         ),
