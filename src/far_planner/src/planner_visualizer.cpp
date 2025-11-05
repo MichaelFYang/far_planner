@@ -419,6 +419,7 @@ void DPVisualizer::SetMarker(const rclcpp::Node::SharedPtr nh,
                              const float& scale_ratio) 
 {
     scan_marker.header.frame_id = FARUtil::worldFrameId;
+    RCLCPP_INFO(nh->get_logger(),"marker frame_id");
     scan_marker.header.stamp = nh->now();
     scan_marker.id = 0;
     scan_marker.ns = ns;

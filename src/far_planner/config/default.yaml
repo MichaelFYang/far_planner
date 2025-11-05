@@ -14,7 +14,7 @@ far_planner:
     is_opencv_visual: false # Obstacle Image Display
     is_static_env: true
     is_pub_boundary: false
-    is_debug_output: false
+    is_debug_output: true
     is_attempt_autoswitch: true  # Auto switch to attemptable navigation
     world_frame: map
 
@@ -48,7 +48,7 @@ far_planner:
     c_detector/resize_ratio: 3.0
     c_detector/filter_count_value: 3
     c_detector/is_save_img: false
-    c_detector/img_folder_path: /path
+    c_detector/img_folder_path: /local_path
 
     # Graph Planner Params
     g_planner/converge_distance: 0.5  # Unit: meter

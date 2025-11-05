@@ -162,6 +162,7 @@ private:
     } 
 
     inline void UpdateCommandCallBack(const std_msgs::msg::Bool::SharedPtr msg) {
+        RCLCPP_INFO(nh_->get_logger(),"UpdateCommandCallBack");
         if (is_stop_update_ && msg->data) {
             if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: Resume visibility graph update.");
             is_stop_update_ = !msg->data;

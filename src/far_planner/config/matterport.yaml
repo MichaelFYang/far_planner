@@ -48,7 +48,7 @@ far_planner:
     c_detector/resize_ratio: 3.0
     c_detector/filter_count_value: 3
     c_detector/is_save_img: false
-    c_detector/img_folder_path: /path
+    c_detector/img_folder_path: /local_path
 
     # Graph Planner Params
     g_planner/converge_distance: 0.25  # Unit: meter

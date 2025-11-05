@@ -159,6 +159,7 @@ inline void UpdaetVGraph(const NodePtrStack& vgraph) {current_graph_ = vgraph;};
 */
 void UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, const NavNodePtr& goal_ptr);
 
+
 /**
  * Generate path to goal based on traversibility result
  * @param goal_ptr current goal node

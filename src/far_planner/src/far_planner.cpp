@@ -225,12 +225,14 @@ void FARMaster::MainLoopCallBack() {
   runtime_pub_->publish(runtimer_);
 
   /* Update v-graph in other modules */
+  // NOTE这里填充了
   nav_graph_ = graph_manager_.GetNavGraph();
   if (is_graph_init_) {
     if (!FARUtil::IsDebug) printf("\033[2K");
     std::cout<<"    "<<"Global V-Graph Updated. Number of global vertices: "<<nav_graph_.size()<<std::endl;
   }
   contour_graph_.ExtractGlobalContours();      // Global Polygon Update
+  // 这里也填充了
   graph_planner_.UpdaetVGraph(nav_graph_);     // Graph Planner Update
   graph_msger_.UpdateGlobalGraph(nav_graph_);  // Graph Messager Update
 
@@ -245,6 +247,7 @@ void FARMaster::MainLoopCallBack() {
   planner_viz_.VizNodes(clear_nodes_, "clear_nodes", VizColor::ORANGE);
   planner_viz_.VizNodes(graph_manager_.GetOutContourNodes(), "out_contour", VizColor::YELLOW);
   planner_viz_.VizPoint3D(FARUtil::free_odom_p, "free_odom_position", VizColor::ORANGE, 1.0);
+  // 
   planner_viz_.VizGraph(nav_graph_);
   planner_viz_.VizContourGraph(ContourGraph::contour_graph_);
   planner_viz_.VizGlobalPolygons(ContourGraph::global_contour_, ContourGraph::unmatched_contour_);
@@ -263,6 +266,7 @@ void FARMaster::MainLoopCallBack() {
   }
 
   if (!is_graph_init_ && !nav_graph_.empty()) {
+    // 第一次检测到 nav_graph_ 为非空时 就将 is_graph_init_ 设置为 true
     is_graph_init_ = true;
     printf("\033[A"), printf("\033[A"), printf("\033[2K");
     std::cout<< "\033[1;32m V-Graph Initialized \033[0m\n" << std::endl;
@@ -271,7 +275,11 @@ void FARMaster::MainLoopCallBack() {
 }
 
 void FARMaster::PlanningCallBack() {
-  if (!is_init_completed_ || !is_graph_init_) return;
+  if (!is_init_completed_ || !is_graph_init_) 
+  {
+
+    return;
+  }
   const NavNodePtr goal_ptr = graph_planner_.GetGoalNodePtr();
   if (goal_ptr == NULL) {
     /* Graph Traversablity Update */
@@ -806,6 +814,7 @@ void FARMaster::WaypointCallBack(const geometry_msgs::msg::PointStamped& route_g
     if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(),"FARMaster: wait for v-graph to init before sending any goals");
     return;
   }
+  // RCLCPP_INFO(nh_->get_logger(),"WaypointCallBack");
   Point3D goal_p(route_goal.point.x, route_goal.point.y, route_goal.point.z);
   const std::string goal_frame = route_goal.header.frame_id;
   if (!FARUtil::IsSameFrameID(goal_frame, master_params_.world_frame)) {

@@ -36,7 +36,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='boundary_rviz',
-            arguments=['-d', get_package_share_directory('boundary_handler') + '/rviz/default.rviz'],
+            arguments=['-d', get_package_share_directory('boundary_handler') + '/rviz/far_planner.rviz'],
             respawn=False,
         ),
     ])

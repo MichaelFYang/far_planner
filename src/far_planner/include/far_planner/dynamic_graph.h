@@ -608,6 +608,7 @@ public:
 
     /* Add new navigation node to global graph */
     static inline void AddNodeToGraph(const NavNodePtr& node_ptr) {
+        std::cout<<"AddNodeToGraph"<<std::endl;
         if (node_ptr != NULL) {
             globalGraphNodes_.push_back(node_ptr);
         } else if (FARUtil::IsDebug) {
