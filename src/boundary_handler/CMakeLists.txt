@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(boundary_handler)
 
-set(CMAKE_CXX_STANDARD 14)
-
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()

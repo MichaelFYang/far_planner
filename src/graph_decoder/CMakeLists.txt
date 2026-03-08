@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(graph_decoder)
 
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
-
 # Other CMake configurations
 set(CMAKE_BUILD_TYPE Release)
 

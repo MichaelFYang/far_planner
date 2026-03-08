@@ -10,16 +10,16 @@ FAR Planner was used by the [CMU-OSU Team](https://www.subt-explorer.com) in att
 
 ## Usage
 
-The repository has been tested in Ubuntu 22.04 with ROS2 Humble and Ubuntu 24.04 with ROS2 Jazzy. Follow instructions in [Autonomous Exploration Development Environment](http://cmu-exploration.com) to setup the development environment. Make sure to checkout the branch that matches the computer setup, compile, and download the simulation environments.
+The repository has been tested in Ubuntu 26.04 with ROS2 Lyrical. Follow instructions in [Autonomous Exploration Development Environment](http://cmu-exploration.com) to setup the development environment. Make sure to checkout the branch that matches the computer setup, compile, and download the simulation environments.
 
 To setup FAR Planner, clone the repository.
 ```
 git clone https://github.com/MichaelFYang/far_planner
 ```
-In a terminal, go to the folder, checkout the 'humble-jazzy' branch, and compile.
+In a terminal, go to the folder, checkout the 'lyrical' branch, and compile.
 ```
 cd far_planner
-git checkout humble-jazzy
+git checkout lyrical
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
 To run the code, go to the development environment folder in a terminal, source the ROS workspace, and launch.
