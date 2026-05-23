@@ -3,11 +3,10 @@ project(teleop_rviz_plugin)
 
 find_package(ament_cmake REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt5 REQUIRED COMPONENTS Core)
-find_package(Qt5 REQUIRED COMPONENTS Quick)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt6 REQUIRED COMPONENTS Quick)
 find_package(rclcpp REQUIRED)
-find_package(rviz2 REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
@@ -24,7 +23,7 @@ set(HDR_FILES
 )
 
 foreach(header "${HDR_FILES}")
-  qt5_wrap_cpp(rviz_plugins_moc_files "${header}")
+  qt6_wrap_cpp(rviz_plugins_moc_files "${header}")
 endforeach()
 
 set(SRC_FILES
@@ -34,20 +33,19 @@ set(SRC_FILES
 
 add_library(${PROJECT_NAME} SHARED ${SRC_FILES} ${HDR_FILES} ${rviz_plugins_moc_files})
 
-ament_target_dependencies(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME}
   PUBLIC
-  "geometry_msgs"
-  "rclcpp"
-  "rviz_common"
-  "rviz_rendering"
-  "sensor_msgs"
-  "rviz_default_plugins"
-  "rviz2"
-  "std_msgs"
+  geometry_msgs::geometry_msgs
+  rclcpp::rclcpp
+  rviz_common::rviz_common
+  rviz_rendering::rviz_rendering
+  sensor_msgs::sensor_msgs
+  rviz_default_plugins::rviz_default_plugins
+  std_msgs::std_msgs
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-  ${Qt5Widgets_INCLUDE_DIRS})
+  ${Qt6Widgets_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   ${rviz_common}
@@ -65,7 +63,6 @@ ament_export_dependencies(
   rviz_rendering
   sensor_msgs
   rviz_default_plugins
-  rviz2
   std_msgs)
 
 if(BUILD_TESTING)

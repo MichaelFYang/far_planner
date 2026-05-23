@@ -36,13 +36,13 @@ set(SOURCES
 )
 
 add_executable(${PROJECT_NAME} src/graph_extractor.cpp ${SOURCES})
-ament_target_dependencies(${PROJECT_NAME}
-  rclcpp
-  std_msgs
-  std_srvs
-  sensor_msgs
-  visualization_msgs
-  visibility_graph_msg
+target_link_libraries(${PROJECT_NAME}
+  rclcpp::rclcpp
+  std_msgs::std_msgs
+  std_srvs::std_srvs
+  sensor_msgs::sensor_msgs
+  visualization_msgs::visualization_msgs
+  visibility_graph_msg::visibility_graph_msg
 )
 
 # Make sure to link against the PCL libraries and any other libraries you need

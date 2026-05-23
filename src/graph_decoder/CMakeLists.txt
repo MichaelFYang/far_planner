@@ -43,13 +43,13 @@ set(SOURCES ${SOURCES}
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Link libraries
-ament_target_dependencies(${PROJECT_NAME}
-  rclcpp
-  std_msgs
-  std_srvs
-  visibility_graph_msg
-  pcl_conversions
-  visualization_msgs
+target_link_libraries(${PROJECT_NAME}
+  rclcpp::rclcpp
+  std_msgs::std_msgs
+  std_srvs::std_srvs
+  visibility_graph_msg::visibility_graph_msg
+  pcl_conversions::pcl_conversions
+  visualization_msgs::visualization_msgs
 )
 
 target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
