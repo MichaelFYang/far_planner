@@ -24,6 +24,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(visibility_graph_msg REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 # Directories
 include_directories(

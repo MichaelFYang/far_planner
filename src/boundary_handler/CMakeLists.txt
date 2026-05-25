@@ -17,6 +17,7 @@ find_package(visibility_graph_msg REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 include_directories(
   include
