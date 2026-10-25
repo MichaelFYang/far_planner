@@ -318,6 +318,7 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
     for (const auto& node_ptr : graphIn) {
         visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
+        msg_node.header.stamp = graphOut.header.stamp;
         msg_node.position    = ToGeoMsgP(node_ptr->position);
         msg_node.id          = node_ptr->id;
         msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
