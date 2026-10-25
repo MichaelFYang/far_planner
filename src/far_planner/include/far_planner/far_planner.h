@@ -71,6 +71,7 @@ private:
 
     rclcpp::TimerBase::SharedPtr planning_event_;
     rclcpp::TimerBase::SharedPtr main_event_;
+    rclcpp::TimerBase::SharedPtr scan_retry_event_;
 
     std_msgs::msg::Float32 runtimer_, plan_timer_;
 
@@ -147,8 +148,9 @@ private:
 
     void PlanningCallBack();
     
-    bool ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
-                      const PointCloudPtr& cloudOut, Point3D* sensor_origin = nullptr);
+    enum class CloudProcessResult { ACCEPTED, INVALID, TF_UNAVAILABLE };
+    CloudProcessResult ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
+                                   const PointCloudPtr& cloudOut, Point3D* sensor_origin = nullptr);
     void ProcessPendingScans();
 
     
