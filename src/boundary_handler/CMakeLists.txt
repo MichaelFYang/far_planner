@@ -57,3 +57,11 @@ install(DIRECTORY launch config rviz
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_input_parser test/test_input_parser.cpp)
+  if(TARGET test_input_parser)
+    target_compile_definitions(test_input_parser PRIVATE FAR_PLANNER_ROS1)
+    target_include_directories(test_input_parser PRIVATE include)
+  endif()
+endif()

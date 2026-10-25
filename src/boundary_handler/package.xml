@@ -16,6 +16,7 @@
   <depend>pcl_ros</depend>
   <depend>libpcl-all-dev</depend>
   <depend>libopencv-dev</depend>
+  <test_depend>gtest</test_depend>
   <exec_depend>roslaunch</exec_depend>
   <exec_depend>far_planner</exec_depend>
   <exec_depend>rviz</exec_depend>

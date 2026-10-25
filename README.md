@@ -98,7 +98,7 @@ No dedicated behavioral test suite is registered yet. Validate planning and vehi
 
 Use `roslaunch far_planner far_planner.launch use_rviz:=false` for headless startup. The decoder subscribes to `/robot_vgraph` by default; select another topic with `roslaunch graph_decoder decoder.launch graph_topic:=/custom_graph`.
 
-The boundary extractor accepts `folder_path:=/path/to/data/` and `use_rviz:=false`. Use a separate writable directory containing the boundary and trajectory inputs to avoid overwriting the sample graph; include the trailing slash.
+Boundary inputs use ASCII PLY with finite `x y z poly_index` vertices (up to one million) and a trajectory file whose first three values are finite `x y z`. Invalid files fail before the graph is saved. The boundary extractor accepts `folder_path:=/path/to/data/` and `use_rviz:=false`. Use a separate writable directory containing the boundary and trajectory inputs to avoid overwriting the sample graph; include the trailing slash.
 
 TF and measurement-time regressions run with `catkin_make run_tests` and `catkin_test_results`. See the [TF and timestamp contract](docs/algorithm.md#tf-and-timestamp-contract) for input timing requirements and `/far_planner/sensor_time_tolerance`.
 
