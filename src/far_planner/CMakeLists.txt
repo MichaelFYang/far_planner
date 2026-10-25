@@ -80,7 +80,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 )
 
 if(CATKIN_ENABLE_TESTING)
-  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_search.cpp)
+  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_search.cpp test/test_graph_lifecycle.cpp)
   if(TARGET test_frame_transforms)
     target_compile_definitions(test_frame_transforms PRIVATE FAR_PLANNER_ROS1)
     target_link_libraries(test_frame_transforms far_planner_core)
