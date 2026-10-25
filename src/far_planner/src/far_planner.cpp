@@ -899,16 +899,3 @@ std::unordered_set<int> MapHandler::extend_obs_indices_;
 std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_free_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_obs_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_grid_;
-
-
-int main(int argc, char** argv){
-  rclcpp::init(argc, argv);
-  
-  auto far_planner_node = std::make_shared<FARMaster>();
-  far_planner_node->Init();
-  rclcpp::spin(far_planner_node->GetNodeHandle());
-
-  rclcpp::shutdown();
-
-  return 0;
-}

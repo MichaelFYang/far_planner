@@ -65,11 +65,14 @@ set(SOURCES
   src/terrain_planner.cpp
 )
 
-add_executable(${PROJECT_NAME} src/far_planner.cpp ${SOURCES})
+add_library(far_planner_core STATIC src/far_planner.cpp ${SOURCES})
 
-ament_target_dependencies(${PROJECT_NAME} rclcpp std_msgs std_srvs sensor_msgs geometry_msgs nav_msgs visualization_msgs pcl_conversions visibility_graph_msg tf2 tf2_ros tf2_geometry_msgs tf2_sensor_msgs)
+ament_target_dependencies(far_planner_core rclcpp std_msgs std_srvs sensor_msgs geometry_msgs nav_msgs visualization_msgs pcl_conversions visibility_graph_msg tf2 tf2_ros tf2_geometry_msgs tf2_sensor_msgs)
 
-target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(far_planner_core ${PCL_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} far_planner_core)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib/${PROJECT_NAME})
 
