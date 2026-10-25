@@ -173,6 +173,18 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 spin_until(lambda: len(received) == 4)
                 assert x_values(received[-1])
                 assert all(abs(x - 2.0) < 1e-5 for x in x_values(received[-1]))
+
+                # The scan arrives between odometry stamps, before the later
+                # odometry callback. It must be retained for interpolation.
+                scans.publish(cloud('map', 5, 50000000))
+                settle()
+                pose.header.stamp.nanosec = 100000000
+                pose.pose.pose.position.x = 0.5
+                odom.publish(pose)
+                settle()
+                clouds.publish(cloud('map', 5, 60000000))
+                spin_until(lambda: len(received) == 5 and len(rays) == 5)
+                assert x_values(rays[-1]), 'Deferred scan was not ray traced'
             except Exception:
                 log.flush()
                 log.seek(0)
