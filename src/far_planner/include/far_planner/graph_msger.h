@@ -27,6 +27,9 @@ public:
 
     void UpdateGlobalGraph(const NodePtrStack& graph);
 
+    static bool ValidateGraphMessage(const visibility_graph_msg::msg::Graph& graph,
+                                     const std::string& expected_frame, std::string& error);
+
 private:
     rclcpp::Node::SharedPtr nh_;
     GraphMsgerParams gm_params_;

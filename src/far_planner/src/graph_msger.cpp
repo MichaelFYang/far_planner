@@ -9,6 +9,11 @@
 
 #include "far_planner/graph_msger.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <unordered_set>
+
 /***************************************************************************************/
 
 void GraphMsger::Init(const rclcpp::Node::SharedPtr nh, const GraphMsgerParams& params) {
@@ -78,16 +83,55 @@ void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
     graph_pub_->publish(*graph_msg);
 }
 
+bool GraphMsger::ValidateGraphMessage(const visibility_graph_msg::msg::Graph& graph,
+                                       const std::string& expected_frame, std::string& error) {
+    error.clear();
+    if (!FARUtil::IsSameFrameID(graph.header.frame_id, expected_frame)) {
+        error = "graph frame does not match the planner world frame";
+        return false;
+    }
+    std::unordered_set<std::uint32_t> ids;
+    ids.reserve(graph.nodes.size());
+    const auto finite_point = [](const auto& point) {
+        return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
+    };
+    for (const auto& node : graph.nodes) {
+        if (!ids.insert(node.id).second) {
+            error = "duplicate graph node ID";
+            return false;
+        }
+        if (node.surface_dirs.size() != 2 || node.freetype > 3 ||
+            !finite_point(node.position) ||
+            !std::all_of(node.surface_dirs.begin(), node.surface_dirs.end(), finite_point)) {
+            error = "invalid graph node geometry or type";
+            return false;
+        }
+    }
+    for (const auto& node : graph.nodes) {
+        const auto known = [&ids](const auto& connections) {
+            return std::all_of(connections.begin(), connections.end(),
+                               [&ids](const auto id) { return ids.count(id) != 0; });
+        };
+        if (!known(node.connect_nodes) || !known(node.poly_connects) ||
+            !known(node.contour_connects) || !known(node.trajectory_connects)) {
+            error = "graph connection refers to an absent node";
+            return false;
+        }
+    }
+    return true;
+}
+
 void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
     if (msg->nodes.empty()) return;
+    std::string error;
+    if (!ValidateGraphMessage(*msg, gm_params_.frame_id, error)) {
+        RCLCPP_WARN(nh_->get_logger(), "Ignoring decoded graph: %s", error.c_str());
+        return;
+    }
     NodePtrStack decoded_nodes;
-    // const std::size_t robot_id = msg->robot_id;
-    const visibility_graph_msg::msg::Graph graph_msg = *msg;
     IdxMap nodeIdx_idx_map;
-    // Create nav nodes for decoded graph
-    decoded_nodes.clear();
-    for (std::size_t i=0; i<graph_msg.nodes.size(); i++) {
-        const auto node = graph_msg.nodes[i];
+    for (std::size_t i=0; i<msg->nodes.size(); i++) {
+        const auto& node = msg->nodes[i];
         const Point3D node_p = Point3D(node.position.x, node.position.y, node.position.z);
         NavNodePtr nearest_node_ptr = NearestNodePtrOnGraph(node_p, gm_params_.dist_margin);
         if (nearest_node_ptr == NULL || IsMismatchFreeNode(nearest_node_ptr, node)) {
@@ -99,8 +143,8 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr
     }
     // Assign connections with fully connection votes
     std::vector<std::size_t> connect_idxs, poly_idxs, contour_idxs, traj_idxs;
-    for (std::size_t i=0; i<graph_msg.nodes.size(); i++) {
-        const auto node = graph_msg.nodes[i];
+    for (std::size_t i=0; i<msg->nodes.size(); i++) {
+        const auto& node = msg->nodes[i];
         const NavNodePtr node_ptr = decoded_nodes[i];
         ExtractConnectIdxs(node, connect_idxs, poly_idxs, contour_idxs, traj_idxs);
         // graph connections
