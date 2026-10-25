@@ -16,6 +16,7 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include "graph_decoder/point_struct.h"
+#include "graph_decoder/graph_file_parser.h"
 
 typedef visualization_msgs::Marker Marker;
 typedef visualization_msgs::MarkerArray MarkerArray;
@@ -77,7 +78,7 @@ struct GraphDecoderParams {
 class GraphDecoder {
 public:
     GraphDecoder() = default;
-    ~GraphDecoder() = default;
+    ~GraphDecoder() { ResetGraph(received_graph_); }
 
     void Init();
     void Loop();
@@ -120,7 +121,7 @@ private:
 
     void VisualizeGraph(const NodePtrStack& graphIn);
 
-    void CreateNavNode(std::string str, NavNodePtr& node_ptr);
+    void CreateNavNode(const graph_file::NodeRecord& record, NavNodePtr& node_ptr);
 
     void CreateNavNode(const visibility_graph_msg::Node& msg, NavNodePtr& node_ptr);
 
@@ -147,6 +148,12 @@ private:
     }
 
     inline void ResetGraph(NodePtrStack& graphOut) {
+        for (const auto& node : graphOut) {
+            node->connect_nodes.clear();
+            node->poly_connects.clear();
+            node->contour_connects.clear();
+            node->traj_connects.clear();
+        }
         graphOut.clear();
     }
 
