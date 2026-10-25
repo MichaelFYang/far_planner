@@ -186,7 +186,8 @@ public:
                                   const std::string& to_frame_id,
                                   const std::shared_ptr<tf2_ros::Buffer>& tf_buffer,
                                   const PointCloudPtr& cloudInOut,
-                                  const rclcpp::Time& stamp);
+                                  const rclcpp::Time& stamp,
+                                  Point3D* sensor_origin = nullptr);
 
     static void TransformPoint3DFrame(const std::string& from_frame_id,
                                       const std::string& to_frame_id,
