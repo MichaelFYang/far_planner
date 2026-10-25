@@ -794,11 +794,3 @@ std::unordered_set<int> MapHandler::extend_obs_indices_;
 std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_free_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_obs_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_grid_;
-
-
-int main(int argc, char** argv){
-  ros::init(argc, argv, "far_planner_node");
-  FARMaster dp_node;
-  dp_node.Init();
-  dp_node.Loop();
-}

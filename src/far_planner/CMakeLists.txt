@@ -40,7 +40,7 @@ catkin_package(CATKIN_DEPENDS
   tf
 )
 
-add_executable(${PROJECT_NAME}
+add_library(far_planner_core STATIC
   src/contour_detector.cpp
   src/contour_graph.cpp
   src/dynamic_graph.cpp
@@ -53,8 +53,8 @@ add_executable(${PROJECT_NAME}
   src/terrain_planner.cpp
   src/utility.cpp
 )
-add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
-target_include_directories(${PROJECT_NAME} PRIVATE
+add_dependencies(far_planner_core ${catkin_EXPORTED_TARGETS})
+target_include_directories(far_planner_core PUBLIC
   include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
@@ -62,7 +62,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${EIGEN3_INCLUDE_DIR}
 )
 add_definitions(${PCL_DEFINITIONS})
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(far_planner_core ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} far_planner_core)
 
 install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
