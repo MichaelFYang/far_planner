@@ -536,17 +536,21 @@ void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
 }
 
 void MapHandler::RemoveObsCloudFromGrid(const PointCloudPtr& obsCloud) {
-    std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
+    std::vector<int> marked_indices;
     for (const auto& point : obsCloud->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
-        util_remove_check_list_[ind] = 1;
+        if (util_remove_check_list_[ind] == 0) {
+            util_remove_check_list_[ind] = 1;
+            marked_indices.push_back(ind);
+        }
     }
-    for (const auto& ind : neighbor_obs_indices_) {
-        if (util_remove_check_list_[ind] == 1 && global_visited_induces_[ind] == 1) {
+    for (const int ind : marked_indices) {
+        if (neighbor_obs_indices_.count(ind) != 0 && global_visited_induces_[ind] == 1) {
             FARUtil::RemoveOverlapCloud(world_obs_cloud_grid_->GetCell(ind), obsCloud);
         }
+        util_remove_check_list_[ind] = 0;
     }
 }
 
