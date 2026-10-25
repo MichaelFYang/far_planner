@@ -33,6 +33,7 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         if (node_ptr->connect_nodes.empty() || !IsEncodeType(node_ptr)) continue;
         visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
+        msg_node.header.stamp = graphOut.header.stamp;
         msg_node.position    = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
         msg_node.id          = node_ptr->id;
         msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
@@ -78,6 +79,7 @@ void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
 void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
     auto graph_msg = std::make_shared<visibility_graph_msg::msg::Graph>();
     graph_msg->header.frame_id = gm_params_.frame_id;
+    graph_msg->header.stamp = nh_->now();
     graph_msg->robot_id = gm_params_.robot_id;
     this->EncodeGraph(graphIn, *graph_msg);
     graph_pub_->publish(*graph_msg);
@@ -90,12 +92,20 @@ bool GraphMsger::ValidateGraphMessage(const visibility_graph_msg::msg::Graph& gr
         error = "graph frame does not match the planner world frame";
         return false;
     }
+    if (graph.size != graph.nodes.size()) {
+        error = "graph size does not match node count";
+        return false;
+    }
     std::unordered_set<std::uint32_t> ids;
     ids.reserve(graph.nodes.size());
     const auto finite_point = [](const auto& point) {
         return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
     };
     for (const auto& node : graph.nodes) {
+        if (!FARUtil::IsSameFrameID(node.header.frame_id, graph.header.frame_id)) {
+            error = "graph node frame does not match graph frame";
+            return false;
+        }
         if (!ids.insert(node.id).second) {
             error = "duplicate graph node ID";
             return false;
