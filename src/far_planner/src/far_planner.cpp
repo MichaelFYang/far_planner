@@ -471,6 +471,7 @@ void FARMaster::LoadROSParams() {
   FARUtil::kMatchDist      = master_params_.robot_dim * 2.0f + FARUtil::kLeafSize;
   FARUtil::kNavClearDist   = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
   FARUtil::kProjectDist    = master_params_.voxel_dim;
+  master_params_.world_frame = FARUtil::NormalizeFrameID(master_params_.world_frame);
   FARUtil::worldFrameId    = master_params_.world_frame;
   FARUtil::kVizRatio       = master_params_.viz_ratio;
   FARUtil::kTolerZ         = map_params_.floor_height - FARUtil::kHeightVoxel;
@@ -537,7 +538,11 @@ void FARMaster::LoadROSParams() {
 
 void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
   // transform from odom frame to mapping frame
-  std::string odom_frame = msg->header.frame_id;
+  const std::string odom_frame = FARUtil::NormalizeFrameID(msg->header.frame_id);
+  if (odom_frame.empty() || msg->header.stamp.isZero()) {
+    ROS_WARN_THROTTLE(1.0, "Dropping odometry with an empty frame or invalid timestamp");
+    return;
+  }
   tf::Pose tf_odom_pose;
   tf::poseMsgToTF(msg->pose.pose, tf_odom_pose);
   if (!FARUtil::IsSameFrameID(odom_frame, master_params_.world_frame)) {
@@ -545,11 +550,10 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
     tf::StampedTransform odom_to_world_tf_stamp;
     try
     {
-      tf_listener_->waitForTransform(master_params_.world_frame, odom_frame, ros::Time(0), ros::Duration(1.0));
-      tf_listener_->lookupTransform(master_params_.world_frame, odom_frame, ros::Time(0), odom_to_world_tf_stamp);
+      tf_listener_->lookupTransform(master_params_.world_frame, odom_frame, msg->header.stamp, odom_to_world_tf_stamp);
       tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
     }
-    catch (tf::TransformException ex){
+    catch (const tf::TransformException& ex){
       ROS_ERROR("Tracking odom TF lookup: %s",ex.what());
       return;
     }
@@ -573,53 +577,45 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
   is_odom_init_ = true;
 }
 
-void FARMaster::PrcocessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
-                             const PointCloudPtr& cloudOut) 
-{
-
-  pcl::PointCloud<PCLPoint> temp_cloud;
-  pcl::fromROSMsg(*pc, temp_cloud);
-  cloudOut->clear(), *cloudOut = temp_cloud;
-  if (cloudOut->empty()) return;
-  FARUtil::FilterCloud(cloudOut, master_params_.voxel_dim);
-  // transform cloud frame
-  std::string cloud_frame = pc->header.frame_id;
-  FARUtil::RemoveNanInfPoints(cloudOut);
-  if (!FARUtil::IsSameFrameID(cloud_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) ROS_WARN_ONCE("FARMaster: cloud frame does NOT match with world frame!");
-    try
-    {
-      FARUtil::TransformPCLFrame(cloud_frame, 
-                                master_params_.world_frame, 
-                                tf_listener_,
-                                cloudOut);
-    }
-    catch(tf::TransformException ex)
-    {
-      ROS_ERROR("Tracking cloud TF lookup: %s",ex.what());
-      return;
-    }
+bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc, const PointCloudPtr& cloudOut) {
+  if (pc->header.stamp.isZero()) {
+    ROS_WARN_THROTTLE(1.0, "Dropping point cloud without a valid measurement timestamp");
+    return false;
   }
+  PointCloudPtr candidate(new PointCloud);
+  pcl::fromROSMsg(*pc, *candidate);
+  FARUtil::RemoveNanInfPoints(candidate);
+  if (candidate->empty()) return false;
+  FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
+  try {
+    FARUtil::TransformPCLFrame(pc->header.frame_id, master_params_.world_frame,
+                              tf_listener_, candidate, pc->header.stamp);
+  } catch (const tf::TransformException& ex) {
+    ROS_WARN_THROTTLE(1.0, "Dropping point cloud: %s", ex.what());
+    return false;
+  }
+  cloudOut->swap(*candidate);
+  return true;
 }
 
 void FARMaster::ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& scan_pc) {
   if (master_params_.is_static_env || !is_odom_init_) return;
-  this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_);
+  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_)) return;
   scan_handler_.UpdateRobotPosition(robot_pos_);
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   if (master_params_.is_static_env) return;
-  this->PrcocessCloud(pc, local_terrain_ptr_);
+  if (!this->ProcessCloud(pc, local_terrain_ptr_)) return;
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   if (!is_odom_init_) return;
+  if (!is_stop_update_ && !this->ProcessCloud(pc, temp_cloud_ptr_)) return;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) {
-    this->PrcocessCloud(pc, temp_cloud_ptr_);
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
@@ -706,7 +702,13 @@ void FARMaster::WaypointCallBack(const geometry_msgs::PointStamped& route_goal) 
   const std::string goal_frame = route_goal.header.frame_id;
   if (!FARUtil::IsSameFrameID(goal_frame, master_params_.world_frame)) {
     if (FARUtil::IsDebug) ROS_WARN_THROTTLE(1.0, "FARMaster: waypoint published is not on world frame!");
-    FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_listener_, goal_p); 
+    try {
+      FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame,
+                                   tf_listener_, goal_p, route_goal.header.stamp);
+    } catch (const tf::TransformException& ex) {
+      ROS_WARN("Dropping goal: %s", ex.what());
+      return;
+    }
   }
   graph_planner_.UpdateGoal(goal_p);
   FARUtil::Timer.start_time("Overall_executing", true);

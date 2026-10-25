@@ -78,3 +78,11 @@ install(DIRECTORY launch config rviz data
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp)
+  if(TARGET test_frame_transforms)
+    target_compile_definitions(test_frame_transforms PRIVATE FAR_PLANNER_ROS1)
+    target_link_libraries(test_frame_transforms far_planner_core)
+  endif()
+endif()

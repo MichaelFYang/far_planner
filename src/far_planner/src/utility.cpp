@@ -123,51 +123,63 @@ void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float
   *cloudInOut = temp_cloud;
 }
 
+std::string FARUtil::NormalizeFrameID(const std::string& frame_id) {
+    const auto first = frame_id.find_first_not_of('/');
+    return first == std::string::npos ? std::string() : frame_id.substr(first);
+}
+
 void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
-                               const std::string& to_frame_id,
-                               const tf::TransformListener* tf_listener,
-                               const PointCloudPtr& cloudInOut) 
-{
-  if (cloudInOut->empty()) return;
-  pcl::PointCloud<PCLPoint> aft_tf_cloud;
-  tf::StampedTransform cloud_to_map_tf;
-  try {
-    tf_listener->waitForTransform(to_frame_id, from_frame_id, ros::Time(0), ros::Duration(1.0));
-    tf_listener->lookupTransform(to_frame_id, from_frame_id, ros::Time(0), cloud_to_map_tf);
-  } catch (tf::TransformException ex){
-    throw ex;
-    return;
-  }
-  pcl_ros::transformPointCloud(*cloudInOut, aft_tf_cloud, cloud_to_map_tf);
-  *cloudInOut = aft_tf_cloud;
+                                const std::string& to_frame_id,
+                                const tf::Transformer* tf_listener,
+                                const PointCloudPtr& cloudInOut,
+                                const ros::Time& stamp) {
+    const std::string source = NormalizeFrameID(from_frame_id);
+    const std::string target = NormalizeFrameID(to_frame_id);
+    if (source.empty() || target.empty()) {
+        throw tf::TransformException("Point cloud source and target frames must be nonempty");
+    }
+    if (stamp.isZero()) {
+        throw tf::TransformException("Sensor clouds require a nonzero measurement timestamp");
+    }
+    if (cloudInOut->empty()) return;
+    if (source == target) {
+        cloudInOut->header.frame_id = target;
+        return;
+    }
+
+    tf::StampedTransform transform;
+    tf_listener->lookupTransform(target, source, stamp, transform);
+    PointCloud transformed;
+    pcl_ros::transformPointCloud(*cloudInOut, transformed, transform);
+    transformed.header.frame_id = target;
+    transformed.header.stamp = stamp.toNSec() / 1000ULL;
+    cloudInOut->swap(transformed);
 }
 
 void FARUtil::TransformPoint3DFrame(const std::string& from_frame_id,
-                                   const std::string& to_frame_id,
-                                   const tf::TransformListener* tf_listener,
-                                   Point3D& point)
-{
-  tf::Vector3 point_vec(point.x, point.y, point.z);
-  tf::StampedTransform transform_tf_stamp;
-  try {
-    tf_listener->waitForTransform(to_frame_id, from_frame_id, ros::Time(0), ros::Duration(1.0));
-    tf_listener->lookupTransform(to_frame_id, from_frame_id, ros::Time(0), transform_tf_stamp);
-    point_vec = transform_tf_stamp * point_vec;
-  } catch (tf::TransformException ex){
-    ROS_ERROR("Tracking Point3D TF lookup: %s",ex.what());
-    return;
-  }
-  point.x = point_vec.x();
-  point.y = point_vec.y();
-  point.z = point_vec.z();
+                                    const std::string& to_frame_id,
+                                    const tf::Transformer* tf_listener,
+                                    Point3D& point,
+                                    const ros::Time& stamp) {
+    const std::string source = NormalizeFrameID(from_frame_id);
+    const std::string target = NormalizeFrameID(to_frame_id);
+    if (source.empty() || target.empty()) {
+        throw tf::TransformException("Goal source and target frames must be nonempty");
+    }
+    if (source == target) return;
+    // Zero is an explicit latest-transform request for an operator goal only.
+    tf::StampedTransform transform;
+    tf_listener->lookupTransform(target, source, stamp, transform);
+    const tf::Vector3 result = transform * tf::Vector3(point.x, point.y, point.z);
+    point.x = result.x();
+    point.y = result.y();
+    point.z = result.z();
 }
 
 bool FARUtil::IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame) {
-  std::string str1 = cur_frame;
-  std::string str2 = ref_frame;
-  if (cur_frame[0] == '/') str1 = cur_frame.substr(1);
-  if (ref_frame[0] == '/') str2 = ref_frame.substr(1);
-  return str1 == str2;
+    const std::string source = NormalizeFrameID(cur_frame);
+    const std::string target = NormalizeFrameID(ref_frame);
+    return !source.empty() && !target.empty() && source == target;
 }
 
 void FARUtil::ConvertCloudToPCL(const PointStack& point_stack, 

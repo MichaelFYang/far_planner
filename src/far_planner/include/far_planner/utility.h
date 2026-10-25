@@ -167,15 +167,20 @@ public:
 
     static void FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size);
 
+    static std::string NormalizeFrameID(const std::string& frame_id);
+
+    // Transform at the original message stamp; throw on failure without modifying input.
     static void TransformPCLFrame(const std::string& from_frame_id,
                                   const std::string& to_frame_id,
-                                  const tf::TransformListener* tf_listener,
-                                  const PointCloudPtr& cloudInOut);
+                                  const tf::Transformer* tf_listener,
+                                  const PointCloudPtr& cloudInOut,
+                                  const ros::Time& stamp);
 
     static void TransformPoint3DFrame(const std::string& from_frame_id,
                                       const std::string& to_frame_id,
-                                      const tf::TransformListener* tf_listener,
-                                      Point3D& point);
+                                      const tf::Transformer* tf_listener,
+                                      Point3D& point,
+                                      const ros::Time& stamp);
 
     static bool IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame);
     

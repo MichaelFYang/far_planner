@@ -25,4 +25,5 @@
   <exec_depend>goalpoint_rviz_plugin</exec_depend>
   <exec_depend>teleop_rviz_plugin</exec_depend>
   <exec_depend>rviz</exec_depend>
+  <test_depend>gtest</test_depend>
 </package>
