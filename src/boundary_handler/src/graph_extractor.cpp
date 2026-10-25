@@ -11,6 +11,7 @@
 #include "boundary_handler/intersection.h"
 #include "boundary_handler/input_parser.h"
 
+#include <rclcpp/executors/single_threaded_executor.hpp>
 #include <stdexcept>
 
 /***************************************************************************************/
@@ -590,10 +591,12 @@ int main(int argc, char** argv){
         return 1;
     }
 
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(ge_node->GetNodeHandle());
     rclcpp::Rate loop_rate(1.0);
     while (rclcpp::ok()) {
         ge_node->Loop();
-        rclcpp::spin_some(ge_node->GetNodeHandle());
+        executor.spin_some();
         loop_rate.sleep();
     }
 
