@@ -407,15 +407,18 @@ private:
     /* Clear nodes in global graph which is marked as merge */
     inline void ClearMergedNodesInGraph() {
         // remove nodes
-        for (auto it = globalGraphNodes_.begin(); it != globalGraphNodes_.end(); it ++) {
-            if (IsMergedNode(*it)) {
-                ClearNodeConnectInGraph(*it);
-                ClearContourConnectionInGraph(*it);
-                ClearTrajectoryConnectInGraph(*it);
-                RemoveNodeIdFromMap(*it);
-                ClearNodeFromInternalStack(*it);
-                globalGraphNodes_.erase(it--);
+        for (auto it = globalGraphNodes_.begin(); it != globalGraphNodes_.end();) {
+            const NavNodePtr node_ptr = *it;
+            if (!IsMergedNode(node_ptr)) {
+                ++it;
+                continue;
             }
+            ClearNodeConnectInGraph(node_ptr);
+            ClearContourConnectionInGraph(node_ptr);
+            ClearTrajectoryConnectInGraph(node_ptr);
+            RemoveNodeIdFromMap(node_ptr);
+            ClearNodeFromInternalStack(node_ptr);
+            it = globalGraphNodes_.erase(it);
         }
         // clean outrange contour nodes 
         out_contour_nodes_.clear();
@@ -670,6 +673,19 @@ public:
         is_bridge_internav_ = false;
         last_connect_pos_   = Point3D(0,0,0);
         
+        // All navigation nodes are discarded together. Break reciprocal edge,
+        // trajectory, potential-vote, and search-parent ownership cycles first.
+        for (const auto& node_ptr : globalGraphNodes_) {
+            node_ptr->connect_nodes.clear();
+            node_ptr->poly_connects.clear();
+            node_ptr->contour_connects.clear();
+            node_ptr->potential_contours.clear();
+            node_ptr->potential_edges.clear();
+            node_ptr->trajectory_connects.clear();
+            node_ptr->parent.reset();
+            node_ptr->free_parent.reset();
+            node_ptr->ctnode.reset();
+        }
         idx_node_map_.clear();
         near_nav_nodes_.clear(); 
         wide_near_nodes_.clear(); 

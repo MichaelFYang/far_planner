@@ -303,11 +303,8 @@ int FARUtil::Mod(const int& a, const int& b) {
 
 void FARUtil::EraseNodeFromStack(const NavNodePtr& node_ptr,
                                  NodePtrStack& node_stack) {
-  for (auto it = node_stack.begin(); it != node_stack.end(); it++) {
-    if (*it  == node_ptr) {
-      node_stack.erase(it--);
-    }
-  }
+  node_stack.erase(std::remove(node_stack.begin(), node_stack.end(), node_ptr),
+                   node_stack.end());
 }
 
 bool FARUtil::IsSamePoint3D(const Point3D& p1, const Point3D& p2) {
