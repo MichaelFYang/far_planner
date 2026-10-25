@@ -1,52 +1,36 @@
 cmake_minimum_required(VERSION 3.5)
 project(graph_decoder)
 
-# Other CMake configurations
-set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
 ## Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(visibility_graph_msg REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
-###########
-## Build ##
-###########
-
-# Include directories
 include_directories(
   include
   ${rclcpp_INCLUDE_DIRS}
   ${std_msgs_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
-  /usr/local/include # Location when using 'make system_install'
-  /usr/include       # More usual location (e.g. when installing using a package)
 )
 
-# Specify additional locations for library files
-link_directories(
-  /usr/local/lib # Location when using 'make system_install'
-  /usr/lib       # More usual location (e.g. when installing using a package)
-)
-
-# Dependent cpp files
-set(SOURCES ${SOURCES}
-  src/decoder_node.cpp
-)
-
-# Declare executables
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME} src/decoder_node.cpp)
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME}
   rclcpp::rclcpp
   std_msgs::std_msgs
   std_srvs::std_srvs
+  geometry_msgs::geometry_msgs
   visibility_graph_msg::visibility_graph_msg
   pcl_conversions::pcl_conversions
   visualization_msgs::visualization_msgs
@@ -62,12 +46,8 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
-##########
-## Test ##
-##########
-# If you have tests
-# find_package(ament_lint_auto REQUIRED)
-# ament_lint_auto_find_test_dependencies()
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
+  DESTINATION share/${PROJECT_NAME}
+)
 
-# This macro ensures modules and global scripts declared therein get installed
 ament_package()
