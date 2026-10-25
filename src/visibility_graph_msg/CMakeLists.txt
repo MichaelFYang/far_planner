@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(visibility_graph_msg)
 
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
   std_msgs
   geometry_msgs
   message_generation
@@ -21,5 +20,9 @@ generate_messages(
 )
 
 catkin_package(
-  CATKIN_DEPENDS message_runtime
+  CATKIN_DEPENDS message_runtime std_msgs geometry_msgs
+)
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

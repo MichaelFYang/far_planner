@@ -1,5 +1,12 @@
-#ifndef GOALPOINT_RVIZ_PLUGIN_WAYPOINT_TOOL_H
-#define GOALPOINT_RVIZ_PLUGIN_WAYPOINT_TOOL_H
+// Copyright (c) 2021-2026 Fan Yang and contributors
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+
+#ifndef GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_
+#define GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_
 
 #include <sstream>
 #include <ros/ros.h>
@@ -20,6 +27,7 @@ class StringProperty;
 class GoalPointTool : public PoseTool
 {
   Q_OBJECT
+
 public:
   GoalPointTool();
   virtual ~GoalPointTool()
@@ -28,7 +36,7 @@ public:
   virtual void onInitialize();
 
 protected:
-  virtual void odomHandler(const nav_msgs::Odometry::ConstPtr& odom);
+  virtual void odomHandler(const nav_msgs::Odometry::ConstPtr & odom);
   virtual void onPoseSet(double x, double y, double theta);
 
 private Q_SLOTS:
@@ -42,8 +50,8 @@ private:
   ros::Publisher pub_;
   ros::Publisher pub_joy_;
 
-  StringProperty* topic_property_;
+  StringProperty * topic_property_;
 };
-}
+}  // namespace rviz
 
-#endif  // GOALPOINT_RVIZ_PLUGIN_WAYPOINT_TOOL_H
+#endif  // GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_

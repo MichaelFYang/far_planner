@@ -1,4 +1,11 @@
-#include "goalpoint_tool.h"
+// Copyright (c) 2021-2026 Fan Yang and contributors
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+
+#include "goalpoint_rviz_plugin/goalpoint_tool.hpp"
 
 namespace rviz
 {
@@ -6,7 +13,8 @@ GoalPointTool::GoalPointTool()
 {
   shortcut_key_ = 'w';
 
-  topic_property_ = new StringProperty("Topic", "goalpoint", "The topic on which to publish goal waypiont for dynamic route planner.",
+  topic_property_ = new StringProperty("Topic", "goalpoint",
+      "The topic on which to publish goal waypiont for dynamic route planner.",
                                        getPropertyContainer(), SLOT(updateTopic()), this);
 }
 
@@ -20,12 +28,13 @@ void GoalPointTool::onInitialize()
 
 void GoalPointTool::updateTopic()
 {
-  sub_ = nh_.subscribe<nav_msgs::Odometry> ("/state_estimation", 5, &GoalPointTool::odomHandler, this);
+  sub_ = nh_.subscribe<nav_msgs::Odometry>("/state_estimation", 5, &GoalPointTool::odomHandler,
+      this);
   pub_ = nh_.advertise<geometry_msgs::PointStamped>("/goal_point", 5);
   pub_joy_ = nh_.advertise<sensor_msgs::Joy>("/joy", 5);
 }
 
-void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr& odom)
+void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr & odom)
 {
   vehicle_z = odom->pose.pose.position.z;
 }
@@ -57,7 +66,7 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
 
   joy.header.stamp = ros::Time::now();
   joy.header.frame_id = "goalpoint_tool";
-  
+
   geometry_msgs::PointStamped goal_point;
   goal_point.header.frame_id = "map";
   goal_point.header.stamp = ros::Time::now();
@@ -68,7 +77,7 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
   pub_.publish(goal_point);
   usleep(10000);
   pub_.publish(goal_point);
-  
+
   usleep(10000); // set to 1000000us (1s) on real robot
   pub_joy_.publish(joy);
 }

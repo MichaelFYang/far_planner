@@ -1,21 +1,28 @@
-<package>
+<?xml version="1.0"?>
+<package format="2">
   <name>far_planner</name>
   <version>0.0.1</version>
   <description>FAR Planner</description>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
-  <license>BSD</license>
-
+  <license>MIT</license>
   <buildtool_depend>catkin</buildtool_depend>
-
-  <build_depend>roscpp</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>visibility_graph_msg</build_depend>
-  <build_depend>pcl_ros</build_depend>
-
-  <run_depend>roscpp</run_depend>
-  <run_depend>std_msgs</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>visibility_graph_msg</run_depend>
-  <run_depend>pcl_ros</run_depend>
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>visibility_graph_msg</depend>
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>tf</depend>
+  <depend>libpcl-all-dev</depend>
+  <depend>libopencv-dev</depend>
+  <depend>eigen</depend>
+  <exec_depend>roslaunch</exec_depend>
+  <exec_depend>graph_decoder</exec_depend>
+  <exec_depend>goalpoint_rviz_plugin</exec_depend>
+  <exec_depend>teleop_rviz_plugin</exec_depend>
+  <exec_depend>rviz</exec_depend>
 </package>
