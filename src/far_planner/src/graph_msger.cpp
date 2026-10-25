@@ -18,9 +18,7 @@ void GraphMsger::Init(const ros::NodeHandle& nh, const GraphMsgerParams& params)
     graph_sub_ = nh_.subscribe("/decoded_vgraph", 5, &GraphMsger::GraphCallBack, this);
 
     global_graph_.clear();
-    nodes_cloud_ptr_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-    kdtree_graph_cloud_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
-    kdtree_graph_cloud_->setSortedResults(false);
+    graph_node_index_.Build(global_graph_);
 }
 
 void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
@@ -68,21 +66,7 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
 
 void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
     global_graph_ = graph;
-    // Update Graph Node KdTree
-    if (global_graph_.empty()) {
-        FARUtil::ClearKdTree(nodes_cloud_ptr_, kdtree_graph_cloud_);
-    } else {
-        nodes_cloud_ptr_->resize(global_graph_.size());
-        std::size_t idx = 0;
-        for (const auto node_ptr : global_graph_) {
-            if (node_ptr->is_odom || FARUtil::IsOutsideGoal(node_ptr)) continue;
-            PCLPoint pcl_p = FARUtil::Point3DToPCLPoint(node_ptr->position);
-            pcl_p.intensity = node_ptr->id;
-            nodes_cloud_ptr_->points[idx] = pcl_p;
-            idx ++;
-        }
-        kdtree_graph_cloud_->setInputCloud(nodes_cloud_ptr_);
-    }
+    graph_node_index_.Build(global_graph_);
     this->PublishGlobalGraph(global_graph_);
 }
 
@@ -152,19 +136,8 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
 }
 
 NavNodePtr GraphMsger::NearestNodePtrOnGraph(const Point3D p, const float radius) {
-    if (global_graph_.empty()) return NULL;
-    // Find the nearest node in graph
-    std::vector<int> pIdxK(1);
-    std::vector<float> pdDistK(1);
-    PCLPoint pcl_p = FARUtil::Point3DToPCLPoint(p);
-    if (kdtree_graph_cloud_->nearestKSearch(pcl_p, 1, pIdxK, pdDistK) > 0) {
-        if (pdDistK[0] < radius) {
-            const PCLPoint graph_p = nodes_cloud_ptr_->points[pIdxK[0]];
-            const std::size_t node_id = static_cast<std::size_t>(graph_p.intensity);
-            return DynamicGraph::MappedNavNodeFromId(node_id);
-        }
-    }
-    return NULL;
+    const auto node = graph_node_index_.Nearest(p, radius);
+    return node && DynamicGraph::MappedNavNodeFromId(node->id) == node ? node : nullptr;
 }
 
 void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr) {

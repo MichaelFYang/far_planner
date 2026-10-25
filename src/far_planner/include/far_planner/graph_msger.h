@@ -3,6 +3,7 @@
 
 #include "utility.h"
 #include "dynamic_graph.h"
+#include "graph_node_index.h"
 
 struct GraphMsgerParams {
     GraphMsgerParams() = default;
@@ -30,8 +31,7 @@ private:
     ros::Subscriber graph_sub_;
 
     NodePtrStack   global_graph_;
-    PointCloudPtr  nodes_cloud_ptr_;
-    PointKdTreePtr kdtree_graph_cloud_;
+    GraphNodeIndex graph_node_index_;
     
     void CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr);
 
