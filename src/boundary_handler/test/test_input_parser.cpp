@@ -1,0 +1,53 @@
+// Copyright (c) 2026 Fan Yang and contributors
+// SPDX-License-Identifier: MIT
+#include <gtest/gtest.h>
+#include <sstream>
+#include "boundary_handler/input_parser.h"
+
+TEST(InputParser, ParsesBoundaryAndTrajectory)
+{
+    std::istringstream boundary("ply\nformat ascii 1.0\nelement vertex 2\n"
+                                "property float x\nend_header\n1 2 3 4\n5 6 7 8\n");
+    const auto vertices = boundary_handler::ReadAsciiPly(boundary);
+    ASSERT_EQ(vertices.size(), 2U);
+    EXPECT_FLOAT_EQ(vertices[0].x, 1.0f);
+    EXPECT_FLOAT_EQ(vertices[1].polygon_index, 8.0f);
+    std::istringstream trajectory("0 1 2 0 0 0 0");
+    const auto point = boundary_handler::ReadTrajectory(trajectory);
+    EXPECT_EQ(point, (std::array<float, 3>{{0.0f, 1.0f, 2.0f}}));
+}
+
+TEST(InputParser, RejectsMissingOrMalformedHeader)
+{
+    for (const char* content : {
+             "ply\nformat ascii 1.0\nend_header\n1 2 3 4\n",
+             "ply\nformat ascii 1.0\nelement vertex -1\nend_header\n",
+             "ply\nformat binary_little_endian 1.0\nelement vertex 1\nend_header\n",
+             "ply\nformat ascii 1.0\nelement vertex 1\n1 2 3 4\n",
+             "ply\nformat ascii 1.0\nelement vertex 1000001\nend_header\n"}) {
+        std::istringstream input(content);
+        EXPECT_THROW(boundary_handler::ReadAsciiPly(input), std::runtime_error);
+    }
+}
+
+TEST(InputParser, RejectsTruncatedAndNonfiniteCoordinates)
+{
+    for (const char* row : {"1 2 3", "1 2 nan 4", "1 inf 3 4", "1 2 3 2147483648"}) {
+        std::istringstream input(std::string("ply\nformat ascii 1.0\nelement vertex 1\nend_header\n") + row);
+        EXPECT_THROW(boundary_handler::ReadAsciiPly(input), std::runtime_error);
+    }
+    std::istringstream long_header(std::string("ply\nformat ascii 1.0\n") +
+        std::string(5000, 'X') + "\nelement vertex 1\nend_header\n1 2 3 4\n");
+    EXPECT_THROW(boundary_handler::ReadAsciiPly(long_header), std::runtime_error);
+    for (const char* content : {"1", "1 2", "1 2 nan", "1 inf 3"}) {
+        std::istringstream input(content);
+        EXPECT_THROW(boundary_handler::ReadTrajectory(input), std::runtime_error);
+    }
+}
+
+#ifdef FAR_PLANNER_ROS1
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+#endif

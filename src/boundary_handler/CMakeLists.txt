@@ -55,4 +55,10 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
   DESTINATION share/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_input_parser test/test_input_parser.cpp)
+  target_include_directories(test_input_parser PRIVATE include)
+endif()
+
 ament_package()
