@@ -9,6 +9,15 @@
 
 #include "far_planner/far_planner.h"
 
+#include <stdexcept>
+
+namespace {
+std::uint64_t MeasurementStamp(const builtin_interfaces::msg::Time& stamp) {
+  if (stamp.sec < 0 || (stamp.sec == 0 && stamp.nanosec == 0) || stamp.nanosec >= 1000000000U) return 0;
+  return static_cast<std::uint64_t>(stamp.sec) * 1000000000ULL + stamp.nanosec;
+}
+}  // namespace
+
 /***************************************************************************************/
 FARMaster::FARMaster()
 {
@@ -141,8 +150,28 @@ void FARMaster::Init() {
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner Initiated Complete");
 }
 
+bool FARMaster::ValidMeasurementTime(std::uint64_t stamp) const {
+  const auto now = nh_->now().nanoseconds();
+  // All inputs must use the same ROS clock. Reject old-epoch messages queued
+  // across a rewind when their timestamps now lie ahead of the current clock.
+  return stamp != 0 && now > 0 && stamp <= static_cast<std::uint64_t>(now) + sensor_time_tolerance_ns_;
+}
+
+void FARMaster::CheckClockEpoch() {
+  if (!clock_epoch_.Observe(nh_->now().nanoseconds())) return;
+  RCLCPP_WARN(nh_->get_logger(), "ROS time moved backwards: clearing sensor history, map, and graph");
+  this->ResetEnvironmentAndGraph();
+}
+
 void FARMaster::ResetEnvironmentAndGraph() {
   this->ResetInternalValues();
+  odometry_history_.Clear();
+  last_scan_stamp_ = last_terrain_stamp_ = last_local_terrain_stamp_ = 0;
+  is_odom_init_ = is_cloud_init_ = is_scan_init_ = false;
+  FARUtil::cur_scan_cloud_->clear();
+  FARUtil::local_terrain_obs_->clear();
+  FARUtil::local_terrain_free_->clear();
+  scan_handler_.ReInitGrids();
   if (!FARUtil::IsDebug) { // Terminal Output
     printf("\033[A"), printf("\033[A"), printf("\033[2K");
     std::cout<< "\033[1;31m V-Graph Resetting...\033[0m\n" << std::endl;
@@ -167,6 +196,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
 }
 
 void FARMaster::MainLoopCallBack() {
+  this->CheckClockEpoch();
   if (!is_init_completed_) {
     return;
   }
@@ -272,6 +302,7 @@ void FARMaster::MainLoopCallBack() {
 }
 
 void FARMaster::PlanningCallBack() {
+  this->CheckClockEpoch();
   if (!is_init_completed_ || !is_graph_init_) return;
   const NavNodePtr goal_ptr = graph_planner_.GetGoalNodePtr();
   if (goal_ptr == NULL) {
@@ -463,6 +494,12 @@ void FARMaster::LoadROSParams() {
   const std::string contour_prefix  = "contour_graph";
   const std::string msger_prefix    = "graph_msger";
 
+  const double sensor_time_tolerance = nh_->declare_parameter<double>("sensor_time_tolerance", 0.2);
+  if (!std::isfinite(sensor_time_tolerance) || sensor_time_tolerance <= 0.0 || sensor_time_tolerance > 10.0) {
+    throw std::invalid_argument("sensor_time_tolerance must be in (0, 10] seconds");
+  }
+  sensor_time_tolerance_ns_ = static_cast<std::uint64_t>(sensor_time_tolerance * 1e9);
+
    // master params
   nh_->declare_parameter<float>("main_run_freq", 5.0);
   nh_->declare_parameter<float>("voxel_dim", 0.2);
@@ -638,9 +675,23 @@ void FARMaster::LoadROSParams() {
 }
 
 void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
+  this->CheckClockEpoch();
+  const auto stamp = MeasurementStamp(msg->header.stamp);
+  if (!this->ValidMeasurementTime(stamp) || stamp <= odometry_history_.LatestStamp()) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping invalid or out-of-order odometry");
+    return;
+  }
+  const auto& p = msg->pose.pose.position;
+  const auto& q = msg->pose.pose.orientation;
+  const double rotation_norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
+  if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
+      !std::isfinite(rotation_norm) || rotation_norm <= 1e-12) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping odometry with an invalid pose");
+    return;
+  }
   // transform from odom frame to mapping frame
   const std::string odom_frame = FARUtil::NormalizeFrameID(msg->header.frame_id);
-  if (odom_frame.empty() || (msg->header.stamp.sec < 0 || (msg->header.stamp.sec == 0 && msg->header.stamp.nanosec == 0))) {
+  if (odom_frame.empty()) {
     RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping odometry with an empty frame or invalid timestamp");
     return;
   }
@@ -662,6 +713,8 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
     }
   }
   
+  const auto& origin = tf_odom_pose.getOrigin();
+  if (!odometry_history_.Add(stamp, {{origin.x(), origin.y(), origin.z()}})) return;
   robot_pos_.x = tf_odom_pose.getOrigin().x(); 
   robot_pos_.y = tf_odom_pose.getOrigin().y();
   robot_pos_.z = tf_odom_pose.getOrigin().z();
@@ -684,7 +737,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
 
 bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) {
-  if ((pc->header.stamp.sec < 0 || (pc->header.stamp.sec == 0 && pc->header.stamp.nanosec == 0))) {
+  if (!this->ValidMeasurementTime(MeasurementStamp(pc->header.stamp))) {
     RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping point cloud without a valid measurement timestamp");
     return false;
   }
@@ -705,20 +758,37 @@ bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, 
 }
 
 void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
+  this->CheckClockEpoch();
   if (master_params_.is_static_env || !is_odom_init_) return;
+  const auto stamp = MeasurementStamp(scan_pc->header.stamp);
+  far_planner::OdometryHistory::Position scan_position;
+  if (stamp <= last_scan_stamp_ ||
+      !odometry_history_.PositionAt(stamp, sensor_time_tolerance_ns_, scan_position)) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping scan without matching odometry or with an old timestamp");
+    return;
+  }
   if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_)) return;
-  scan_handler_.UpdateRobotPosition(robot_pos_);
+  scan_handler_.UpdateRobotPosition(Point3D(scan_position[0], scan_position[1], scan_position[2]));
+  last_scan_stamp_ = stamp;
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
+  this->CheckClockEpoch();
   if (master_params_.is_static_env) return;
+  const auto stamp = MeasurementStamp(pc->header.stamp);
+  if (stamp <= last_local_terrain_stamp_) return;
   if (!this->ProcessCloud(pc, local_terrain_ptr_)) return;
+  last_local_terrain_stamp_ = stamp;
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
+  this->CheckClockEpoch();
   if (!is_odom_init_) return;
+  const auto stamp = MeasurementStamp(pc->header.stamp);
+  if (!this->ValidMeasurementTime(stamp) || stamp <= last_terrain_stamp_) return;
   if (!is_stop_update_ && !this->ProcessCloud(pc, temp_cloud_ptr_)) return;
+  last_terrain_stamp_ = stamp;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) {
@@ -746,7 +816,9 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
-  if (!master_params_.is_static_env && !is_stop_update_) {
+  scan_handler_.ReInitGrids();
+  if (!master_params_.is_static_env && !is_stop_update_ &&
+      far_planner::WithinSensorSkew(stamp, last_scan_stamp_, sensor_time_tolerance_ns_)) {
     this->ExtractDynamicObsFromScan(FARUtil::cur_scan_cloud_, 
                                     FARUtil::surround_obs_cloud_, 
                                     FARUtil::surround_free_cloud_, 
@@ -761,7 +833,9 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
       *FARUtil::cur_new_cloud_ += *FARUtil::cur_dyobs_cloud_;
       FARUtil::FilterCloud(FARUtil::cur_new_cloud_, master_params_.voxel_dim);
     }
-    // update world dynamic obstacles
+  }
+  if (!master_params_.is_static_env && !is_stop_update_) {
+    // Decay exclusions even when no timestamp-compatible scan is available.
     FARUtil::StackCloudByTime(FARUtil::cur_dyobs_cloud_, FARUtil::stack_dyobs_cloud_, FARUtil::kObsDecayTime, nh_);
   }
   
@@ -794,12 +868,18 @@ void FARMaster::ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn,
                                           const PointCloudPtr& freeCloudIn,
                                           const PointCloudPtr& dyObsCloudOut)
 {
-  scan_handler_.ReInitGrids();
   scan_handler_.SetCurrentScanCloud(scanCloudIn, freeCloudIn);
   scan_handler_.ExtractDyObsCloud(obsCloudIn, dyObsCloudOut);
 }
 
 void FARMaster::WaypointCallBack(const geometry_msgs::msg::PointStamped& route_goal) {
+  this->CheckClockEpoch();
+  if (route_goal.header.stamp.sec < 0 || route_goal.header.stamp.nanosec >= 1000000000U ||
+      !std::isfinite(route_goal.point.x) || !std::isfinite(route_goal.point.y) ||
+      !std::isfinite(route_goal.point.z)) {
+    RCLCPP_WARN(nh_->get_logger(), "Dropping goal with an invalid point or timestamp");
+    return;
+  }
   if (!is_graph_init_) {
     if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(),"FARMaster: wait for v-graph to init before sending any goals");
     return;
