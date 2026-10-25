@@ -103,3 +103,22 @@ TEST(GraphLifecycle, OrdinaryContourUpdateReleasesRetiredVertices)
     EXPECT_TRUE(all_released);
     graph.ResetCurrentContour();
 }
+
+TEST(GraphLifecycle, PillarThresholdUsesClosedPolygonPerimeter)
+{
+    ContourGraph graph;
+    ContourGraphParams params;
+    params.kPillarPerimeter = 10.0f;
+    graph.Init(nullptr, params);
+    auto odom = std::make_shared<NavNode>();
+    odom->position = Point3D(-10.0f, -10.0f, 0.0f);
+
+    // The open chain is 7 m, but the triangle's full perimeter is 12 m.
+    graph.UpdateContourGraph(odom, {{Point3D(0.0f, 0.0f, 0.0f),
+                                     Point3D(3.0f, 0.0f, 0.0f),
+                                     Point3D(3.0f, 4.0f, 0.0f)}});
+    ASSERT_EQ(ContourGraph::contour_graph_.size(), 3U);
+    EXPECT_FALSE(ContourGraph::contour_graph_.front()->poly_ptr->is_pillar);
+    EXPECT_FLOAT_EQ(ContourGraph::contour_graph_.front()->poly_ptr->perimeter, 12.0f);
+    graph.ResetCurrentContour();
+}
