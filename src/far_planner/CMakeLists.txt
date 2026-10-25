@@ -62,9 +62,9 @@ set(SOURCES
   src/terrain_planner.cpp
 )
 
-add_executable(${PROJECT_NAME} src/far_planner.cpp ${SOURCES})
+add_library(far_planner_core STATIC src/far_planner.cpp ${SOURCES})
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(far_planner_core
   rclcpp::rclcpp
   std_msgs::std_msgs
   std_srvs::std_srvs
@@ -80,7 +80,10 @@ target_link_libraries(${PROJECT_NAME}
   tf2_sensor_msgs::tf2_sensor_msgs
 )
 
-target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(far_planner_core ${PCL_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} far_planner_core)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib/${PROJECT_NAME})
 
