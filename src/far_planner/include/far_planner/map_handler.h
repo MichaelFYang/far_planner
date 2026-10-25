@@ -186,7 +186,7 @@ private:
     static std::unordered_set<int> neighbor_obs_indices_;  // surrounding obs cloud grid indices stack
     static std::unordered_set<int> extend_obs_indices_;    // extended surrounding obs cloud grid indices stack
 
-    std::vector<int> global_visited_induces_;
+    std::unordered_set<int> visited_cell_indices_;
     std::vector<int> util_obs_modified_list_;
     std::vector<int> util_free_modified_list_;
     std::vector<int> util_remove_check_list_;
