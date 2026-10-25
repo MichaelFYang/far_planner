@@ -163,12 +163,12 @@ private:
 
     // Rest of your callback functions...
 
-    inline void ResetGraphCallBack(const std_msgs::msg::Empty::SharedPtr msg) {
+    inline void ResetGraphCallBack(const std_msgs::msg::Empty::SharedPtr) {
         is_reset_env_ = true;
     }
 
     inline void JoyCommandCallBack(const sensor_msgs::msg::Joy::SharedPtr msg) {
-        if (msg->buttons[4] > 0.5) {
+        if (msg->buttons.size() > 4 && msg->buttons[4] > 0) {
             is_reset_env_ = true;
         }
     } 
@@ -202,7 +202,7 @@ private:
         }
     }
 
-    inline void ReadFileCommand(const std_msgs::msg::String::SharedPtr msg) {
+    inline void ReadFileCommand(const std_msgs::msg::String::SharedPtr) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
@@ -210,10 +210,7 @@ private:
     }
 
     inline void SaveFileCommand(const std_msgs::msg::String::SharedPtr msg) {
-        if (!FARUtil::IsDebug) { // Terminal Output
-            printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
-            FakeTerminalInit();
-        }
+        ReadFileCommand(msg);
     }
 
     void ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc);
