@@ -37,9 +37,9 @@ void MapHandler::Init(const MapHandlerParams& params) {
         world_obs_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
         world_free_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
     }
-    global_visited_induces_.resize(n_cell), util_remove_check_list_.resize(n_cell);
+    visited_cell_indices_.clear();
+    util_remove_check_list_.resize(n_cell);
     util_obs_modified_list_.resize(n_cell), util_free_modified_list_.resize(n_cell);
-    std::fill(global_visited_induces_.begin(), global_visited_induces_.end(), 0);
     std::fill(util_obs_modified_list_.begin(), util_obs_modified_list_.end(), 0);
     std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
     std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
@@ -66,12 +66,11 @@ void MapHandler::Init(const MapHandlerParams& params) {
 }
 
 void MapHandler::ResetGripMapCloud() {
-    const int n_cell = world_obs_cloud_grid_->GetCellNumber();
-    for (int i=0; i<n_cell; i++) {
-        world_obs_cloud_grid_->GetCell(i)->clear();
-        world_free_cloud_grid_->GetCell(i)->clear();
+    for (const int ind : visited_cell_indices_) {
+        world_obs_cloud_grid_->GetCell(ind)->clear();
+        world_free_cloud_grid_->GetCell(ind)->clear();
     }
-    std::fill(global_visited_induces_.begin(),     global_visited_induces_.end(),     0);
+    visited_cell_indices_.clear();
     std::fill(util_obs_modified_list_.begin(),     util_obs_modified_list_.end(),     0);
     std::fill(util_free_modified_list_.begin(),    util_free_modified_list_.end(),    0);
     std::fill(util_remove_check_list_.begin(),     util_remove_check_list_.end(),     0);
@@ -92,7 +91,7 @@ void MapHandler::ClearObsCellThroughPosition(const Point3D& point) {
             if (!world_obs_cloud_grid_->InRange(csub) || neighbor_obs_indices_.find(ind) == neighbor_obs_indices_.end()) continue; 
             world_obs_cloud_grid_->GetCell(ind)->clear();
             if (world_free_cloud_grid_->GetCell(ind)->empty()) {
-                global_visited_induces_[ind] = 0;
+                visited_cell_indices_.erase(ind);
             }
         }
     }
@@ -214,7 +213,7 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
                 util_obs_modified_list_[ind] = 1;
                 modified_indices.push_back(ind);
             }
-            global_visited_induces_[ind] = 1;
+            visited_cell_indices_.insert(ind);
         }
     }
     *obsCloudInOut = *obs_valid_ptr;
@@ -236,7 +235,7 @@ void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
             util_free_modified_list_[ind] = 1;
             modified_indices.push_back(ind);
         }
-        global_visited_induces_[ind]  = 1;
+        visited_cell_indices_.insert(ind);
     }
     for (const int ind : modified_indices) {
         FARUtil::FilterCloud(world_free_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
@@ -518,7 +517,7 @@ void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
     if (!is_init_) return;
     neighbor_centers.clear();
     for (const auto& ind : neighbor_obs_indices_) {
-        if (global_visited_induces_[ind] == 0) continue;
+        if (visited_cell_indices_.count(ind) == 0) continue;
         Point3D center_p(world_obs_cloud_grid_->Ind2Pos(ind));
         neighbor_centers.push_back(center_p);
     }
@@ -527,9 +526,7 @@ void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
 void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
     if (!is_init_) return;
     occupancy_centers.clear();
-    const int N = world_obs_cloud_grid_->GetCellNumber();
-    for (int ind=0; ind<N; ind++) {
-        if (global_visited_induces_[ind] == 0) continue;
+    for (const int ind : visited_cell_indices_) {
         Point3D center_p(world_obs_cloud_grid_->Ind2Pos(ind));
         occupancy_centers.push_back(center_p);
     }
@@ -547,7 +544,7 @@ void MapHandler::RemoveObsCloudFromGrid(const PointCloudPtr& obsCloud) {
         }
     }
     for (const int ind : marked_indices) {
-        if (neighbor_obs_indices_.count(ind) != 0 && global_visited_induces_[ind] == 1) {
+        if (neighbor_obs_indices_.count(ind) != 0 && visited_cell_indices_.count(ind) != 0) {
             FARUtil::RemoveOverlapCloud(world_obs_cloud_grid_->GetCell(ind), obsCloud);
         }
         util_remove_check_list_[ind] = 0;
