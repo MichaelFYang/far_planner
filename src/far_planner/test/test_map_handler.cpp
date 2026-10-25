@@ -69,4 +69,16 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     map.UpdateFreeCloudGrid(CloudAt(5.0f));
     EXPECT_EQ(CellSize(map, 1.0f, FREE_CLOUD), 1U);
     EXPECT_EQ(CellSize(map, 5.0f, FREE_CLOUD), 1U);
+
+    PointStack occupied;
+    map.GetOccupancyCeilsCenters(occupied);
+    EXPECT_EQ(occupied.size(), 2U);
+    map.ResetGripMapCloud();
+    map.GetOccupancyCeilsCenters(occupied);
+    EXPECT_TRUE(occupied.empty());
+    EXPECT_EQ(CellSize(map, 1.0f, OBS_CLOUD), 0U);
+    EXPECT_EQ(CellSize(map, 5.0f, FREE_CLOUD), 0U);
+    map.UpdateObsCloudGrid(CloudAt(1.0f));
+    map.GetOccupancyCeilsCenters(occupied);
+    EXPECT_EQ(occupied.size(), 1U);
 }
