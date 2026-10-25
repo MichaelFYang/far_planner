@@ -134,22 +134,6 @@ struct nodeptr_hash
   }
 };
 
-struct nodeptr_gcomp
-{
-  bool operator()(const NavNodePtr& n1, const NavNodePtr& n2) const
-  {
-    return n1->gscore > n2->gscore;
-  }
-};
-
-struct nodeptr_fgcomp
-{
-  bool operator()(const NavNodePtr& n1, const NavNodePtr& n2) const
-  {
-    return n1->fgscore > n2->fgscore;
-  }
-};
-
 struct nodeptr_icomp
 {
   bool operator()(const NavNodePtr& n1, const NavNodePtr& n2) const

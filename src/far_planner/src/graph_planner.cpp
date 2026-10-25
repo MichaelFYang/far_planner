@@ -9,6 +9,8 @@
 
 #include "far_planner/graph_planner.h"
 
+#include <functional>
+
 /***************************************************************************************/
 
 const char INIT_BIT = char(0); // 0000
@@ -41,16 +43,16 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
     this->InitNodesStates(current_graph_);
     // start expand the whole current_graph_
     odom_node_ptr_->gscore = 0.0;
-    IdxSet open_set;
-    std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_gcomp> open_queue;
+    using SearchEntry = std::pair<float, NavNodePtr>;
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> open_queue;
     IdxSet close_set;
     // Expansion from odom node to all reachable navigation node
-    open_queue.push(odom_node_ptr_);
-    open_set.insert(odom_node_ptr_->id);
-    while (!open_set.empty()) {
-        const NavNodePtr current = open_queue.top();
+    open_queue.push({0.0f, odom_node_ptr_});
+    while (!open_queue.empty()) {
+        const auto entry = open_queue.top();
         open_queue.pop();
-        open_set.erase(current->id);
+        const NavNodePtr current = entry.second;
+        if (entry.first != current->gscore || close_set.count(current->id)) continue;
         close_set.insert(current->id);
         current->is_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
@@ -69,24 +71,21 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
             if (temp_gscore < neighbor->gscore) {
                 neighbor->parent = current;
                 neighbor->gscore = temp_gscore;
-                if (!open_set.count(neighbor->id)) {
-                    open_queue.push(neighbor);
-                    open_set.insert(neighbor->id);
-                }
+                // Keep queue keys immutable; obsolete entries are skipped on pop.
+                open_queue.push({temp_gscore, neighbor});
             }
         }
     }
-    std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_fgcomp> fopen_queue;
-    IdxSet fopen_set;
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> fopen_queue;
     close_set.clear();
     // Expansion from odom node to all covered navigation node
     odom_node_ptr_->fgscore = 0.0;
-    fopen_queue.push(odom_node_ptr_);
-    fopen_set.insert(odom_node_ptr_->id);
-    while (!fopen_set.empty()) {
-        const NavNodePtr current = fopen_queue.top();
+    fopen_queue.push({0.0f, odom_node_ptr_});
+    while (!fopen_queue.empty()) {
+        const auto entry = fopen_queue.top();
         fopen_queue.pop();
-        fopen_set.erase(current->id);
+        const NavNodePtr current = entry.second;
+        if (entry.first != current->fgscore || close_set.count(current->id)) continue;
         close_set.insert(current->id);
         current->is_free_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
@@ -97,10 +96,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
             if (temp_fgscore < neighbor->fgscore) {
                 neighbor->free_parent = current;
                 neighbor->fgscore = temp_fgscore;
-                if (!fopen_set.count(neighbor->id)) {
-                    fopen_queue.push(neighbor);
-                    fopen_set.insert(neighbor->id);
-                } 
+                fopen_queue.push({temp_fgscore, neighbor});
             }
         }
     }
