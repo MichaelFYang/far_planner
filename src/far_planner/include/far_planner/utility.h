@@ -174,7 +174,8 @@ public:
                                   const std::string& to_frame_id,
                                   const tf::Transformer* tf_listener,
                                   const PointCloudPtr& cloudInOut,
-                                  const ros::Time& stamp);
+                                  const ros::Time& stamp,
+                                  Point3D* sensor_origin = nullptr);
 
     static void TransformPoint3DFrame(const std::string& from_frame_id,
                                       const std::string& to_frame_id,

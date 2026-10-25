@@ -132,7 +132,8 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
                                 const std::string& to_frame_id,
                                 const tf::Transformer* tf_listener,
                                 const PointCloudPtr& cloudInOut,
-                                const ros::Time& stamp) {
+                                const ros::Time& stamp,
+                                Point3D* sensor_origin) {
     const std::string source = NormalizeFrameID(from_frame_id);
     const std::string target = NormalizeFrameID(to_frame_id);
     if (source.empty() || target.empty()) {
@@ -154,6 +155,10 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
     transformed.header.frame_id = target;
     transformed.header.stamp = stamp.toNSec() / 1000ULL;
     cloudInOut->swap(transformed);
+    if (sensor_origin) {
+        const auto& translation = transform.getOrigin();
+        *sensor_origin = Point3D(translation.x(), translation.y(), translation.z());
+    }
 }
 
 void FARUtil::TransformPoint3DFrame(const std::string& from_frame_id,

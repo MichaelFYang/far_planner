@@ -124,7 +124,7 @@ private:
     void PlanningCallBack(const ros::TimerEvent& event);
     
     bool ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
-                       const PointCloudPtr& cloudOut);
+                       const PointCloudPtr& cloudOut, Point3D* sensor_origin = nullptr);
 
     Point3D ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavNodePtr& last_point_ptr);
 

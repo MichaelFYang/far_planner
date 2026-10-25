@@ -84,6 +84,42 @@ TEST_F(FrameTransforms, UsesCloudMeasurementTimeInsteadOfLatestTransform)
     EXPECT_EQ(cloud->header.stamp, 10000000ULL);
 }
 
+TEST_F(FrameTransforms, ReturnsSensorOriginFromTheSameMeasurementTime)
+{
+    auto cloud = Cloud(10);
+    Point3D origin(99.0f, 99.0f, 99.0f);
+    FARUtil::TransformPCLFrame("sensor", "map", Handle(), cloud, Stamp(10, 0), &origin);
+    EXPECT_FLOAT_EQ(cloud->front().x, 3.0f);
+    EXPECT_FLOAT_EQ(origin.x, 1.0f);
+    EXPECT_FLOAT_EQ(origin.y, 0.0f);
+    EXPECT_FLOAT_EQ(origin.z, 0.0f);
+
+    cloud = Cloud(11);
+    FARUtil::TransformPCLFrame("sensor", "map", Handle(), cloud, Stamp(11, 0), &origin);
+    EXPECT_FLOAT_EQ(origin.x, 2.0f);
+}
+
+TEST_F(FrameTransforms, KeepsFallbackOriginForWorldFrameCloud)
+{
+    auto cloud = Cloud(10);
+    Point3D origin(7.0f, 8.0f, 9.0f);
+    FARUtil::TransformPCLFrame("map", "map", Handle(), cloud, Stamp(10, 0), &origin);
+    EXPECT_FLOAT_EQ(origin.x, 7.0f);
+    EXPECT_FLOAT_EQ(origin.y, 8.0f);
+    EXPECT_FLOAT_EQ(origin.z, 9.0f);
+}
+
+TEST_F(FrameTransforms, FailedTfLeavesSensorOriginUnchanged)
+{
+    auto cloud = Cloud(13);
+    Point3D origin(7.0f, 8.0f, 9.0f);
+    EXPECT_THROW(FARUtil::TransformPCLFrame("sensor", "map", Handle(), cloud, Stamp(13, 0), &origin),
+                 TransformError);
+    EXPECT_FLOAT_EQ(origin.x, 7.0f);
+    EXPECT_FLOAT_EQ(origin.y, 8.0f);
+    EXPECT_FLOAT_EQ(origin.z, 9.0f);
+}
+
 TEST_F(FrameTransforms, InterpolatesAtCloudMeasurementTime)
 {
     auto cloud = Cloud(11);

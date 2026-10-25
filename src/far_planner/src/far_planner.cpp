@@ -631,7 +631,8 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
   is_odom_init_ = true;
 }
 
-bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc, const PointCloudPtr& cloudOut) {
+bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
+                             const PointCloudPtr& cloudOut, Point3D* sensor_origin) {
   if (!this->ValidMeasurementTime(MeasurementStamp(pc->header.stamp))) {
     ROS_WARN_THROTTLE(1.0, "Dropping point cloud without a valid measurement timestamp");
     return false;
@@ -643,7 +644,7 @@ bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc, const P
   FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
   try {
     FARUtil::TransformPCLFrame(pc->header.frame_id, master_params_.world_frame,
-                              tf_listener_, candidate, pc->header.stamp);
+                              tf_listener_, candidate, pc->header.stamp, sensor_origin);
   } catch (const tf::TransformException& ex) {
     ROS_WARN_THROTTLE(1.0, "Dropping point cloud: %s", ex.what());
     return false;
@@ -662,8 +663,9 @@ void FARMaster::ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& scan_pc) {
     ROS_WARN_THROTTLE(1.0, "Dropping scan without matching odometry or with an old timestamp");
     return;
   }
-  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_)) return;
-  scan_handler_.UpdateRobotPosition(Point3D(scan_position[0], scan_position[1], scan_position[2]));
+  Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
+  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_, &sensor_origin)) return;
+  scan_handler_.UpdateRobotPosition(sensor_origin);
   last_scan_stamp_ = stamp;
 }
 
