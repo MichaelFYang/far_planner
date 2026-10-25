@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <deque>
 #include <iterator>
+#include <utility>
 
 namespace far_planner {
 
@@ -59,6 +61,53 @@ private:
     };
     std::deque<Sample> samples_;
 };
+
+// Hold scans until odometry brackets their measurement time. Entries are
+// ordered by stamp, bounded in count, and discarded after a finite ROS age.
+template <typename Message>
+class PendingMeasurementQueue {
+public:
+    struct Entry {
+        std::uint64_t stamp;
+        Message message;
+        std::uint64_t arrived_ns;
+    };
+
+    bool Push(std::uint64_t stamp, Message message, std::uint64_t last_accepted,
+              std::uint64_t arrived_ns) {
+        if (stamp == 0 || stamp <= last_accepted ||
+            (!entries_.empty() && stamp <= entries_.back().stamp)) return false;
+        entries_.push_back({stamp, std::move(message), arrived_ns});
+        if (entries_.size() > 32) entries_.pop_front();
+        return true;
+    }
+
+    void DiscardExpired(std::uint64_t now_ns, std::uint64_t max_age_ns) {
+        while (!entries_.empty() && now_ns > entries_.front().arrived_ns &&
+               now_ns - entries_.front().arrived_ns > max_age_ns) entries_.pop_front();
+    }
+
+    bool HasReady(std::uint64_t latest_odometry) const {
+        return !entries_.empty() && entries_.front().stamp <= latest_odometry;
+    }
+
+    Entry PopReady() {
+        Entry entry = std::move(entries_.front());
+        entries_.pop_front();
+        return entry;
+    }
+
+    std::size_t Size() const { return entries_.size(); }
+    void Clear() { entries_.clear(); }
+
+private:
+    std::deque<Entry> entries_;
+};
+
+inline std::uint64_t SteadyNowNs() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 // Called from the serialized planner callbacks, not from the TF listener thread.
 class ClockEpoch {
