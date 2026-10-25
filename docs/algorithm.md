@@ -100,6 +100,8 @@ A full graph reset now clears reciprocal navigation edges, potential connections
 
 Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
+Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
+
 ## Boundary input stage
 
 The boundary extractor now reads ASCII PLY through a bounded, checked parser. It requires `element vertex N` and `end_header`, accepts at most one million finite XYZI vertices, and rejects truncated rows before modifying the accepted cloud or polygon stack. The trajectory reader requires finite X, Y, and Z values; extra trajectory fields remain allowed for the sample format. File streams close automatically, and the executable reports an input error without saving a partial graph. Parser unit tests cover malformed headers, missing coordinates, nonfinite values, and oversized IDs. Process smoke checks verify the sample still produces 25 nodes and malformed input exits without a graph.

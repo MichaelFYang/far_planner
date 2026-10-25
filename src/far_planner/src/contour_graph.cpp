@@ -498,6 +498,8 @@ bool ContourGraph::IsAPillarPolygon(const PointStack& vertex_points, float& peri
         perimeter += dist;
         prev_p = cur_p;
     }
+    perimeter += std::hypotf(vertex_points.front().x - prev_p.x,
+                             vertex_points.front().y - prev_p.y);
     return perimeter > ctgraph_params_.kPillarPerimeter ? false : true;
 }
 
@@ -524,7 +526,7 @@ bool ContourGraph::IsEdgeCollidePoly(const PointStack& poly, const ConnectPair& 
 
 void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) {
     if (ctnode_ptr->surf_dirs.first  == Point3D(0,0,-1) || ctnode_ptr->surf_dirs.second == Point3D(0,0,-1) || ctnode_ptr->poly_ptr->is_pillar) {
-        ctnode_ptr->surf_dirs.first = Point3D(0,0,-1), ctnode_ptr->surf_dirs.second == Point3D(0,0,-1);
+        ctnode_ptr->surf_dirs = {Point3D(0,0,-1), Point3D(0,0,-1)};
         ctnode_ptr->poly_ptr->is_pillar = true;
         ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         return;
