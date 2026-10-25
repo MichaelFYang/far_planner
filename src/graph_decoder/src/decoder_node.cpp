@@ -57,26 +57,26 @@ void GraphDecoder::Init() {
 
 
 void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
-    // Directly use the msg without dereferencing, as it's now a shared pointer
-    this->ResetGraph(received_graph_);
-    NavNodePtr temp_node_ptr = nullptr;  // Use nullptr in C++ instead of NULL
-    robot_id_ = msg->robot_id;
+    NodePtrStack next_graph;
     std::unordered_map<std::size_t, std::size_t> nodeIdx_idx_map;
-    for (std::size_t i=0; i<msg->nodes.size(); i++) {
-        const auto& node = msg->nodes[i];  // Use a reference here to avoid unnecessary copying
+    for (const auto& node : msg->nodes) {
+        NavNodePtr temp_node_ptr;
         CreateNavNode(node, temp_node_ptr);
-        if (AddNodePtrToGraph(temp_node_ptr, received_graph_)) {
-            nodeIdx_idx_map.insert({node.id, i});
+        if (!nodeIdx_idx_map.emplace(node.id, next_graph.size()).second) {
+            RCLCPP_ERROR(nh_->get_logger(), "Ignoring graph with duplicate node ID %u", node.id);
+            return;
         }
+        next_graph.push_back(temp_node_ptr);
     }
-    // add connections to nodes
-    for (const auto& node_ptr : received_graph_) { 
-        AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->connect_idxs, node_ptr->connect_nodes);
-        AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->poly_idxs, node_ptr->poly_connects);
-        AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->contour_idxs, node_ptr->contour_connects);
-        AssignConnectNodes(nodeIdx_idx_map, received_graph_, node_ptr->traj_idxs, node_ptr->traj_connects);
+    for (const auto& node_ptr : next_graph) {
+        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->connect_idxs, node_ptr->connect_nodes);
+        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->poly_idxs, node_ptr->poly_connects);
+        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->contour_idxs, node_ptr->contour_connects);
+        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->traj_idxs, node_ptr->traj_connects);
     }
-    // RCLCPP_INFO(nh_->get_logger(), "Graph extraction completed. Total size of graph nodes: %ld", received_graph_.size());
+    ResetGraph(received_graph_);
+    received_graph_.swap(next_graph);
+    robot_id_ = msg->robot_id;
     this->VisualizeGraph(received_graph_);
 }
 
@@ -91,7 +91,7 @@ void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std:
     for (const auto& cid : node_idxs) {
         const auto it = idxs_map.find(cid);
         if (it != idxs_map.end()) {
-            const std::size_t idx = idxs_map.find(cid)->second;
+            const std::size_t idx = it->second;
             const NavNodePtr cnode_ptr = graph[idx];
             connects.push_back(cnode_ptr);
             clean_idx.push_back(cnode_ptr->id);
@@ -210,63 +210,22 @@ void GraphDecoder::SetColor(const VizColor& color,
     scan_marker.color = c;
 }
 
-void GraphDecoder::CreateNavNode(std::string str, NavNodePtr& node_ptr) {
+void GraphDecoder::CreateNavNode(const graph_file::NodeRecord& record, NavNodePtr& node_ptr) {
     node_ptr = std::make_shared<NavNode>();
-    std::vector<std::string> components;
-    std::size_t pos = 0;
-    std::string delimiter = " ";
-    while ((pos = str.find(delimiter)) != std::string::npos) {
-        std::string c = str.substr(0, pos);
-        if (c.length() > 0) {
-            components.push_back(str.substr(0, pos));
-        }
-        str.erase(0, pos + delimiter.length());
-    }
-    bool is_connect, is_poly, is_contour;
-    is_connect = is_poly = is_contour = false;
-    node_ptr->connect_idxs.clear(), node_ptr->contour_idxs.clear(), node_ptr->traj_idxs.clear();
-    for (std::size_t i=0; i<components.size(); i++) {
-        if (i == 0) node_ptr->id = (std::size_t)std::stoi(components[i]);
-        if (i == 1) node_ptr->free_direct = static_cast<NodeFreeDirect>(std::stoi(components[i]));
-        // position
-        if (i == 2) node_ptr->position.x = std::stof(components[i]);
-        if (i == 3) node_ptr->position.y = std::stof(components[i]);
-        if (i == 4) node_ptr->position.z = std::stof(components[i]);
-        // surface direcion first
-        if (i == 5) node_ptr->surf_dirs.first.x = std::stof(components[i]);
-        if (i == 6) node_ptr->surf_dirs.first.y = std::stof(components[i]);
-        if (i == 7) node_ptr->surf_dirs.first.z = std::stof(components[i]);
-        // surface direction second
-        if (i == 8)  node_ptr->surf_dirs.second.x = std::stof(components[i]);
-        if (i == 9)  node_ptr->surf_dirs.second.y = std::stof(components[i]);
-        if (i == 10) node_ptr->surf_dirs.second.z = std::stof(components[i]);
-        // node internal infos
-        if (i == 11) node_ptr->is_covered  = std::stoi(components[i]) == 0 ? false : true;
-        if (i == 12) node_ptr->is_frontier = std::stoi(components[i]) == 0 ? false : true;
-        if (i == 13) node_ptr->is_navpoint = std::stoi(components[i]) == 0 ? false : true;
-        if (i == 14) node_ptr->is_boundary = std::stoi(components[i]) == 0 ? false : true;
-        if (i  > 14 && !is_connect && !is_poly && !is_contour) {
-            if (components[i] != "|") {
-                node_ptr->connect_idxs.push_back((std::size_t)std::stoi(components[i]));
-            } else {
-                is_connect = true;
-            }
-        } else if (i > 14 && is_connect && !is_poly && !is_contour) {
-            if (components[i] != "|") {
-                node_ptr->poly_idxs.push_back((std::size_t)std::stoi(components[i]));
-            } else {
-                is_poly = true;
-            }
-        } else if (i > 14 && is_connect && is_poly && !is_contour) {
-            if (components[i] != "|") {
-                node_ptr->contour_idxs.push_back((std::size_t)std::stoi(components[i]));
-            } else {
-                is_contour = true;
-            }
-        } else if (i > 14 && is_connect && is_poly && is_contour) {
-            node_ptr->traj_idxs.push_back((std::size_t)std::stoi(components[i]));
-        }
-    }
+    node_ptr->id = record.id;
+    node_ptr->free_direct = static_cast<NodeFreeDirect>(record.free_type);
+    const auto& c = record.coordinates;
+    node_ptr->position = Point3D(c[0], c[1], c[2]);
+    node_ptr->surf_dirs.first = Point3D(c[3], c[4], c[5]);
+    node_ptr->surf_dirs.second = Point3D(c[6], c[7], c[8]);
+    node_ptr->is_covered = record.flags[0];
+    node_ptr->is_frontier = record.flags[1];
+    node_ptr->is_navpoint = record.flags[2];
+    node_ptr->is_boundary = record.flags[3];
+    node_ptr->connect_idxs.assign(record.connections[0].begin(), record.connections[0].end());
+    node_ptr->poly_idxs.assign(record.connections[1].begin(), record.connections[1].end());
+    node_ptr->contour_idxs.assign(record.connections[2].begin(), record.connections[2].end());
+    node_ptr->traj_idxs.assign(record.connections[3].begin(), record.connections[3].end());
 }
 
 void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
@@ -309,20 +268,26 @@ void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg
 
 void GraphDecoder::ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg) {
     const std::string file_path = msg->data;
-    if (file_path == "") return;
+    if (file_path.empty()) return;
     std::ifstream graph_file(file_path);
+    if (!graph_file) {
+        RCLCPP_ERROR(nh_->get_logger(), "Cannot open graph file: %s", file_path.c_str());
+        return;
+    }
+    std::vector<graph_file::NodeRecord> records;
+    try {
+        records = graph_file::ParseGraph(graph_file);
+    } catch (const std::exception& error) {
+        RCLCPP_ERROR(nh_->get_logger(), "Invalid graph file %s: %s", file_path.c_str(), error.what());
+        return;
+    }
     NodePtrStack loaded_graph;
-    std::string str;
     std::unordered_map<std::size_t, std::size_t> nodeIdx_idx_map;
-    std::size_t ic = 0;
-    NavNodePtr temp_node_ptr = NULL;
-    loaded_graph.clear();
-    while (std::getline(graph_file, str)) {
-        CreateNavNode(str, temp_node_ptr);
-        if (AddNodePtrToGraph(temp_node_ptr, loaded_graph)) { 
-            nodeIdx_idx_map.insert({temp_node_ptr->id, ic});
-            ic ++;
-        }
+    for (const auto& record : records) {
+        NavNodePtr node;
+        CreateNavNode(record, node);
+        nodeIdx_idx_map.emplace(node->id, loaded_graph.size());
+        loaded_graph.push_back(node);
     }
     for (const auto& node_ptr : loaded_graph) { // add connections to nodes
         AssignConnectNodes(nodeIdx_idx_map, loaded_graph, node_ptr->connect_idxs, node_ptr->connect_nodes);
@@ -334,6 +299,7 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg)
     visibility_graph_msg::msg::Graph graph_msg;
     ConvertGraphToMsg(loaded_graph, graph_msg);
     graph_pub_->publish(graph_msg);
+    ResetGraph(loaded_graph);
 }
 
 void GraphDecoder::SaveGraphCallBack(const std_msgs::msg::String::SharedPtr msg) {
