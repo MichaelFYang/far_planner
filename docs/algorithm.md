@@ -43,7 +43,7 @@ flowchart TD
 
 ## One update cycle
 
-1. **Accept observations.** Odometry sets robot position and heading. Cloud callbacks convert incoming data to PCL, downsample it, filter invalid points, and transform it into `world_frame`. Terrain point intensity is compared with `FARUtil::kFreeZ` to divide free and obstacle samples; it is not simply reflectivity throughout this pipeline.
+1. **Accept observations.** Odometry sets robot position and heading. Cloud callbacks convert incoming data to PCL, filter invalid points, downsample it, and transform it into `world_frame`. Terrain point intensity is compared with `FARUtil::kFreeZ` to divide free and obstacle samples; it is not simply reflectivity throughout this pipeline.
 2. **Update local map state.** `TerrainCallBack` updates rolling map cells and terrain heights, extracts nearby clouds, and maintains time-decayed new-obstacle clouds. In dynamic mode, scan raycasting detects discrepancies and removes obsolete obstacle observations.
 3. **Build local contour topology.** `ContourDetector` projects obstacles to an XY image, inflates pixel occupancy, resizes/blurs it, calls OpenCV `findContours`, and applies `approxPolyDP` plus topology/adjacency filters. `ContourGraph` builds polygon-linked contour nodes and classifies surface directions and convexity. Terrain data supplies node heights: this is not a full arbitrary 3D visibility graph.
 4. **Maintain the persistent graph.** Match nearby old nodes to current contour vertices; add valid unmatched vertices and intermediate trajectory nodes. Remove merged/invalid nodes and update odometry connections. Recheck pairs of nearby nodes, relevant old edges, and contour-boundary connections. Edge decisions combine direction constraints, polygon intersection, terrain feasibility, and accumulated votes. Already traversed trajectory connections provide additional connectivity.
@@ -62,15 +62,20 @@ On ROS 2, both graph-update and planning wall timers use `main_run_freq`, and `m
 
 A measurement in frame `sensor` at time `t` must use `T_world_sensor(t)`, with target frame first and source frame second in the lookup. A nonzero input timestamp must not silently become a latest-transform query. TF time zero explicitly requests the latest available transform; a bounded wait can accommodate delayed TF delivery. See the [official tf2 time tutorial](https://raw.githubusercontent.com/ros2/ros2_documentation/jazzy/source/Tutorials/Intermediate/Tf2/Learning-About-Tf2-And-Time-Cpp.rst). A [TF message filter](https://raw.githubusercontent.com/ros2/ros2_documentation/jazzy/source/Tutorials/Intermediate/Tf2/Using-Stamped-Datatypes-With-Tf2-Ros-MessageFilter.rst) can queue stamped inputs until their transforms are available.
 
-The audit found these issues in the foundation implementation; they are **not yet fixed**:
+The timestamped-transform stage fixes the following confirmed defects:
 
-- Cloud and odometry lookups request time zero, ignoring sensor timestamps. Moving-frame measurements can therefore be transformed with the wrong pose.
-- A failed cloud transform returns from `PrcocessCloud`, but its callers continue using the output, which can still contain sensor-frame coordinates.
-- A failed goal transform is swallowed inside `TransformPoint3DFrame`; the caller still updates the goal.
-- Scan, local-terrain, and terrain-map inputs are combined without an explicit skew policy. Scan ray origins use the latest robot position rather than a position explicitly associated with the scan time.
-- Goal helpers omit stamped-time propagation; graph publications also need a consistent timestamp/frame policy.
+- Cloud and odometry lookups now use the original ROS measurement timestamp, including nanoseconds before PCL rounds timestamps to microseconds. They no longer request the latest pose for a stamped measurement.
+- `ProcessCloud` builds a candidate and commits it only after a successful transform. Its callers return on failure before changing map state. Goal transform failures also propagate and prevent goal replacement.
+- Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
+- TF queries do not block the planner executor. If the requested transform is unavailable, the observation is dropped with a diagnostic; it is not retried or replaced with the latest transform. Upstream TF must arrive before the measurement. Bounded buffering remains a separate improvement.
 
-The next step must define zero-stamp handling, failure atomicity, finite bounded waiting, stale/out-of-order input policy, and behavior when simulated time jumps. A timestamped rigid transform does not deskew a spinning scan; that requires upstream per-point timing and motion compensation. Likewise, a terrain map assembled across multiple scans needs a documented upstream frame/time convention.
+Remaining timing work is explicit:
+
+- Scan, local-terrain, and terrain-map inputs still lack a cross-stream skew policy. Scan ray origins still use the latest robot position rather than the scan-time position.
+- Out-of-order observations, delayed TF buffering, and simulated-clock resets need dedicated policies and regression coverage. Graph exchange also needs a consistent timestamp/frame contract.
+- A timestamped rigid transform does not deskew a spinning scan: upstream per-point timing and motion compensation are required. An aggregated terrain map needs a documented upstream frame/time convention.
+
+`test/test_frame_transforms.cpp` covers moving transforms, interpolation, nanosecond precision, unavailable/past/future TF, zero stamps, frame normalization, and unchanged inputs on failure. The ROS 2 `test/test_terrain_tf.py` exercises the actual node: a cloud at 10 s uses the 10 s transform despite a newer 12 s transform, and rejected clouds never reach map publication. These tests do not establish end-to-end navigation safety or complete sensor synchronization.
 
 ## Invariants to preserve
 

@@ -88,4 +88,15 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
   DESTINATION share/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_gtest(test_frame_transforms test/test_frame_transforms.cpp)
+  target_link_libraries(test_frame_transforms far_planner_core)
+  ament_add_pytest_test(test_terrain_tf test/test_terrain_tf.py
+    TIMEOUT 40
+    ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
+  )
+endif()
+
 ament_package()
