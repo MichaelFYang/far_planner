@@ -24,6 +24,9 @@ public:
 
     void UpdateGlobalGraph(const NodePtrStack& graph);
 
+    static bool ValidateGraphMessage(const visibility_graph_msg::Graph& graph,
+                                     const std::string& expected_frame, std::string& error);
+
 private:
     ros::NodeHandle nh_;
     GraphMsgerParams gm_params_;
