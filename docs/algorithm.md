@@ -82,6 +82,7 @@ The cross-stream timing stage adds the following policies:
 Remaining limits are explicit:
 
 - Terrain and odometry are not buffered for delayed TF. Scans retry only within the bounded queue lifetime; a TF that arrives after expiry cannot recover that scan. The 0.2-second tolerance is a configurable policy, not a verified setting for every robot.
+- Terrain clouds are transformed at their header stamp, but the local map crop and terrain-height traversal still use the latest accepted robot pose. A delayed terrain cloud can therefore be processed around a pose from a different time; aligning terrain with odometry requires a bounded measurement-time pose policy.
 - World-frame scan clouds have no separate sensor frame, so their rays still start at the odometry reference point. Sensor-frame scans use their timestamped TF origin. A rigid cloud transform does not deskew a spinning scan; upstream per-point timing and motion compensation are required.
 - Local terrain is ordered but has no maximum-age gate against graph-update time. Aggregated terrain maps also need a documented upstream frame/time convention; they cannot be made simultaneous with a scan by assigning one header stamp. Graph publication time is not an aggregate observation time.
 - These tests do not establish end-to-end navigation correctness. Validate synchronized bag replay and motion on the actual robot before adopting the refactor branches.
