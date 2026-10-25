@@ -92,6 +92,14 @@ The two visibility-graph traversals and terrain A* now push an immutable cost wi
 
 A five-node geometric graph demonstrated the old failure: the cost to node 1 settled at 45 instead of the 44.89018 route through node 3. `test/test_search.cpp` now checks both graph traversals against an independent quadratic shortest-path reference over 40 deterministic graphs with covered/uncovered nodes. It also checks an obstacle-grid terrain route. These tests establish search behavior for the covered cases, not the whole navigation stack.
 
+## Graph lifecycle stage
+
+`EraseNodeFromStack` now uses stable remove-and-erase for all matching pointers, including the first element and adjacent copies. Merged-node removal uses the iterator returned by `erase`, so removing the first or consecutive nodes does not decrement past `begin()`.
+
+A full graph reset now clears reciprocal navigation edges, potential connections, trajectory links, search-parent links, and navigation-to-contour references before releasing graph storage. Full contour reset clears the reciprocal vertex links and contour-node edges. `test/test_graph_lifecycle.cpp` verifies first/last/consecutive erasure and that linked navigation and contour vertices are actually destroyed after reset; both ownership tests failed before the fix.
+
+Contour vertices created during ordinary contour updates can still form shared-pointer cycles after the active contour vectors are replaced. Removing those cycles without changing the lifetime of topology still referenced by navigation nodes needs a separate ownership refactor and memory validation. The current reset tests do not prove that long-running updates have no growth.
+
 ## Invariants to preserve
 
 - Every accepted geometric value used by the planner is in the configured world frame. Failed or unavailable transforms must not mutate accepted map, odometry, or goal state.
