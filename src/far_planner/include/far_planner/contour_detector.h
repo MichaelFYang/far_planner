@@ -155,13 +155,11 @@ private:
     inline Point3D ConvertCVPointToPoint3D(const cv::Point2f& cv_p,
                                            const Point3D& c_pos,
                                            const bool& is_resized_img=false) {
-        Point3D p;
         const int c_idx = is_resized_img ? CMAT_RESIZE : CMAT;
         const float ratio = is_resized_img ? cd_params_.kRatio : 1.0f;
-        p.x = (cv_p.y - c_idx) * cd_params_.voxel_dim / ratio + c_pos.x;
-        p.y = (cv_p.x - c_idx) * cd_params_.voxel_dim / ratio + c_pos.y;
-        p.z = odom_pos_.z;
-        return p;
+        return Point3D((cv_p.y - c_idx) * cd_params_.voxel_dim / ratio + c_pos.x,
+                       (cv_p.x - c_idx) * cd_params_.voxel_dim / ratio + c_pos.y,
+                       odom_pos_.z);
     }
 
     inline void SaveCurrentImg(const cv::Mat& img) {
