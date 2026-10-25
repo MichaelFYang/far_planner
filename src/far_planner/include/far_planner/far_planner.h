@@ -137,12 +137,12 @@ private:
 
     Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
 
-    inline void ResetGraphCallBack(const std_msgs::EmptyConstPtr& msg) {
+    inline void ResetGraphCallBack(const std_msgs::EmptyConstPtr&) {
         is_reset_env_ = true;
     }
 
     inline void JoyCommandCallBack(const sensor_msgs::JoyConstPtr& msg) {
-        if (msg->buttons[4] > 0.5) {
+        if (msg->buttons.size() > 4 && msg->buttons[4] > 0) {
             is_reset_env_ = true;
         }
     } 
@@ -176,7 +176,7 @@ private:
         }
     }
 
-    inline void ReadFileCommand(const std_msgs::StringConstPtr& msg) {
+    inline void ReadFileCommand(const std_msgs::StringConstPtr&) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
@@ -184,10 +184,7 @@ private:
     }
 
     inline void SaveFileCommand(const std_msgs::StringConstPtr& msg) {
-        if (!FARUtil::IsDebug) { // Terminal Output
-            printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
-            FakeTerminalInit();
-        }
+        ReadFileCommand(msg);
     }
 
     void ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& pc);
