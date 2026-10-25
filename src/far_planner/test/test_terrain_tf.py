@@ -185,6 +185,29 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 clouds.publish(cloud('map', 5, 60000000))
                 spin_until(lambda: len(received) == 5 and len(rays) == 5)
                 assert x_values(rays[-1]), 'Deferred scan was not ray traced'
+
+                # A scan can outlive a temporarily missing TF. No new scan or
+                # odometry callback should be needed after that TF arrives.
+                tick.clock.sec = 6
+                clock.publish(tick)
+                settle(0.1)
+                scans.publish(cloud('late_sensor', 5, 100000000))
+                settle(0.15)
+                clouds.publish(cloud('map', 5, 260000000))
+                spin_until(lambda: len(received) == 6 and len(rays) == 6)
+                assert not x_values(rays[-1]), 'Scan was used before its TF arrived'
+                late_tf = TransformStamped()
+                late_tf.header.frame_id = 'map'
+                late_tf.child_frame_id = 'late_sensor'
+                late_tf.header.stamp.sec = 5
+                late_tf.header.stamp.nanosec = 100000000
+                late_tf.transform.translation.x = 1.0
+                late_tf.transform.rotation.w = 1.0
+                transforms.publish(TFMessage(transforms=[late_tf]))
+                settle(0.25)
+                clouds.publish(cloud('map', 5, 270000000))
+                spin_until(lambda: len(received) == 7 and len(rays) == 7)
+                assert x_values(rays[-1]), 'Scan was not retried after its TF arrived'
             except Exception:
                 log.flush()
                 log.seek(0)

@@ -63,7 +63,7 @@ private:
 };
 
 // Hold scans until odometry brackets their measurement time. Entries are
-// ordered by stamp, bounded in count, and discarded after a finite ROS age.
+// ordered by stamp, bounded in count, and discarded after a finite steady age.
 template <typename Message>
 class PendingMeasurementQueue {
 public:
@@ -82,14 +82,21 @@ public:
         return true;
     }
 
-    void DiscardExpired(std::uint64_t now_ns, std::uint64_t max_age_ns) {
+    std::size_t DiscardExpired(std::uint64_t now_ns, std::uint64_t max_age_ns) {
+        std::size_t removed = 0;
         while (!entries_.empty() && now_ns > entries_.front().arrived_ns &&
-               now_ns - entries_.front().arrived_ns > max_age_ns) entries_.pop_front();
+               now_ns - entries_.front().arrived_ns > max_age_ns) {
+            entries_.pop_front();
+            ++removed;
+        }
+        return removed;
     }
 
     bool HasReady(std::uint64_t latest_odometry) const {
         return !entries_.empty() && entries_.front().stamp <= latest_odometry;
     }
+
+    const Entry& Front() const { return entries_.front(); }
 
     Entry PopReady() {
         Entry entry = std::move(entries_.front());

@@ -86,6 +86,9 @@ TEST(SensorTiming, PendingScanWaitsForLaterOdometryAndRejectsReordering)
     EXPECT_FALSE(scans.Push(140, 3, 100, 1000));
     EXPECT_TRUE(scans.Push(170, 4, 100, 1001));
     ASSERT_TRUE(scans.HasReady(160));
+    EXPECT_EQ(scans.Front().stamp, 150U);
+    EXPECT_EQ(scans.Front().message, 1);
+    EXPECT_EQ(scans.Size(), 2U); // A retry can inspect without consuming.
     const auto first = scans.PopReady();
     EXPECT_EQ(first.stamp, 150U);
     EXPECT_EQ(first.message, 1);
@@ -102,12 +105,12 @@ TEST(SensorTiming, PendingScanQueueIsBoundedExpiresAndResets)
         EXPECT_TRUE(scans.Push(stamp, static_cast<int>(stamp), 0, stamp));
     EXPECT_EQ(scans.Size(), 32U);
     EXPECT_EQ(scans.PopReady().stamp, 2U);
-    scans.DiscardExpired(100, 60);
+    EXPECT_EQ(scans.DiscardExpired(100, 60), 31U);
     EXPECT_EQ(scans.Size(), 0U);
     EXPECT_TRUE(scans.Push(101, 7, 0, 100));
     scans.Clear();
     EXPECT_EQ(scans.Size(), 0U);
     EXPECT_TRUE(scans.Push(1, 8, 0, 101));
-    scans.DiscardExpired(102, 1);
+    EXPECT_EQ(scans.DiscardExpired(102, 1), 0U);
     EXPECT_EQ(scans.Size(), 1U);
 }
