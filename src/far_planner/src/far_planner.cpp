@@ -549,6 +549,7 @@ void FARMaster::LoadROSParams() {
   FARUtil::kMatchDist      = master_params_.robot_dim * 2.0f + FARUtil::kLeafSize;
   FARUtil::kNavClearDist   = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
   FARUtil::kProjectDist    = master_params_.voxel_dim;
+  master_params_.world_frame = FARUtil::NormalizeFrameID(master_params_.world_frame);
   FARUtil::worldFrameId    = master_params_.world_frame;
   FARUtil::kVizRatio       = master_params_.viz_ratio;
   FARUtil::kTolerZ         = map_params_.floor_height - FARUtil::kHeightVoxel;
@@ -638,7 +639,11 @@ void FARMaster::LoadROSParams() {
 
 void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   // transform from odom frame to mapping frame
-  std::string odom_frame = msg->header.frame_id;
+  const std::string odom_frame = FARUtil::NormalizeFrameID(msg->header.frame_id);
+  if (odom_frame.empty() || (msg->header.stamp.sec < 0 || (msg->header.stamp.sec == 0 && msg->header.stamp.nanosec == 0))) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping odometry with an empty frame or invalid timestamp");
+    return;
+  }
   tf2::Transform tf_odom_pose;
   tf2::fromMsg(msg->pose.pose, tf_odom_pose);
   
@@ -647,8 +652,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
     tf2::Transform odom_to_world_tf_stamp;
     try
     {
-      tf_buffer_->canTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero, std::chrono::seconds(1));
-      auto transform_stamped = tf_buffer_->lookupTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero);
+      auto transform_stamped = tf_buffer_->lookupTransform(master_params_.world_frame, odom_frame, rclcpp::Time(msg->header.stamp));
       tf2::fromMsg(transform_stamped.transform, odom_to_world_tf_stamp);
       tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
     }
@@ -679,52 +683,45 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 }
 
 
-void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) 
-{
-  pcl::PointCloud<PCLPoint> temp_cloud;
-  pcl::fromROSMsg(*pc, temp_cloud);
-  cloudOut->clear(), *cloudOut = temp_cloud;
-  if (cloudOut->empty()) return;
-  FARUtil::FilterCloud(cloudOut, master_params_.voxel_dim);
-  // transform cloud frame
-  std::string cloud_frame = pc->header.frame_id;
-  FARUtil::RemoveNanInfPoints(cloudOut);
-  if (!FARUtil::IsSameFrameID(cloud_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(),"FARMaster: cloud frame does NOT match with world frame!");
-    try
-    {
-      FARUtil::TransformPCLFrame(cloud_frame, 
-                                 master_params_.world_frame, 
-                                 tf_buffer_,
-                                 cloudOut);
-    }
-    catch(const tf2::TransformException& ex)
-    {
-      RCLCPP_ERROR_STREAM(nh_->get_logger(), "Tracking cloud TF lookup: " << ex.what());
-      return;
-    }
+bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) {
+  if ((pc->header.stamp.sec < 0 || (pc->header.stamp.sec == 0 && pc->header.stamp.nanosec == 0))) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping point cloud without a valid measurement timestamp");
+    return false;
   }
+  PointCloudPtr candidate(new PointCloud);
+  pcl::fromROSMsg(*pc, *candidate);
+  FARUtil::RemoveNanInfPoints(candidate);
+  if (candidate->empty()) return false;
+  FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
+  try {
+    FARUtil::TransformPCLFrame(pc->header.frame_id, master_params_.world_frame,
+                              tf_buffer_, candidate, rclcpp::Time(pc->header.stamp));
+  } catch (const tf2::TransformException& ex) {
+    RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping point cloud: %s", ex.what());
+    return false;
+  }
+  cloudOut->swap(*candidate);
+  return true;
 }
-
 
 void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
   if (master_params_.is_static_env || !is_odom_init_) return;
-  this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_);
+  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_)) return;
   scan_handler_.UpdateRobotPosition(robot_pos_);
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (master_params_.is_static_env) return;
-  this->PrcocessCloud(pc, local_terrain_ptr_);
+  if (!this->ProcessCloud(pc, local_terrain_ptr_)) return;
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (!is_odom_init_) return;
+  if (!is_stop_update_ && !this->ProcessCloud(pc, temp_cloud_ptr_)) return;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) {
-    this->PrcocessCloud(pc, temp_cloud_ptr_);
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
@@ -811,7 +808,13 @@ void FARMaster::WaypointCallBack(const geometry_msgs::msg::PointStamped& route_g
   const std::string goal_frame = route_goal.header.frame_id;
   if (!FARUtil::IsSameFrameID(goal_frame, master_params_.world_frame)) {
     if (FARUtil::IsDebug) RCLCPP_WARN_ONCE(nh_->get_logger(), "FARMaster: waypoint published is not on world frame!");
-    FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame, tf_buffer_, goal_p); 
+    try {
+      FARUtil::TransformPoint3DFrame(goal_frame, master_params_.world_frame,
+                                   tf_buffer_, goal_p, rclcpp::Time(route_goal.header.stamp));
+    } catch (const tf2::TransformException& ex) {
+      RCLCPP_WARN(nh_->get_logger(), "Dropping goal: %s", ex.what());
+      return;
+    }
   }
   graph_planner_.UpdateGoal(goal_p);
   FARUtil::Timer.start_time("Overall_executing", true);
