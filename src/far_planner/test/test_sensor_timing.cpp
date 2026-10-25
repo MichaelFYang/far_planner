@@ -114,3 +114,14 @@ TEST(SensorTiming, PendingScanQueueIsBoundedExpiresAndResets)
     EXPECT_EQ(scans.DiscardExpired(102, 1), 0U);
     EXPECT_EQ(scans.Size(), 1U);
 }
+
+TEST(SensorTiming, PendingTerrainQueueRetainsOnlyTwoRecentClouds)
+{
+    far_planner::PendingMeasurementQueue<int> terrain(2);
+    EXPECT_TRUE(terrain.Push(10, 1, 0, 100));
+    EXPECT_TRUE(terrain.Push(20, 2, 0, 110));
+    EXPECT_TRUE(terrain.Push(30, 3, 0, 120));
+    ASSERT_EQ(terrain.Size(), 2U);
+    EXPECT_EQ(terrain.PopReady().stamp, 20U);
+    EXPECT_EQ(terrain.PopReady().message, 3);
+}
