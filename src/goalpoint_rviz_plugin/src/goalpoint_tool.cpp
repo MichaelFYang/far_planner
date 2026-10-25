@@ -1,4 +1,10 @@
-#include <goalpoint_tool.hpp>
+// Copyright (c) 2021-2026 Fan Yang and contributors
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+#include "goalpoint_rviz_plugin/goalpoint_tool.hpp"
 
 #include <string>
 
@@ -14,9 +20,10 @@ GoalpointTool::GoalpointTool()
 {
   shortcut_key_ = 'w';
 
-  topic_property_ = new rviz_common::properties::StringProperty("Topic", "goalpoint", "The topic on which to publish navigation waypionts.",
+  topic_property_ = new rviz_common::properties::StringProperty("Topic", "goalpoint",
+      "The topic on which to publish navigation waypionts.",
                                        getPropertyContainer(), SLOT(updateTopic()), this);
-  
+
   qos_profile_property_ = new rviz_common::properties::QosProfileProperty(
     topic_property_, qos_profile_);
 }
@@ -37,9 +44,11 @@ void GoalpointTool::updateTopic()
 {
   rclcpp::Node::SharedPtr raw_node =
     context_->getRosNodeAbstraction().lock()->get_raw_node();
-  sub_ = raw_node->template create_subscription<nav_msgs::msg::Odometry>("/state_estimation", 5 ,std::bind(&GoalpointTool::odomHandler,this,std::placeholders::_1));
-  
-  pub_ = raw_node->template create_publisher<geometry_msgs::msg::PointStamped>("/goal_point", qos_profile_);
+  sub_ = raw_node->template create_subscription<nav_msgs::msg::Odometry>("/state_estimation", 5,
+      std::bind(&GoalpointTool::odomHandler, this, std::placeholders::_1));
+
+  pub_ = raw_node->template create_publisher<geometry_msgs::msg::PointStamped>("/goal_point",
+      qos_profile_);
   pub_joy_ = raw_node->template create_publisher<sensor_msgs::msg::Joy>("/joy", qos_profile_);
   clock_ = raw_node->get_clock();
 }
@@ -49,7 +58,7 @@ void GoalpointTool::odomHandler(const nav_msgs::msg::Odometry::ConstSharedPtr od
   vehicle_z = odom->pose.pose.position.z;
 }
 
-void GoalpointTool::onPoseSet(double x, double y, double theta)
+void GoalpointTool::onPoseSet(double x, double y, double /* theta */)
 {
   sensor_msgs::msg::Joy joy;
 
@@ -89,7 +98,7 @@ void GoalpointTool::onPoseSet(double x, double y, double theta)
   usleep(10000);
   pub_->publish(goalpoint);
 }
-}
+}  // namespace goalpoint_rviz_plugin
 
-#include <pluginlib/class_list_macros.hpp> 
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(goalpoint_rviz_plugin::GoalpointTool, rviz_common::Tool)

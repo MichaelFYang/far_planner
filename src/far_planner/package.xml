@@ -6,14 +6,15 @@
   <description>FAR Planner</description>
   <author email="fanyang1@alumni.cmu.edu">Fan Yang</author>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
-  <license>BSD</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>srv_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>nav_msgs</depend>
   <depend>pcl_conversions</depend>
   <depend>eigen</depend>
@@ -26,11 +27,18 @@
 
   <depend>visibility_graph_msg</depend>
 
-  <build_depend>pcl_ros</build_depend>
-  <exec_depend>pcl_ros</exec_depend>
+  <depend>libpcl-all-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>graph_decoder</exec_depend>
+  <exec_depend>goalpoint_rviz_plugin</exec_depend>
+  <exec_depend>teleop_rviz_plugin</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

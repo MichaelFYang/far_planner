@@ -1,3 +1,5 @@
+# FAR Planner
+
 FAR Planner uses a dynamically updated visibility graph for fast replanning. The planner models the environment with polygons and builds a global visibility graph along with the navigation. The planner is capable of handling both known and unknown environments. In a known environment, paths are planned based on a prior map. In an unknown environment, multiple paths are attempted to guide the vehicle to goal based on the environment observed during the navigation. When dynamic obstacles are present, FAR Planner disconnects visibility edges blocked by the dynamic obstacles and reconnects them after regaining visibility. The software implementation uses two CPU threads - one for dynamically updating the visibility graph using ~20% of the thread and the other for path search that can find a path within 3ms, as evaluated on an i7 computer.
 
 FAR Planner was used by the [CMU-OSU Team](https://www.subt-explorer.com) in attending [DARPA Subterranean Challenge](https://www.subtchallenge.com). In the final competition which took place in Louisville Mega Cavern, KY, the team's robots conducted the most complete traversing and mapping across the site (26 out of 28 sectors) among all teams, winning a "Most Sectors Explored Award".
@@ -8,6 +10,16 @@ FAR Planner was used by the [CMU-OSU Team](https://www.subt-explorer.com) in att
   <img src="img/method.png" alt="Method" width="70%"/>
 </p>
 
+## Branches
+
+| Branch | ROS version | Build tool |
+| --- | --- | --- |
+| `humble-jazzy` (default) | ROS 2 Humble / Jazzy | colcon |
+| `lyrical` | ROS 2 Lyrical | colcon |
+| `melodic-noetic` | ROS 1 Melodic / Noetic | catkin |
+
+Use the branch matching your ROS installation; its README contains the corresponding commands.
+
 ## Usage
 
 The repository has been tested in Ubuntu 22.04 with ROS2 Humble and Ubuntu 24.04 with ROS2 Jazzy. Follow instructions in [Autonomous Exploration Development Environment](http://cmu-exploration.com) to setup the development environment. Make sure to checkout the branch that matches the computer setup, compile, and download the simulation environments.
@@ -16,20 +28,22 @@ To setup FAR Planner, clone the repository.
 ```
 git clone https://github.com/MichaelFYang/far_planner
 ```
-In a terminal, go to the folder, checkout the 'humble-jazzy' branch, and compile.
-```
+In a Bash terminal, source ROS, select the 'humble-jazzy' branch, install dependencies, and compile. Use `humble` instead of `jazzy` on Ubuntu 22.04. The dependency command assumes rosdep has been initialized and its index updated.
+```sh
+source /opt/ros/jazzy/setup.bash
 cd far_planner
 git checkout humble-jazzy
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
 To run the code, go to the development environment folder in a terminal, source the ROS workspace, and launch.
 ```
-source install/setup.sh
+source install/setup.bash
 ros2 launch vehicle_simulator system_indoor.launch
 ```
 In another terminal, go to the FAR Planner folder, source the ROS workspace, and launch.
 ```
-source install/setup.sh
+source install/setup.bash
 ros2 launch far_planner far_planner.launch
 ```
 Now, users can send a goal by pressing the 'Goalpoint' button in RVIZ and then clicking a point to set the goal. The vehicle will navigate to the goal and build a visibility graph (in cyan) along the way. Areas covered by the visibility graph become free space. When navigating in free space, the planner uses the built visibility graph, and when navigating in unknown space, the planner attempts to discover a way to the goal. By pressing the 'Reset Visibility Graph' button, the planner will reinitialize the visibility graph. By unchecking the 'Planning Attemptable' checkbox, the planner will first try to find a path through the free space. The path will show in green. If such a path does not exist, the planner will consider unknown space together. The path will show in blue. By unchecking the 'Update Visibility Graph' checkbox, the planner will stop updating the visibility graph. To read/save the visibility graph from/to a file, press the 'Read'/'Save' button. An example visibility graph file for indoor environment is available at 'src/far_planner/data/indoor.vgh'.
@@ -63,8 +77,33 @@ ros2 launch far_planner far_planner.launch config:=matterport
 
 Users have the option to define custom navigation boundaries. To do this, users need to supply a boundary file and a trajectory file. Examples are provided as 'boundary.ply' and 'trajectory.txt' in the 'src/far_planner/data' folder. The files can be viewed by text editors. Specifically, the boundary file contains user-defined polygons where each polygon has an index. The trajectory file contains poses where each pose is a row with x (m), y (m), z (m), roll (rad), pitch (rad), yaw (rad), and time duration from start of the run (second). The trajectory file is in the same format as those saved by the development environment and needs to contain at least one pose to determine the traversable side of the navigation boundaries. Users can use the command line below to generate a visibility graph file in the same folder (provided as 'boundary_graph.vgh'), which can be loaded to FAR Planner using the 'Read' button.
 ```
-ros2 launch boundary_handler boundary_handler.launch
+ros2 launch boundary_handler boundary_handler.launch
 ```
+
+## Development
+
+The workspace contains six ROS 2 packages under `src/`: the core `far_planner`, `graph_decoder`, `boundary_handler`, `visibility_graph_msg`, and two RViz plugins. Each package owns its CMake configuration and dependency manifest. See [AGENTS.md](AGENTS.md) for contributor conventions.
+
+After building and sourcing `install/setup.bash`, run the registered checks:
+
+```sh
+colcon test --executor sequential
+colcon test-result --verbose
+```
+
+Checks cover generated message code and RViz plugin linting; they do not validate navigation behavior. Include simulator validation for changes to planning or vehicle controls.
+
+To format the RViz plugins with their existing ROS style tool, run `ament_uncrustify --reformat src/goalpoint_rviz_plugin src/teleop_rviz_plugin`.
+
+For a debuggable build, use:
+
+```sh
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+```
+
+Launch without RViz using `ros2 launch far_planner far_planner.launch use_rviz:=false`. Set `use_sim_time:=true` only when a clock publisher is available. The decoder subscribes to `/robot_vgraph` by default; override it with `ros2 launch graph_decoder decoder.launch graph_topic:=/custom_graph`.
+
+The boundary extractor accepts `folder_path:=/path/to/data/` to select a writable directory containing the boundary and trajectory inputs and receiving the generated graph. Include the trailing slash. It also accepts `use_rviz:=false`. With `--symlink-install`, the default data directory may refer back to the source tree, so use a separate directory when experimenting.
 
 ## Configuration
 
@@ -81,3 +120,7 @@ FAR Planner settings are kept in default.yaml in the 'src/far_planner/config' fo
 ## Author
 
 [Fan Yang](https://github.com/MichaelFYang) (michael.yfan24@gmail.com)
+
+## License
+
+Licensed under the [MIT License](LICENSE). Copyright (c) 2021-2026 Fan Yang and contributors. Existing author credits are retained in the source files.

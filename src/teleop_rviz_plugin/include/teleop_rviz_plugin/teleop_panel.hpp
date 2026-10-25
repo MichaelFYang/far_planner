@@ -1,5 +1,11 @@
-#ifndef TELEOP_PANEL_H
-#define TELEOP_PANEL_H
+// Copyright (c) 2021-2026 Fan Yang and contributors
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+#ifndef TELEOP_RVIZ_PLUGIN__TELEOP_PANEL_HPP_
+#define TELEOP_RVIZ_PLUGIN__TELEOP_PANEL_HPP_
 
 #ifndef Q_MOC_RUN
 # include <rclcpp/rclcpp.hpp>
@@ -28,16 +34,17 @@ namespace teleop_rviz_plugin
 
 class DriveWidget;
 
-class TeleopPanel: public rviz_common::Panel
+class TeleopPanel : public rviz_common::Panel
 {
-Q_OBJECT
+  Q_OBJECT
+
 public:
-  TeleopPanel( QWidget* parent = 0 );
-  virtual void load( const rviz_common::Config& config );
-  virtual void save( rviz_common::Config config ) const;
+  explicit TeleopPanel(QWidget * parent = nullptr);
+  void load(const rviz_common::Config & config) override;
+  void save(rviz_common::Config config) const override;
 
 public Q_SLOTS:
-  void setVel( float linear_velocity_, float angular_velocity_, bool mouse_pressed_ );
+  void setVel(float linear_velocity_, float angular_velocity_, bool mouse_pressed_);
 
 protected Q_SLOTS:
   void pressButton1();
@@ -49,7 +56,7 @@ protected Q_SLOTS:
   void sendVel();
 
 protected:
-  DriveWidget* drive_widget_;
+  DriveWidget * drive_widget_;
 
   // ROS2 uses smart pointers for publishers and subscribers
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr velocity_publisher_;
@@ -76,6 +83,6 @@ protected:
   bool mouse_pressed_sent_;
 };
 
-}
+}  // namespace teleop_rviz_plugin
 
-#endif // TELEOP_PANEL_H
+#endif  // TELEOP_RVIZ_PLUGIN__TELEOP_PANEL_HPP_

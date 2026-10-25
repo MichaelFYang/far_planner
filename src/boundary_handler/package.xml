@@ -4,22 +4,27 @@
   <version>0.0.1</version>
   <description>Boundary Graph Extractor</description>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
-  <license>BSD</license>
+  <license>MIT</license>
 
-  <!-- Build tool and test dependencies -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- Dependencies for building the package -->
   <depend>rclcpp</depend>
   <depend>std_srvs</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>visibility_graph_msg</depend>
   
-  <!-- The below dependencies are system dependencies and may need to be reflected in the CMake as well. -->
-  <depend>PCL</depend>
-  <depend>OpenCV</depend>
+  <depend>libpcl-all-dev</depend>
+  <depend>opencv4</depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>far_planner</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

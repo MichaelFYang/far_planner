@@ -4,21 +4,23 @@
   <version>0.0.1</version>
   <description>Visibility Graph Decoder</description>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
-  <license>BSD</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- Dependencies for building the package -->
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
   <depend>visibility_graph_msg</depend>
   <depend>pcl_conversions</depend>
-  <depend>PCL</depend>
+  <depend>libpcl-all-dev</depend>
 
-  <!-- Optional: Test dependencies -->
-  <!-- <test_depend>ament_lint_auto</test_depend> -->
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
