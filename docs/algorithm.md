@@ -69,13 +69,22 @@ The timestamped-transform stage fixes the following confirmed defects:
 - Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
 - TF queries do not block the planner executor. If the requested transform is unavailable, the observation is dropped with a diagnostic; it is not retried or replaced with the latest transform. Upstream TF must arrive before the measurement. Bounded buffering remains a separate improvement.
 
-Remaining timing work is explicit:
+The cross-stream timing stage adds the following policies:
 
-- Scan, local-terrain, and terrain-map inputs still lack a cross-stream skew policy. Scan ray origins still use the latest robot position rather than the scan-time position.
-- Out-of-order observations, delayed TF buffering, and simulated-clock resets need dedicated policies and regression coverage. Graph exchange also needs a consistent timestamp/frame contract.
-- A timestamped rigid transform does not deskew a spinning scan: upstream per-point timing and motion compensation are required. An aggregated terrain map needs a documented upstream frame/time convention.
+- Each odometry, scan, local-terrain, and terrain stream must advance strictly in timestamp order. Rejected observations do not advance the accepted stamp. Odometry also requires finite coordinates and a nonzero finite quaternion.
+- Scan ray origins use exact or interpolated world-frame odometry at the scan timestamp. History retains at most 2,000 samples and 10 seconds. There is no extrapolation; both interpolation samples must be within `sensor_time_tolerance` of the scan. Missing matching odometry drops the scan.
+- Dynamic-obstacle clearing runs only when scan and terrain timestamps differ by at most `sensor_time_tolerance`. Otherwise the map update proceeds without scan-based clearing. Existing dynamic exclusions continue to decay.
+- `sensor_time_tolerance` defaults to **0.2 seconds** and must be in `(0, 10]`. Configure it in the planner parameters (`/far_planner/sensor_time_tolerance` on ROS 1) to match the upstream publication rate and motion/error budget. A larger value permits greater temporal mismatch; it does not improve synchronization.
+- All inputs must use the planner's ROS clock. Zero sensor stamps and stamps ahead of that clock by more than the tolerance are rejected. A backward clock jump clears sensor history, map, graph, and goal state, publishes a stop waypoint, and waits for fresh odometry/terrain. Explicit graph reset also clears cached observations. The TF provider must supply transforms for the new epoch.
 
-`test/test_frame_transforms.cpp` covers moving transforms, interpolation, nanosecond precision, unavailable/past/future TF, zero stamps, frame normalization, and unchanged inputs on failure. The ROS 2 `test/test_terrain_tf.py` exercises the actual node: a cloud at 10 s uses the 10 s transform despite a newer 12 s transform, and rejected clouds never reach map publication. These tests do not establish end-to-end navigation safety or complete sensor synchronization.
+`test/test_frame_transforms.cpp` covers moving transforms, interpolation, nanosecond precision, unavailable/past/future TF, zero stamps, frame normalization, and unchanged inputs on failure. `test/test_sensor_timing.cpp` covers bounded history, timestamp ordering, interpolation limits, skew, and clock-rewind detection. The ROS 2 `test/test_terrain_tf.py` exercises the actual node: timestamped cloud conversion, atomic rejection, old-scan ray origins, invalid/out-of-order odometry, duplicate terrain, skew rejection, and simulated-time reset.
+
+Remaining limits are explicit:
+
+- TF and odometry must arrive before dependent measurements; bounded retry queues are not implemented. The 0.2-second bound is a configurable policy, not a verified setting for every robot.
+- The scan-ray origin is the odometry reference point. A sensor with a significant lever arm needs an explicit sensor-origin frame/extrinsic policy. A rigid transform does not deskew a spinning scan; upstream per-point timing and motion compensation are required.
+- Local terrain is ordered but has no maximum-age gate against graph-update time. Aggregated terrain maps also need a documented upstream frame/time convention; they cannot be made simultaneous with a scan by assigning one header stamp. Graph exchange needs a consistent timestamp/frame contract.
+- These tests do not establish end-to-end navigation correctness. Validate synchronized bag replay and motion on the actual robot before adopting the refactor branches.
 
 ## Invariants to preserve
 

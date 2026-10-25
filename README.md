@@ -100,6 +100,8 @@ Use `roslaunch far_planner far_planner.launch use_rviz:=false` for headless star
 
 The boundary extractor accepts `folder_path:=/path/to/data/` and `use_rviz:=false`. Use a separate writable directory containing the boundary and trajectory inputs to avoid overwriting the sample graph; include the trailing slash.
 
+TF and measurement-time regressions run with `catkin_make run_tests` and `catkin_test_results`. See the [TF and timestamp contract](docs/algorithm.md#tf-and-timestamp-contract) for input timing requirements and `/far_planner/sensor_time_tolerance`.
+
 ## Configuration
 
 FAR Planner settings are kept in default.yaml in the 'src/far_planner/config' folder. For Matterport3D environments, the settings are in matterport.yaml in the same folder.
