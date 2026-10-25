@@ -201,7 +201,7 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
 
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
-    std::fill(util_obs_modified_list_.begin(), util_obs_modified_list_.end(), 0);
+    std::vector<int> modified_indices;
     PointCloudPtr obs_valid_ptr(new pcl::PointCloud<PCLPoint>());
     for (const auto& point : obsCloudInOut->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
@@ -210,31 +210,37 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
             world_obs_cloud_grid_->GetCell(ind)->points.push_back(point);
             obs_valid_ptr->points.push_back(point);
-            util_obs_modified_list_[ind] = 1;
+            if (util_obs_modified_list_[ind] == 0) {
+                util_obs_modified_list_[ind] = 1;
+                modified_indices.push_back(ind);
+            }
             global_visited_induces_[ind] = 1;
         }
     }
     *obsCloudInOut = *obs_valid_ptr;
-    // Filter Modified Ceils
-    for (int i = 0; i < world_obs_cloud_grid_->GetCellNumber(); ++i) {
-      if (util_obs_modified_list_[i] == 1) FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(i), FARUtil::kLeafSize);
+    for (const int ind : modified_indices) {
+        FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
+        util_obs_modified_list_[ind] = 0;
     }
 }
 
 void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     if (!is_init_ || freeCloudIn->empty()) return;
-    std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
+    std::vector<int> modified_indices;
     for (const auto& point : freeCloudIn->points) {
         Eigen::Vector3i sub = world_free_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
         world_free_cloud_grid_->GetCell(ind)->points.push_back(point);
-        util_free_modified_list_[ind] = 1;
+        if (util_free_modified_list_[ind] == 0) {
+            util_free_modified_list_[ind] = 1;
+            modified_indices.push_back(ind);
+        }
         global_visited_induces_[ind]  = 1;
     }
-    // Filter Modified Ceils
-    for (int i = 0; i < world_free_cloud_grid_->GetCellNumber(); ++i) {
-      if (util_free_modified_list_[i] == 1) FARUtil::FilterCloud(world_free_cloud_grid_->GetCell(i), FARUtil::kLeafSize);
+    for (const int ind : modified_indices) {
+        FARUtil::FilterCloud(world_free_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
+        util_free_modified_list_[ind] = 0;
     }
 }
 
