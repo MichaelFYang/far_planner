@@ -132,7 +132,8 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
                                 const std::string& to_frame_id,
                                 const std::shared_ptr<tf2_ros::Buffer>& tf_buffer,
                                 const PointCloudPtr& cloudInOut,
-                                const rclcpp::Time& stamp) {
+                                const rclcpp::Time& stamp,
+                                Point3D* sensor_origin) {
     const std::string source = NormalizeFrameID(from_frame_id);
     const std::string target = NormalizeFrameID(to_frame_id);
     if (source.empty() || target.empty()) {
@@ -158,6 +159,10 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
     pcl::fromROSMsg(output, transformed);
     transformed.header.stamp = static_cast<std::uint64_t>(stamp.nanoseconds()) / 1000ULL;
     cloudInOut->swap(transformed);
+    if (sensor_origin) {
+        const auto& translation = transform.transform.translation;
+        *sensor_origin = Point3D(translation.x, translation.y, translation.z);
+    }
 }
 
 void FARUtil::TransformPoint3DFrame(const std::string& from_frame_id,

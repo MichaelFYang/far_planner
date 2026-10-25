@@ -736,7 +736,8 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
 }
 
 
-bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) {
+bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
+                             const PointCloudPtr& cloudOut, Point3D* sensor_origin) {
   if (!this->ValidMeasurementTime(MeasurementStamp(pc->header.stamp))) {
     RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping point cloud without a valid measurement timestamp");
     return false;
@@ -748,7 +749,7 @@ bool FARMaster::ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, 
   FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
   try {
     FARUtil::TransformPCLFrame(pc->header.frame_id, master_params_.world_frame,
-                              tf_buffer_, candidate, rclcpp::Time(pc->header.stamp));
+                              tf_buffer_, candidate, rclcpp::Time(pc->header.stamp), sensor_origin);
   } catch (const tf2::TransformException& ex) {
     RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping point cloud: %s", ex.what());
     return false;
@@ -767,8 +768,9 @@ void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan
     RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 1000, "Dropping scan without matching odometry or with an old timestamp");
     return;
   }
-  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_)) return;
-  scan_handler_.UpdateRobotPosition(Point3D(scan_position[0], scan_position[1], scan_position[2]));
+  Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
+  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_, &sensor_origin)) return;
+  scan_handler_.UpdateRobotPosition(sensor_origin);
   last_scan_stamp_ = stamp;
 }
 

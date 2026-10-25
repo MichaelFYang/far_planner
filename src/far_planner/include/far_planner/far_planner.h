@@ -146,7 +146,8 @@ private:
 
     void PlanningCallBack();
     
-    bool ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut);
+    bool ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
+                      const PointCloudPtr& cloudOut, Point3D* sensor_origin = nullptr);
 
     
     Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
