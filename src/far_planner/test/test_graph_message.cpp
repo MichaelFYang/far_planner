@@ -19,6 +19,7 @@ GraphMessage ValidGraph() {
     GraphMessage graph;
     graph.header.frame_id = "map";
     NodeMessage node;
+    node.header.frame_id = "map";
     node.id = 7;
 #ifdef FAR_PLANNER_ROS1
     node.FreeType = 1;
@@ -65,4 +66,19 @@ TEST(GraphMessage, RejectsDuplicateIdsAndMissingConnectionTargets) {
     graph.nodes[0].connect_nodes.push_back(7);
     EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error));
     EXPECT_TRUE(error.empty());
+}
+
+TEST(GraphMessage, RejectsInconsistentNodeFrameAndCount) {
+    auto graph = ValidGraph();
+    std::string error;
+    graph.nodes[0].header.frame_id = "odom";
+    EXPECT_FALSE(GraphMsger::ValidateGraphMessage(graph, "map", error));
+    graph = ValidGraph();
+    graph.nodes[0].header.frame_id.clear();
+    EXPECT_FALSE(GraphMsger::ValidateGraphMessage(graph, "map", error));
+    graph = ValidGraph();
+    graph.nodes[0].header.frame_id = "/map";
+    EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error));
+    graph.size = 0;
+    EXPECT_FALSE(GraphMsger::ValidateGraphMessage(graph, "map", error));
 }
