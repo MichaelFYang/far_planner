@@ -9,6 +9,9 @@
 
 #include "boundary_handler/graph_extractor.h"
 #include "boundary_handler/intersection.h"
+#include "boundary_handler/input_parser.h"
+
+#include <stdexcept>
 
 /***************************************************************************************/
 
@@ -43,9 +46,9 @@ void GraphExtractor::LoadParmas() {
     // Declare parameters if they haven't been declared yet
     nh_->declare_parameter("world_frame", "map");
     nh_->declare_parameter("folder_path", "/home/workspace/src/boundary_handler/data/");
-    nh_->declare_parameter("boundary_file", "boundary.pcd");
-    nh_->declare_parameter("traj_file", "traj.txt");
-    nh_->declare_parameter("graph_file", "graph.txt");
+    nh_->declare_parameter("boundary_file", "boundary.ply");
+    nh_->declare_parameter("traj_file", "trajectory.txt");
+    nh_->declare_parameter("graph_file", "boundary_graph.vgh");
     nh_->declare_parameter("visual_scale_ratio", 1.0f);
     nh_->declare_parameter("height_tolz", 1.0f);
 
@@ -347,69 +350,30 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
 }
 
 void GraphExtractor::ReadBoundaryFile(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
-    /* Modified from waypointExample.cpp from https://github.com/HongbiaoZ/autonomous_exploration_development_environment/tree/noetic/src/waypoint_example*/
-    FILE* boundary_file = fopen(ge_params_.bd_file_path.c_str(), "r");
-    if (boundary_file == NULL) {
-        printf ("\nCannot read input boundary, exit.\n\n");
-        exit(1);
+    std::ifstream input(ge_params_.bd_file_path);
+    if (!input) throw std::runtime_error("Cannot open boundary: " + ge_params_.bd_file_path);
+    const auto vertices = boundary_handler::ReadAsciiPly(input);
+    PointCloudPtr candidate(new PointCloud);
+    candidate->reserve(vertices.size());
+    for (const auto& vertex : vertices) {
+        PCLPoint point{};
+        point.x = vertex.x;
+        point.y = vertex.y;
+        point.z = vertex.z;
+        point.intensity = vertex.polygon_index;
+        candidate->push_back(point);
     }
-    char str[50];
-    int val, pointNum;
-    std::string strCur, strLast;
-    while (strCur != "end_header") {
-        val = fscanf(boundary_file, "%s", str);
-        if (val != 1) {
-            printf ("\nError reading boundary files, exit.\n\n");
-            exit(1);
-        }
-
-        strLast = strCur;
-        strCur = std::string(str);
-
-        if (strCur == "vertex" && strLast == "element") {
-            val = fscanf(boundary_file, "%d", &pointNum);
-            if (val != 1) {
-                printf ("\nError reading boundary files, exit.\n\n");
-                exit(1);
-            }
-        }
-    }
-
-    bd_cloud->clear();
-    PCLPoint point;
-    int val1, val2, val3, val4;
-    for (int i = 0; i < pointNum; i++) {
-        val1 = fscanf(boundary_file, "%f", &point.x);
-        val2 = fscanf(boundary_file, "%f", &point.y);
-        val3 = fscanf(boundary_file, "%f", &point.z);
-        val4 = fscanf(boundary_file, "%f", &point.intensity);
-
-        if (val1 != 1 || val2 != 1 || val3 != 1 || val4 != 1) {
-            printf ("\nError reading boundary values, exit.\n\n");
-            exit(1);
-        }
-        bd_cloud->push_back(point);
-    }
-    // verify the polygon vertex size
-    this->FilterPolyBoundary(bd_cloud, polysOut);
-    fclose(boundary_file);
+    PolygonStack polygons;
+    this->FilterPolyBoundary(candidate, polygons);
+    bd_cloud->swap(*candidate);
+    polysOut.swap(polygons);
 }
 
 void GraphExtractor::ReadTrajFile(Point3D& free_p) {
-    FILE* traj_file = fopen(ge_params_.traj_file_path.c_str(), "r");
-    if (traj_file == NULL) {
-        printf ("\nCannot read trajectory files, exit.\n\n");
-        exit(1);
-    }
-    int valx, valy, valz;
-    valx = fscanf(traj_file, "%f", &free_p.x);
-    valy = fscanf(traj_file, "%f", &free_p.y);
-    valz = fscanf(traj_file, "%f", &free_p.z);
-    if (valx != 1 || valx != 1 || valx != 1) {
-        printf ("\nError reading trajectory values, exit.\n\n");
-        exit(1);
-    }
-    fclose(traj_file);
+    std::ifstream input(ge_params_.traj_file_path);
+    if (!input) throw std::runtime_error("Cannot open trajectory: " + ge_params_.traj_file_path);
+    const auto values = boundary_handler::ReadTrajectory(input);
+    free_p = Point3D(values[0], values[1], values[2]);
 }
 
 void GraphExtractor::FilterPolyBoundary(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
@@ -615,8 +579,15 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
 int main(int argc, char** argv){
     rclcpp::init(argc, argv);
     
-    auto ge_node = std::make_shared<GraphExtractor>();
-    ge_node->Run();
+    std::shared_ptr<GraphExtractor> ge_node;
+    try {
+        ge_node = std::make_shared<GraphExtractor>();
+        ge_node->Run();
+    } catch (const std::exception& ex) {
+        RCLCPP_ERROR(rclcpp::get_logger("boundary_handler"), "Boundary input error: %s", ex.what());
+        rclcpp::shutdown();
+        return 1;
+    }
 
     rclcpp::Rate loop_rate(1.0);
     while (rclcpp::ok()) {
