@@ -119,21 +119,19 @@ def test_terrain_transform_is_timestamped_and_atomic():
                     clouds.publish(rejected)
                     settle()
                     assert len(received) == 1, 'Rejected cloud reached the mapping pipeline'
-                # A delayed scan must raycast from its own odometry pose (x=0),
-                # even after odometry has advanced to x=5. Older odometry is rejected.
+                # A delayed scan uses its own odometry pose (x=0). Terrain
+                # also requires a nearby pose at its measurement time.
                 pose.header.stamp.sec = 13
                 pose.pose.pose.position.x = 50.0
                 pose.pose.pose.orientation.w = 0.0
                 odom.publish(pose)
                 settle()
-                pose.header.stamp.sec = 12
-                pose.pose.pose.position.x = 5.0
+                pose.header.stamp.sec = 10
+                pose.header.stamp.nanosec = 100000000
+                pose.pose.pose.position.x = 0.0
                 pose.pose.pose.orientation.w = 1.0
                 odom.publish(pose)
                 settle()
-                pose.header.stamp.sec = 11
-                pose.pose.pose.position.x = 50.0
-                odom.publish(pose)
                 scans.publish(cloud('map', 10))
                 settle()
                 clouds.publish(cloud('map', 10, 100000000))
@@ -145,15 +143,35 @@ def test_terrain_transform_is_timestamped_and_atomic():
                             for i in range(0, len(msg.data), msg.point_step)]
 
                 assert x_values(rays[-1]) and max(x_values(rays[-1])) < 2.0
-                assert x_values(received[-1]), 'Older odometry moved the map crop center'
+                assert x_values(received[-1])
+                pose.header.stamp.nanosec = 150000000
+                pose.pose.pose.position.x = 0.1
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 11
+                pose.header.stamp.nanosec = 0
+                pose.pose.pose.position.x = 2.5
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 12
+                pose.pose.pose.position.x = 5.0
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 11
+                pose.pose.pose.position.x = 50.0
+                odom.publish(pose)
                 clouds.publish(cloud('map', 10, 100000000))
                 settle()
                 assert len(received) == 2, 'Duplicate terrain was processed again'
+                clouds.publish(cloud('map', 10, 150000000))
+                settle()
+                assert len(received) == 2, 'Old terrain replaced the current local map'
 
                 # A newer terrain update must not clear obstacles with an old scan.
-                clouds.publish(cloud('/map', 11))
+                clouds.publish(cloud('/map', 12))
                 spin_until(lambda: len(received) == 3 and len(rays) == 3)
                 assert not x_values(rays[-1]), 'Stale scan was reused for ray clearing'
+                assert x_values(received[-1]), 'Older odometry moved the map crop center'
 
                 # Rewinding simulated time must clear old observations and ordering
                 # guards, allowing a fresh odometry/cloud pair in the new epoch.
@@ -193,6 +211,9 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 settle(0.1)
                 scans.publish(cloud('late_sensor', 5, 100000000))
                 settle(0.15)
+                pose.header.stamp.nanosec = 260000000
+                odom.publish(pose)
+                settle()
                 clouds.publish(cloud('map', 5, 260000000))
                 spin_until(lambda: len(received) == 6 and len(rays) == 6)
                 assert not x_values(rays[-1]), 'Scan was used before its TF arrived'
@@ -205,9 +226,47 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 late_tf.transform.rotation.w = 1.0
                 transforms.publish(TFMessage(transforms=[late_tf]))
                 settle(0.25)
+                pose.header.stamp.nanosec = 270000000
+                odom.publish(pose)
+                settle()
                 clouds.publish(cloud('map', 5, 270000000))
                 spin_until(lambda: len(received) == 7 and len(rays) == 7)
                 assert x_values(rays[-1]), 'Scan was not retried after its TF arrived'
+
+                # A delayed terrain cloud is cropped at its interpolated
+                # measurement pose, even though the latest odometry moved far.
+                pose.header.stamp.nanosec = 310000000
+                pose.pose.pose.position.x = 0.0
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.nanosec = 410000000
+                pose.pose.pose.position.x = 30.0
+                odom.publish(pose)
+                settle()
+                clouds.publish(cloud('map', 5, 310000000))
+                spin_until(lambda: len(received) == 8)
+                assert x_values(received[-1]), 'Terrain used the latest pose for cropping'
+
+                # Terrain waits for later odometry and for a delayed stamped TF.
+                clouds.publish(cloud('map', 5, 450000000))
+                settle(0.15)
+                assert len(received) == 8, 'Terrain ran before its later odometry'
+                pose.header.stamp.nanosec = 500000000
+                odom.publish(pose)
+                spin_until(lambda: len(received) == 9)
+                clouds.publish(cloud('late_terrain', 5, 500000000))
+                settle(0.15)
+                assert len(received) == 9, 'Terrain ran before its TF arrived'
+                terrain_tf = TransformStamped()
+                terrain_tf.header.frame_id = 'map'
+                terrain_tf.child_frame_id = 'late_terrain'
+                terrain_tf.header.stamp.sec = 5
+                terrain_tf.header.stamp.nanosec = 500000000
+                terrain_tf.transform.translation.x = 30.0
+                terrain_tf.transform.rotation.w = 1.0
+                transforms.publish(TFMessage(transforms=[terrain_tf]))
+                spin_until(lambda: len(received) == 10)
+                assert x_values(received[-1]), 'Terrain was not retried after TF arrived'
             except Exception:
                 log.flush()
                 log.seek(0)

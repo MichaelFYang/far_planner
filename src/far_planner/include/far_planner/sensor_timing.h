@@ -62,11 +62,14 @@ private:
     std::deque<Sample> samples_;
 };
 
-// Hold scans until odometry brackets their measurement time. Entries are
+// Hold sensor messages until odometry brackets their measurement time. Entries are
 // ordered by stamp, bounded in count, and discarded after a finite steady age.
 template <typename Message>
 class PendingMeasurementQueue {
 public:
+    explicit PendingMeasurementQueue(std::size_t capacity = 32)
+        : capacity_(std::max<std::size_t>(1, capacity)) {}
+
     struct Entry {
         std::uint64_t stamp;
         Message message;
@@ -78,7 +81,7 @@ public:
         if (stamp == 0 || stamp <= last_accepted ||
             (!entries_.empty() && stamp <= entries_.back().stamp)) return false;
         entries_.push_back({stamp, std::move(message), arrived_ns});
-        if (entries_.size() > 32) entries_.pop_front();
+        if (entries_.size() > capacity_) entries_.pop_front();
         return true;
     }
 
@@ -108,6 +111,7 @@ public:
     void Clear() { entries_.clear(); }
 
 private:
+    std::size_t capacity_;
     std::deque<Entry> entries_;
 };
 

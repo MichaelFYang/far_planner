@@ -7,6 +7,7 @@ far_planner:
     vehicle_height: 0.75  # Unit: meter
     sensor_range: 30.0  # Unit: meter
     terrain_range: 15.0  # Unit: meter
+    sensor_time_tolerance: 0.2  # Seconds; max scan/terrain/odometry timestamp gap
     local_planner_range: 5.0   # Unit: meter
     visualize_ratio: 0.75
     is_viewpoint_extend: true

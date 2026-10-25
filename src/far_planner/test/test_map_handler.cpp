@@ -11,10 +11,12 @@ struct RestoreMapParameters {
     float leaf = FARUtil::kLeafSize;
     float robot = FARUtil::robot_dim;
     float height = FARUtil::vehicle_height;
+    Point3D position = FARUtil::robot_pos;
     ~RestoreMapParameters() {
         FARUtil::kLeafSize = leaf;
         FARUtil::robot_dim = robot;
         FARUtil::vehicle_height = height;
+        FARUtil::robot_pos = position;
     }
 };
 
@@ -81,4 +83,13 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     map.UpdateObsCloudGrid(CloudAt(1.0f));
     map.GetOccupancyCeilsCenters(occupied);
     EXPECT_EQ(occupied.size(), 1U);
+
+    // Traversability must use the pose assigned to this terrain update,
+    // even if the planner's latest odometry has already advanced.
+    FARUtil::robot_pos = Point3D(100.0f, 0.0f, 0.0f);
+    auto ground = CloudAt(0.0f);
+    ground->points.front().z = -FARUtil::vehicle_height;
+    PointCloudPtr terrain_height(new PointCloud);
+    map.UpdateTerrainHeightGrid(ground, terrain_height);
+    EXPECT_FALSE(terrain_height->empty());
 }
