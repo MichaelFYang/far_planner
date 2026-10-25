@@ -98,7 +98,7 @@ A five-node geometric graph demonstrated the old failure: the cost to node 1 set
 
 A full graph reset now clears reciprocal navigation edges, potential connections, trajectory links, search-parent links, and navigation-to-contour references before releasing graph storage. Full contour reset clears the reciprocal vertex links and contour-node edges. `test/test_graph_lifecycle.cpp` verifies first/last/consecutive erasure and that linked navigation and contour vertices are actually destroyed after reset; both ownership tests failed before the fix.
 
-Contour vertices created during ordinary contour updates can still form shared-pointer cycles after the active contour vectors are replaced. Removing those cycles without changing the lifetime of topology still referenced by navigation nodes needs a separate ownership refactor and memory validation. The current reset tests do not prove that long-running updates have no growth.
+Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
 ## Boundary input stage
 
@@ -142,7 +142,7 @@ Scans that arrive before their later odometry sample now wait in a timestamp-ord
 | 5 — file boundaries | Validate graph/boundary/trajectory input and fail without partial state updates | Truncated/malformed files, missing fields, large IDs, round trips, invalid coordinates |
 | 6 — measured hot paths | Remove proven unnecessary copies/allocations; bound pair iteration; avoid avoidable rebuilds | Identical graph/path results; allocation counts; median/p95 stage timing over representative graph sizes |
 
-Confirmed input and graph-index defects have regression coverage: trajectory Y/Z validation, bounded PLY parsing with a required vertex count, compact KD-tree points, exact node identity, and radius units. Remaining work includes live graph ownership during ordinary contour updates, delayed-TF handling, and measured hot-path changes.
+Confirmed input and graph-index defects have regression coverage: trajectory Y/Z validation, bounded PLY parsing with a required vertex count, compact KD-tree points, exact node identity, and radius units. Remaining work includes long-running memory profiling, delayed-TF handling, and measured hot-path changes.
 
 Potential costs are point-cloud conversion/downsampling and neighborhood reconstruction, image processing, roughly quadratic nearby-node pair checks, graph serialization/KD-tree rebuilds, and graph traversals. Complexity is a prioritization aid, not a measured bottleneck. Existing `/runtime` and `/planning_time` measurements cover different scopes and units; normalize benchmark reporting before comparing them. Record point count, contour/graph size, edge count, configuration, CPU, ROS version, and correctness results with each performance claim.
 

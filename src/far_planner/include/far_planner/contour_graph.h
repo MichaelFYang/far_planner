@@ -124,7 +124,7 @@ private:
     
     /* static private functions */
     inline void AddCTNodeToGraph(const CTNodePtr& ctnode_ptr) {
-        if (ctnode_ptr == NULL && ctnode_ptr->free_direct == NodeFreeDirect::UNKNOW) {
+        if (ctnode_ptr == NULL) {
             if (FARUtil::IsDebug) ROS_ERROR_THROTTLE(1.0, "CG: Add ctnode to contour graph fails, ctnode is invaild.");
             return;
         }
@@ -249,6 +249,14 @@ private:
     }
 
     inline void ClearContourGraph() {
+        const auto release_links = [](const CTNodePtr& node) {
+            if (!node) return;
+            node->front.reset();
+            node->back.reset();
+            node->connect_nodes.clear();
+        };
+        for (const auto& node : ContourGraph::polys_ctnodes_) release_links(node);
+        for (const auto& node : ContourGraph::contour_graph_) release_links(node);
         ContourGraph::polys_ctnodes_.clear();
         ContourGraph::contour_graph_.clear();
         ContourGraph::contour_polygons_.clear(); 

@@ -68,3 +68,38 @@ TEST(GraphLifecycle, ContourResetReleasesLinkedVertices)
     }
     EXPECT_TRUE(released);
 }
+
+TEST(GraphLifecycle, OrdinaryContourUpdateReleasesRetiredVertices)
+{
+    ContourGraph graph;
+    graph.ResetCurrentContour();
+    auto a = std::make_shared<CTNode>();
+    auto b = std::make_shared<CTNode>();
+    a->front = b;
+    b->back = a;
+    a->connect_nodes.push_back(b);
+    b->connect_nodes.push_back(a);
+    ContourGraph::contour_graph_ = {a, b};
+
+    auto nav = std::make_shared<NavNode>();
+    nav->ctnode = a; // Navigation may retain the old contour until rematching.
+    auto odom = std::make_shared<NavNode>();
+    odom->position = Point3D(0.0f, 0.0f, 0.0f);
+    std::weak_ptr<CTNode> weak_a = a, weak_b = b;
+
+    graph.UpdateContourGraph(odom, {});
+    a.reset();
+    b.reset();
+    const bool neighbor_released = weak_b.expired();
+    nav->ctnode.reset();
+    const bool all_released = weak_a.expired() && weak_b.expired();
+    if (!all_released) {
+        a = weak_a.lock(); b = weak_b.lock();
+        if (a) { a->front.reset(); a->back.reset(); a->connect_nodes.clear(); }
+        if (b) { b->front.reset(); b->back.reset(); b->connect_nodes.clear(); }
+        a.reset(); b.reset();
+    }
+    EXPECT_TRUE(neighbor_released);
+    EXPECT_TRUE(all_released);
+    graph.ResetCurrentContour();
+}

@@ -14,8 +14,7 @@
 
 void ContourGraph::Init(const ContourGraphParams& params) {
     ctgraph_params_ = params;
-    ContourGraph::contour_graph_.clear();
-    ContourGraph::contour_polygons_.clear();
+    this->ClearContourGraph();
     ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign / 2.0f);
     is_robot_inside_poly_ = false;
     ContourGraph::global_contour_set_.clear();
@@ -721,14 +720,6 @@ ConnectPair ContourGraph::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNo
 }
 
 void ContourGraph::ResetCurrentContour() {
-    // Full reset discards these polygons; release the reciprocal vertex links.
-    const auto release_links = [](const CTNodePtr& node) {
-        node->front.reset();
-        node->back.reset();
-        node->connect_nodes.clear();
-    };
-    for (const auto& node : polys_ctnodes_) release_links(node);
-    for (const auto& node : contour_graph_) release_links(node);
     this->ClearContourGraph();
     // clear contour sets
     ContourGraph::global_contour_set_.clear();
