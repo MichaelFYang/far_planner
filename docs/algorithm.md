@@ -67,22 +67,22 @@ The timestamped-transform stage fixes the following confirmed defects:
 - Cloud and odometry lookups now use the original ROS measurement timestamp, including nanoseconds before PCL rounds timestamps to microseconds. They no longer request the latest pose for a stamped measurement.
 - `ProcessCloud` builds a candidate and commits it only after a successful transform. Its callers return on failure before changing map state. Goal transform failures also propagate and prevent goal replacement.
 - Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
-- TF queries do not block the planner executor. If the requested transform is unavailable, the observation is dropped with a diagnostic; it is not retried or replaced with the latest transform. Upstream TF must arrive before the measurement. Bounded buffering remains a separate improvement.
+- TF queries do not block the planner executor. If the requested transform is unavailable when a cloud or odometry callback runs, that observation is dropped with a diagnostic; it is not replaced with the latest transform. The bounded scan queue waits for matching odometry, but it does not retry missing TF.
 
 The cross-stream timing stage adds the following policies:
 
 - Each odometry, scan, local-terrain, and terrain stream must advance strictly in timestamp order. Rejected observations do not advance the accepted stamp. Odometry also requires finite coordinates and a nonzero finite quaternion.
-- Scan ray origins use exact or interpolated world-frame odometry at the scan timestamp. History retains at most 2,000 samples and 10 seconds. There is no extrapolation; both interpolation samples must be within `sensor_time_tolerance` of the scan. Missing matching odometry drops the scan.
+- Scans require exact or interpolated world-frame odometry at their timestamp. History retains at most 2,000 samples and 10 seconds; both interpolation samples must be within `sensor_time_tolerance`, with no extrapolation. Scans can wait briefly for the later sample. Rays start at the timestamped sensor-frame TF origin when available, or at interpolated odometry for world-frame scans.
 - Dynamic-obstacle clearing runs only when scan and terrain timestamps differ by at most `sensor_time_tolerance`. Otherwise the map update proceeds without scan-based clearing. Existing dynamic exclusions continue to decay.
 - `sensor_time_tolerance` defaults to **0.2 seconds** and must be in `(0, 10]`. Configure it in the planner parameters (`/far_planner/sensor_time_tolerance` on ROS 1) to match the upstream publication rate and motion/error budget. A larger value permits greater temporal mismatch; it does not improve synchronization.
 - All inputs must use the planner's ROS clock. Zero sensor stamps and stamps ahead of that clock by more than the tolerance are rejected. A backward clock jump clears sensor history, map, graph, and goal state, publishes a stop waypoint, and waits for fresh odometry/terrain. Explicit graph reset also clears cached observations. The TF provider must supply transforms for the new epoch.
 
-`test/test_frame_transforms.cpp` covers moving transforms, interpolation, nanosecond precision, unavailable/past/future TF, zero stamps, frame normalization, and unchanged inputs on failure. `test/test_sensor_timing.cpp` covers bounded history, timestamp ordering, interpolation limits, skew, and clock-rewind detection. The ROS 2 `test/test_terrain_tf.py` exercises the actual node: timestamped cloud conversion, atomic rejection, old-scan ray origins, invalid/out-of-order odometry, duplicate terrain, skew rejection, and simulated-time reset.
+`test/test_frame_transforms.cpp` covers moving transforms, interpolation, nanosecond precision, unavailable/past/future TF, zero stamps, frame normalization, and unchanged inputs on failure. `test/test_sensor_timing.cpp` covers bounded history, ordered/expiring pending scans, interpolation limits, skew, and clock-rewind detection. The ROS 2 `test/test_terrain_tf.py` exercises the actual node: timestamped cloud conversion, atomic rejection, delayed scans, invalid/out-of-order odometry, duplicate terrain, skew rejection, and simulated-time reset.
 
 Remaining limits are explicit:
 
-- TF and odometry must arrive before dependent measurements; bounded retry queues are not implemented. The 0.2-second bound is a configurable policy, not a verified setting for every robot.
-- The scan-ray origin is the odometry reference point. A sensor with a significant lever arm needs an explicit sensor-origin frame/extrinsic policy. A rigid transform does not deskew a spinning scan; upstream per-point timing and motion compensation are required.
+- TF must be available when its measurement is processed. Scans can wait for odometry, but TF failures are not retried; terrain and odometry are not buffered. The 0.2-second tolerance is a configurable policy, not a verified setting for every robot.
+- World-frame scan clouds have no separate sensor frame, so their rays still start at the odometry reference point. Sensor-frame scans use their timestamped TF origin. A rigid cloud transform does not deskew a spinning scan; upstream per-point timing and motion compensation are required.
 - Local terrain is ordered but has no maximum-age gate against graph-update time. Aggregated terrain maps also need a documented upstream frame/time convention; they cannot be made simultaneous with a scan by assigning one header stamp. Graph exchange needs a consistent timestamp/frame contract.
 - These tests do not establish end-to-end navigation correctness. Validate synchronized bag replay and motion on the actual robot before adopting the refactor branches.
 
@@ -110,6 +110,10 @@ The decoder now parses the complete saved graph before publishing it. Each line 
 
 Incoming graph messages are built before replacing the last accepted graph. Replacing or destroying a decoder graph clears its strong connection links; temporary graphs loaded from files release their links after publication. This prevents reciprocal edges from retaining old graph nodes on repeated updates.
 
+## Graph exchange spatial index stage
+
+`GraphMsger` now packs only searchable nodes into its KD-tree cloud and keeps a parallel pointer for each point. Search returns the exact node pointer, avoiding both empty/ghost slots and loss of integer ID precision through a float intensity field. PCL returns squared distances, so the matcher compares them with the squared linear radius. Tests cover skipped nodes, a large ID, radius semantics, empty rebuilds, and invalid queries.
+
 ## Scan sensor origin stage
 
 When a scan arrives in a sensor frame, the cloud transform also supplies the sensor's world-frame translation at that same scan timestamp. Scan ray tracing starts from that translation, accounting for the scanner's offset from the odometry body. A scan already in the world frame still uses the interpolated odometry position because its original sensor frame is unavailable. Failed TF leaves both the accepted cloud and ray origin unchanged. Moving-TF regression tests cover the returned origin, interpolation, identity fallback, and failure.
@@ -136,7 +140,7 @@ Scans that arrive before their later odometry sample now wait in a timestamp-ord
 | 5 — file boundaries | Validate graph/boundary/trajectory input and fail without partial state updates | Truncated/malformed files, missing fields, large IDs, round trips, invalid coordinates |
 | 6 — measured hot paths | Remove proven unnecessary copies/allocations; bound pair iteration; avoid avoidable rebuilds | Identical graph/path results; allocation counts; median/p95 stage timing over representative graph sizes |
 
-Confirmed review findings also include an unchecked trajectory Y/Z parse, an unbounded boundary token read, and missing vertex-count validation. The graph KD-tree builder needs review because it allocates for all graph nodes but skips some while filling. These findings should become regression cases, not broad speculative rewrites.
+Confirmed input and graph-index defects have regression coverage: trajectory Y/Z validation, bounded PLY parsing with a required vertex count, compact KD-tree points, exact node identity, and radius units. Remaining work includes live graph ownership during ordinary contour updates, delayed-TF handling, and measured hot-path changes.
 
 Potential costs are point-cloud conversion/downsampling and neighborhood reconstruction, image processing, roughly quadratic nearby-node pair checks, graph serialization/KD-tree rebuilds, and graph traversals. Complexity is a prioritization aid, not a measured bottleneck. Existing `/runtime` and `/planning_time` measurements cover different scopes and units; normalize benchmark reporting before comparing them. Record point count, contour/graph size, edge count, configuration, CPU, ROS version, and correctness results with each performance claim.
 

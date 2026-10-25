@@ -3,6 +3,7 @@
 
 #include "utility.h"
 #include "dynamic_graph.h"
+#include "graph_node_index.h"
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -33,8 +34,7 @@ private:
     rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_;
 
     NodePtrStack   global_graph_;
-    PointCloudPtr  nodes_cloud_ptr_;
-    PointKdTreePtr kdtree_graph_cloud_;
+    GraphNodeIndex graph_node_index_;
     
     void CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr);
 
