@@ -8,6 +8,8 @@
 
 #include "far_planner/terrain_planner.h"
 
+#include <functional>
+
 /***************************************************************************************/
 
 void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams& params) {
@@ -110,22 +112,20 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
     std::array<int, 8> dx = {1, 1, 0,-1,-1, 0, 1,-1};
     std::array<int, 8> dy = {0, 1, 1, 0, 1,-1,-1,-1};
     start_node_ptr->gscore = 0.0;
-    std::unordered_set<int> open_set;
-    std::priority_queue<TerrainNodePtr, std::vector<TerrainNodePtr>, TNodeptr_fcomp> open_queue;
+    using SearchEntry = std::pair<float, TerrainNodePtr>;
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> open_queue;
     std::unordered_set<int> close_set;
-    open_queue.push(start_node_ptr);
-    open_set.insert(start_node_ptr->id);
-    while (true) {
-        if (open_set.empty()) {
-            break;
-        }
-        const TerrainNodePtr current = open_queue.top();
+    start_node_ptr->fscore = this->EulerCost(start_node_ptr, end_node_ptr);
+    open_queue.push({start_node_ptr->fscore, start_node_ptr});
+    while (!open_queue.empty()) {
+        const auto entry = open_queue.top();
+        open_queue.pop();
+        const TerrainNodePtr current = entry.second;
+        if (entry.first != current->fscore || close_set.count(current->id)) continue;
         if (current == end_node_ptr) {
             this->ExtractPath(end_node_ptr, path);
             break;
         }
-        open_queue.pop();
-        open_set.erase(current->id);
         close_set.insert(current->id);
         for (int i=0; i<8; i++) {
             Eigen::Vector3i csub = terrain_grids_->Ind2Sub(current->id);
@@ -138,10 +138,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
                 neighbor->parent = current;
                 neighbor->gscore = temp_gscore;
                 neighbor->fscore = temp_gscore + this->EulerCost(neighbor, end_node_ptr);
-                if (!open_set.count(neighbor->id)) {
-                    open_queue.push(neighbor);
-                    open_set.insert(neighbor->id);
-                } 
+                open_queue.push({neighbor->fscore, neighbor});
             }
         }
     }

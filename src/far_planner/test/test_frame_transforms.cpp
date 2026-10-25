@@ -182,6 +182,7 @@ TEST(FrameNames, EmptyFramesNeverMatch)
 // catkin_add_gtest links gtest without its main entry point.
 int main(int argc, char** argv)
 {
+    ros::init(argc, argv, "far_planner_core_tests", ros::init_options::NoSigintHandler);
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

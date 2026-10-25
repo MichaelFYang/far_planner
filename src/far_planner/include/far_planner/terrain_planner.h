@@ -26,14 +26,6 @@ typedef std::shared_ptr<TerrainNode> TerrainNodePtr;
 typedef std::vector<TerrainNode> TerrainNodeStack;
 
 
-struct TNodeptr_fcomp
-{
-  bool operator()(const TerrainNodePtr& n1, const TerrainNodePtr& n2) const
-  {
-    return n1->fscore > n2->fscore;
-  }
-};
-
 class TerrainPlanner {
 
 public:
