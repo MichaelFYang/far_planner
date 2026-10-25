@@ -2,6 +2,7 @@
 #define FAR_PLANNER_H
 
 #include "utility.h"
+#include "sensor_timing.h"
 #include "dynamic_graph.h"
 #include "contour_detector.h"
 #include "contour_graph.h"
@@ -74,6 +75,10 @@ private:
     std_msgs::msg::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
+    far_planner::OdometryHistory odometry_history_;
+    far_planner::ClockEpoch clock_epoch_;
+    std::uint64_t last_scan_stamp_ = 0, last_terrain_stamp_ = 0, last_local_terrain_stamp_ = 0;
+    std::uint64_t sensor_time_tolerance_ns_ = 200000000ULL;
 
     bool is_reset_env_, is_stop_update_, is_init_completed_;
 
@@ -130,6 +135,10 @@ private:
     void LoadROSParams();
 
     void ResetEnvironmentAndGraph();
+
+    void CheckClockEpoch();
+
+    bool ValidMeasurementTime(std::uint64_t stamp) const;
 
     void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
 

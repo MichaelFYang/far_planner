@@ -102,7 +102,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
-  ament_add_gtest(test_frame_transforms test/test_frame_transforms.cpp)
+  ament_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp)
   target_link_libraries(test_frame_transforms far_planner_core)
   ament_add_pytest_test(test_terrain_tf test/test_terrain_tf.py
     TIMEOUT 40

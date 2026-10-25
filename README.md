@@ -93,7 +93,7 @@ colcon test --executor sequential
 colcon test-result --verbose
 ```
 
-Checks cover generated message code and RViz plugin linting; they do not validate navigation behavior. Include simulator validation for changes to planning or vehicle controls.
+Checks include TF/measurement-time unit regressions, a live ROS 2 sensor-callback test, generated message code, and RViz plugin linting. They do not establish end-to-end navigation correctness. Include simulator or bag-replay validation for changes to planning or vehicle controls. See the [TF and timestamp contract](docs/algorithm.md#tf-and-timestamp-contract) for input timing requirements and `sensor_time_tolerance`.
 
 To format the RViz plugins with their existing ROS style tool, run `ament_uncrustify --reformat src/goalpoint_rviz_plugin src/teleop_rviz_plugin`.
 

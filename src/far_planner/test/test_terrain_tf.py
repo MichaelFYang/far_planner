@@ -13,6 +13,7 @@ import rclpy
 from rclpy.parameter_client import AsyncParameterClient
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
+from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
 
@@ -26,7 +27,11 @@ def test_terrain_transform_is_timestamped_and_atomic():
         rclpy.init()
         node = rclpy.create_node('terrain_tf_test')
         received = []
+        rays = []
         node.create_subscription(PointCloud2, '/FAR_obs_debug', received.append, 10)
+        node.create_subscription(PointCloud2, '/FAR_scanGrid_debug', rays.append, 10)
+        scans = node.create_publisher(PointCloud2, '/scan_cloud', 10)
+        clock = node.create_publisher(Clock, '/clock', 10)
         clouds = node.create_publisher(PointCloud2, '/terrain_cloud', 10)
         odom = node.create_publisher(Odometry, '/odom_world', 10)
         transforms = node.create_publisher(TFMessage, '/tf', 10)
@@ -34,7 +39,8 @@ def test_terrain_transform_is_timestamped_and_atomic():
             process = subprocess.Popen([
                 os.environ['FAR_PLANNER_EXECUTABLE'], '--ros-args',
                 '-p', 'is_opencv_visual:=false', '-p', 'main_run_freq:=0.01',
-                '-p', 'world_frame:=map',
+                '-p', 'world_frame:=map', '-p', 'use_sim_time:=true',
+                '-p', 'is_static_env:=false',
             ], stdout=log, stderr=subprocess.STDOUT)
 
             def spin_until(predicate, timeout=10.0):
@@ -76,6 +82,12 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 ready = client.get_parameters(['world_frame'])
                 spin_until(ready.done)
                 assert ready.result().values[0].string_value == 'map'
+                spin_until(lambda: clock.get_subscription_count() > 0
+                           and scans.get_subscription_count() > 0)
+                tick = Clock()
+                tick.clock.sec = 20
+                clock.publish(tick)
+                settle()
                 pose = Odometry()
                 pose.header.frame_id = 'map'
                 pose.header.stamp.sec = 10
@@ -103,12 +115,64 @@ def test_terrain_transform_is_timestamped_and_atomic():
 
                 # Each rejected cloud must return before map updates/publication.
                 for rejected in (cloud('missing', 10), cloud('sensor', 9),
-                                 cloud('sensor', 12, 1), cloud('map', 0), cloud('', 10)):
+                                 cloud('sensor', 12, 1), cloud('map', 0), cloud('', 10), cloud('map', 21)):
                     clouds.publish(rejected)
                     settle()
                     assert len(received) == 1, 'Rejected cloud reached the mapping pipeline'
+                # A delayed scan must raycast from its own odometry pose (x=0),
+                # even after odometry has advanced to x=5. Older odometry is rejected.
+                pose.header.stamp.sec = 13
+                pose.pose.pose.position.x = 50.0
+                pose.pose.pose.orientation.w = 0.0
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 12
+                pose.pose.pose.position.x = 5.0
+                pose.pose.pose.orientation.w = 1.0
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 11
+                pose.pose.pose.position.x = 50.0
+                odom.publish(pose)
+                scans.publish(cloud('map', 10))
+                settle()
+                clouds.publish(cloud('map', 10, 100000000))
+                spin_until(lambda: len(received) == 2 and len(rays) == 2)
+
+                def x_values(msg):
+                    offset = next(field.offset for field in msg.fields if field.name == 'x')
+                    return [struct.unpack_from('<f', msg.data, i + offset)[0]
+                            for i in range(0, len(msg.data), msg.point_step)]
+
+                assert x_values(rays[-1]) and max(x_values(rays[-1])) < 2.0
+                assert x_values(received[-1]), 'Older odometry moved the map crop center'
+                clouds.publish(cloud('map', 10, 100000000))
+                settle()
+                assert len(received) == 2, 'Duplicate terrain was processed again'
+
+                # A newer terrain update must not clear obstacles with an old scan.
                 clouds.publish(cloud('/map', 11))
-                spin_until(lambda: len(received) == 2)
+                spin_until(lambda: len(received) == 3 and len(rays) == 3)
+                assert not x_values(rays[-1]), 'Stale scan was reused for ray clearing'
+
+                # Rewinding simulated time must clear old observations and ordering
+                # guards, allowing a fresh odometry/cloud pair in the new epoch.
+                tick.clock.sec = 5
+                clock.publish(tick)
+                settle()
+                # A queued message from the previous epoch must not prevent
+                # fresh (lower-stamped) odometry from being accepted.
+                pose.header.stamp.sec = 12
+                odom.publish(pose)
+                settle()
+                pose.header.stamp.sec = 5
+                pose.pose.pose.position.x = 0.0
+                odom.publish(pose)
+                settle()
+                clouds.publish(cloud('map', 5))
+                spin_until(lambda: len(received) == 4)
+                assert x_values(received[-1])
+                assert all(abs(x - 2.0) < 1e-5 for x in x_values(received[-1]))
             except Exception:
                 log.flush()
                 log.seek(0)
