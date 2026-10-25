@@ -132,6 +132,7 @@ void FARMaster::CheckClockEpoch() {
 void FARMaster::ResetEnvironmentAndGraph() {
   this->ResetInternalValues();
   odometry_history_.Clear();
+  pending_scans_.Clear();
   last_scan_stamp_ = last_terrain_stamp_ = last_local_terrain_stamp_ = 0;
   is_odom_init_ = is_cloud_init_ = is_scan_init_ = false;
   FARUtil::cur_scan_cloud_->clear();
@@ -629,6 +630,7 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
   }
 
   is_odom_init_ = true;
+  this->ProcessPendingScans();
 }
 
 bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
@@ -653,20 +655,34 @@ bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
   return true;
 }
 
+void FARMaster::ProcessPendingScans() {
+  const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
+  pending_scans_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  while (pending_scans_.HasReady(odometry_history_.LatestStamp())) {
+    const auto scan = pending_scans_.PopReady();
+    far_planner::OdometryHistory::Position scan_position;
+    if (scan.stamp <= last_scan_stamp_ ||
+        !odometry_history_.PositionAt(scan.stamp, sensor_time_tolerance_ns_, scan_position)) {
+      ROS_WARN_THROTTLE(1.0, "Dropping scan without nearby odometry or with an old timestamp");
+      continue;
+    }
+    Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
+    if (!this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, &sensor_origin)) continue;
+    scan_handler_.UpdateRobotPosition(sensor_origin);
+    last_scan_stamp_ = scan.stamp;
+  }
+}
+
 void FARMaster::ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& scan_pc) {
   this->CheckClockEpoch();
-  if (master_params_.is_static_env || !is_odom_init_) return;
+  if (master_params_.is_static_env) return;
   const auto stamp = MeasurementStamp(scan_pc->header.stamp);
-  far_planner::OdometryHistory::Position scan_position;
-  if (stamp <= last_scan_stamp_ ||
-      !odometry_history_.PositionAt(stamp, sensor_time_tolerance_ns_, scan_position)) {
-    ROS_WARN_THROTTLE(1.0, "Dropping scan without matching odometry or with an old timestamp");
+  if (!this->ValidMeasurementTime(stamp) ||
+      !pending_scans_.Push(stamp, scan_pc, last_scan_stamp_, far_planner::SteadyNowNs())) {
+    ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order scan");
     return;
   }
-  Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
-  if (!this->ProcessCloud(scan_pc, FARUtil::cur_scan_cloud_, &sensor_origin)) return;
-  scan_handler_.UpdateRobotPosition(sensor_origin);
-  last_scan_stamp_ = stamp;
+  this->ProcessPendingScans();
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {

@@ -76,3 +76,38 @@ TEST(SensorTiming, DetectsClockRewindIncludingZeroWithoutTreatingPauseAsReset)
     EXPECT_TRUE(epoch.Observe(0));
     EXPECT_FALSE(epoch.Observe(0));
 }
+
+TEST(SensorTiming, PendingScanWaitsForLaterOdometryAndRejectsReordering)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    EXPECT_TRUE(scans.Push(150, 1, 100, 1000));
+    EXPECT_FALSE(scans.HasReady(100));
+    EXPECT_FALSE(scans.Push(150, 2, 100, 1000));
+    EXPECT_FALSE(scans.Push(140, 3, 100, 1000));
+    EXPECT_TRUE(scans.Push(170, 4, 100, 1001));
+    ASSERT_TRUE(scans.HasReady(160));
+    const auto first = scans.PopReady();
+    EXPECT_EQ(first.stamp, 150U);
+    EXPECT_EQ(first.message, 1);
+    EXPECT_FALSE(scans.HasReady(160));
+    EXPECT_TRUE(scans.HasReady(200));
+    EXPECT_EQ(scans.PopReady().message, 4);
+    EXPECT_FALSE(scans.Push(150, 5, 170, 1002));
+}
+
+TEST(SensorTiming, PendingScanQueueIsBoundedExpiresAndResets)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    for (std::uint64_t stamp = 1; stamp <= 33; ++stamp)
+        EXPECT_TRUE(scans.Push(stamp, static_cast<int>(stamp), 0, stamp));
+    EXPECT_EQ(scans.Size(), 32U);
+    EXPECT_EQ(scans.PopReady().stamp, 2U);
+    scans.DiscardExpired(100, 60);
+    EXPECT_EQ(scans.Size(), 0U);
+    EXPECT_TRUE(scans.Push(101, 7, 0, 100));
+    scans.Clear();
+    EXPECT_EQ(scans.Size(), 0U);
+    EXPECT_TRUE(scans.Push(1, 8, 0, 101));
+    scans.DiscardExpired(102, 1);
+    EXPECT_EQ(scans.Size(), 1U);
+}
