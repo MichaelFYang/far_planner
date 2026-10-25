@@ -86,6 +86,8 @@ See [the algorithm and refactor guide](docs/algorithm.md) for the data flow, TF/
 
 The workspace contains six ROS 2 packages under `src/`: the core `far_planner`, `graph_decoder`, `boundary_handler`, `visibility_graph_msg`, and two RViz plugins. Each package owns its CMake configuration and dependency manifest. See [AGENTS.md](AGENTS.md) for contributor conventions.
 
+The ROS 2 packages require CMake 3.16 or newer.
+
 After building and sourcing `install/setup.bash`, run the registered checks:
 
 ```sh
