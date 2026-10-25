@@ -175,6 +175,7 @@ void FARMaster::Loop() {
     /* Process callback functions */
     ros::spinOnce();
     this->CheckClockEpoch();
+    if (pending_scans_.Size() != 0) this->ProcessPendingScans();
     if (!this->PreconditionCheck()) {
       loop_rate.sleep();
       continue;
@@ -633,43 +634,60 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
   this->ProcessPendingScans();
 }
 
-bool FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
-                             const PointCloudPtr& cloudOut, Point3D* sensor_origin) {
+FARMaster::CloudProcessResult FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
+                                                       const PointCloudPtr& cloudOut, Point3D* sensor_origin) {
   if (!this->ValidMeasurementTime(MeasurementStamp(pc->header.stamp))) {
     ROS_WARN_THROTTLE(1.0, "Dropping point cloud without a valid measurement timestamp");
-    return false;
+    return CloudProcessResult::INVALID;
   }
+  if (FARUtil::NormalizeFrameID(pc->header.frame_id).empty()) return CloudProcessResult::INVALID;
   PointCloudPtr candidate(new PointCloud);
   pcl::fromROSMsg(*pc, *candidate);
   FARUtil::RemoveNanInfPoints(candidate);
-  if (candidate->empty()) return false;
+  if (candidate->empty()) return CloudProcessResult::INVALID;
   FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
   try {
     FARUtil::TransformPCLFrame(pc->header.frame_id, master_params_.world_frame,
                               tf_listener_, candidate, pc->header.stamp, sensor_origin);
   } catch (const tf::TransformException& ex) {
-    ROS_WARN_THROTTLE(1.0, "Dropping point cloud: %s", ex.what());
-    return false;
+    ROS_WARN_THROTTLE(1.0, "Point cloud TF unavailable: %s", ex.what());
+    return CloudProcessResult::TF_UNAVAILABLE;
   }
   cloudOut->swap(*candidate);
-  return true;
+  return CloudProcessResult::ACCEPTED;
 }
 
 void FARMaster::ProcessPendingScans() {
   const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
-  pending_scans_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  const auto expired = pending_scans_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  if (expired != 0) ROS_WARN_THROTTLE(1.0, "Expired %zu scans waiting for odometry or TF", expired);
   while (pending_scans_.HasReady(odometry_history_.LatestStamp())) {
-    const auto scan = pending_scans_.PopReady();
+    const auto& scan = pending_scans_.Front();
     far_planner::OdometryHistory::Position scan_position;
     if (scan.stamp <= last_scan_stamp_ ||
         !odometry_history_.PositionAt(scan.stamp, sensor_time_tolerance_ns_, scan_position)) {
       ROS_WARN_THROTTLE(1.0, "Dropping scan without nearby odometry or with an old timestamp");
+      pending_scans_.PopReady();
       continue;
     }
+    const std::string source = FARUtil::NormalizeFrameID(scan.message->header.frame_id);
+    if (source.empty()) {
+      pending_scans_.PopReady();
+      continue;
+    }
+    if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
+        !tf_listener_->canTransform(master_params_.world_frame, source,
+                                    scan.message->header.stamp)) break;
     Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
-    if (!this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, &sensor_origin)) continue;
+    const auto result = this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, &sensor_origin);
+    if (result == CloudProcessResult::TF_UNAVAILABLE) break;
+    if (result == CloudProcessResult::INVALID) {
+      pending_scans_.PopReady();
+      continue;
+    }
     scan_handler_.UpdateRobotPosition(sensor_origin);
     last_scan_stamp_ = scan.stamp;
+    pending_scans_.PopReady();
   }
 }
 
@@ -690,7 +708,7 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
   if (master_params_.is_static_env) return;
   const auto stamp = MeasurementStamp(pc->header.stamp);
   if (stamp <= last_local_terrain_stamp_) return;
-  if (!this->ProcessCloud(pc, local_terrain_ptr_)) return;
+  if (this->ProcessCloud(pc, local_terrain_ptr_) != CloudProcessResult::ACCEPTED) return;
   last_local_terrain_stamp_ = stamp;
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
 }
@@ -700,7 +718,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   if (!is_odom_init_) return;
   const auto stamp = MeasurementStamp(pc->header.stamp);
   if (!this->ValidMeasurementTime(stamp) || stamp <= last_terrain_stamp_) return;
-  if (!is_stop_update_ && !this->ProcessCloud(pc, temp_cloud_ptr_)) return;
+  if (!is_stop_update_ && this->ProcessCloud(pc, temp_cloud_ptr_) != CloudProcessResult::ACCEPTED) return;
   last_terrain_stamp_ = stamp;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);

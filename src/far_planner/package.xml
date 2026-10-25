@@ -26,4 +26,7 @@
   <exec_depend>teleop_rviz_plugin</exec_depend>
   <exec_depend>rviz</exec_depend>
   <test_depend>gtest</test_depend>
+  <test_depend>rostest</test_depend>
+  <test_depend>rospy</test_depend>
+  <test_depend>tf2_msgs</test_depend>
 </package>
