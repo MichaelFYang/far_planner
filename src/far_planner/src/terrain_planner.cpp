@@ -143,19 +143,18 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
     searched_cells_.push_back(start_node_ptr->id);
     using SearchEntry = std::pair<float, TerrainNodePtr>;
     std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> open_queue;
-    std::unordered_set<int> close_set;
     start_node_ptr->fscore = this->EulerCost(start_node_ptr, end_node_ptr);
     open_queue.push({start_node_ptr->fscore, start_node_ptr});
     while (!open_queue.empty()) {
         const auto entry = open_queue.top();
         open_queue.pop();
         const TerrainNodePtr current = entry.second;
-        if (entry.first != current->fscore || close_set.count(current->id)) continue;
+        if (entry.first != current->fscore || current->is_closed) continue;
         if (current == end_node_ptr) {
             this->ExtractPath(end_node_ptr, path);
             break;
         }
-        close_set.insert(current->id);
+        current->is_closed = true;
         const Eigen::Vector3i current_sub = terrain_grids_->Ind2Sub(current->id);
         for (int i=0; i<8; i++) {
             Eigen::Vector3i csub = current_sub;
@@ -170,7 +169,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
                 if (terrain_grids_->GetCell(side_sub)->is_occupied) continue;
             }
             const TerrainNodePtr neighbor = terrain_grids_->GetCell(terrain_grids_->Sub2Ind(csub));
-            if (close_set.count(neighbor->id) || (neighbor->is_occupied && neighbor != end_node_ptr) || !InCylinder(neighbor)) continue;
+            if (neighbor->is_closed || (neighbor->is_occupied && neighbor != end_node_ptr) || !InCylinder(neighbor)) continue;
             const float temp_gscore = current->gscore + this->EulerCost(current, neighbor);
             if (temp_gscore < neighbor->gscore) {
                 if (neighbor->gscore == FARUtil::kINF) searched_cells_.push_back(neighbor->id);

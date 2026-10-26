@@ -111,6 +111,19 @@ Planner reset now clears the selected goal before dropping its pointer. Temporar
 
 Terrain A* now rejects a diagonal step if either adjacent cardinal cell is occupied. A two-obstacle corner regression failed on the old path, and the updated obstacle-grid route has an independently checked shortest length of 6 m under the corner-safe rule.
 
+Terrain search now stores closed membership on each existing grid node, eliminating the per-query hash table. Every closed node has already entered `searched_cells_`, so the next query resets its flag together with its score and parent; unsuccessful and out-of-range queries also start with that reset. The deterministic reference test compares reachability and shortest cost for 320 queries across 80 changing obstacle grids and alternating map centers, including same-cell queries and occupied endpoints.
+
+The optional `terrain_search_benchmark` target links the actual planner core. From a built, sourced workspace, run `cmake --build build/far_planner --target terrain_search_benchmark -j2` and `build/far_planner/terrain_search_benchmark 200` (ROS 1: `catkin_make terrain_search_benchmark`, then `devel/lib/far_planner/terrain_search_benchmark 200`, with a running ROS master). It reports query batches on an 80² grid, including search reset and path-length accounting; map projection, grid construction, ROS startup, and four warmup queries are untimed. Twenty alternating Release runs of the baseline core (`b4e0e6f`) and this change on native Jazzy, pinned to CPU 2 of an i9-12900K, produced these median/p95 batch times for 200 queries:
+
+| Scenario | Hash set median/p95 (ms) | Node flag median/p95 (ms) |
+| --- | --- | --- |
+| Nearby endpoint | 0.164 / 0.170 | 0.160 / 0.172 |
+| Clear corridor | 2.553 / 2.589 | 2.256 / 2.308 |
+| Detour around a wall | 43.217 / 43.551 | 33.243 / 33.490 |
+| Blocked corridor | 40.653 / 41.312 | 31.334 / 34.514 |
+
+Every batch matched in acceptance, total path length, and returned point count. Nearby-query timing changed little; these synthetic cases measure terrain queries rather than complete planner latency. The heap, heuristic, neighbor order, occupied-endpoint rule, and diagonal corner checks are unchanged.
+
 ## Graph lifecycle stage
 
 `EraseNodeFromStack` now uses stable remove-and-erase for all matching pointers, including the first element and adjacent copies. Merged-node removal uses the iterator returned by `erase`, so removing the first or consecutive nodes does not decrement past `begin()`.

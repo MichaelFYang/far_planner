@@ -75,6 +75,8 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 )
 
 if(BUILD_TESTING)
+  add_executable(terrain_search_benchmark EXCLUDE_FROM_ALL ../../benchmarks/terrain_search.cpp)
+  target_link_libraries(terrain_search_benchmark far_planner_core)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_viewpoint_extension.cpp test/test_overlap_cloud.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp test/test_contour_detector.cpp test/test_ros_context_cleanup.cpp)

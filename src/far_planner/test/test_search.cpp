@@ -367,6 +367,98 @@ TEST(GraphSearch, MatchesIndependentShortestPathsForGeneralAndCoveredGraph)
     }
 }
 
+TEST(TerrainSearch, MatchesIndependentShortestPathsAcrossChangingGrids)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "terrain_reference_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("terrain_reference_test");
+#endif
+    const LocalPlanRangeGuard range(0.0f);
+    TerrainPlannerParams params{};
+    params.world_frame = "map";
+    params.radius = 4.5f;
+    params.voxel_size = 1.0f;
+    params.inflate_size = 0;
+    TerrainPlanner planner;
+    planner.Init(node, params);
+    constexpr int width = 9;
+    constexpr int cells = width * width;
+    const auto position = [](int index) {
+        return Point3D(index % width - 4.0f, index / width - 4.0f, 0.0f);
+    };
+    std::mt19937 generator(1618033);
+    for (int iteration = 0; iteration < 80; ++iteration) {
+        const Point3D offset(iteration % 2 ? 10.0f : 0.0f, -3.0f, 0.0f);
+        planner.UpdateCenterNode(Node(105, offset.x, offset.y));
+        std::vector<bool> occupied(cells, false);
+        PointCloudPtr obstacles(new PointCloud);
+        for (int i = 0; i < cells; ++i) {
+            if (generator() % 4 != 0) continue;
+            occupied[i] = true;
+            obstacles->push_back(FARUtil::Point3DToPCLPoint(position(i) + offset));
+        }
+        planner.SetLocalTerrainObsCloud(obstacles, iteration + 1);
+        for (int query = 0; query < 4; ++query) {
+            const int start = generator() % cells;
+            const int goal = query == 0 ? start : generator() % cells;
+            const Point3D from = position(start);
+            const Point3D to = position(goal);
+            const Point3D axis = (to - from).normalize();
+            const float extent = (to - from).norm();
+            std::vector<bool> allowed(cells, false);
+            for (int i = 0; i < cells; ++i) {
+                const Point3D delta = position(i) - from;
+                const float along = delta * axis;
+                allowed[i] = along >= -FARUtil::kNavClearDist &&
+                    along <= extent + FARUtil::kNavClearDist &&
+                    (delta - axis * along).norm() <= params.radius;
+            }
+            // O(V^2) Dijkstra reference; no heap or persistent search flags.
+            std::vector<float> distance(cells, FARUtil::kINF);
+            std::vector<bool> visited(cells, false);
+            distance[start] = 0.0f;
+            for (int step = 0; step < cells; ++step) {
+                int current = -1;
+                for (int i = 0; i < cells; ++i) {
+                    if (!visited[i] && (current < 0 || distance[i] < distance[current])) current = i;
+                }
+                if (current < 0 || distance[current] == FARUtil::kINF || current == goal) break;
+                visited[current] = true;
+                const int x = current % width, y = current / width;
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const int nx = x + dx, ny = y + dy;
+                        if ((dx == 0 && dy == 0) || nx < 0 || nx >= width || ny < 0 || ny >= width) continue;
+                        const int neighbor = nx + width * ny;
+                        if (!allowed[neighbor] || (occupied[neighbor] && neighbor != goal)) continue;
+                        if (dx && dy && (occupied[nx + width * y] || occupied[x + width * ny])) continue;
+                        distance[neighbor] = std::min(distance[neighbor], distance[current] +
+                            (dx && dy ? std::sqrt(2.0f) : 1.0f));
+                    }
+                }
+            }
+            PointStack path;
+            const bool found = planner.PlanPathFromPToP(from + offset, to + offset, path);
+            ASSERT_EQ(found, distance[goal] != FARUtil::kINF) << iteration << ':' << query;
+            if (!found) {
+                EXPECT_TRUE(path.empty());
+                continue;
+            }
+            ASSERT_FALSE(path.empty());
+            EXPECT_TRUE(path.front() == from + offset);
+            EXPECT_TRUE(path.back() == to + offset);
+            float length = 0.0f;
+            for (std::size_t i = 1; i < path.size(); ++i) length += (path[i] - path[i - 1]).norm();
+            EXPECT_NEAR(length, distance[goal], 1e-4f) << iteration << ':' << query;
+        }
+    }
+}
+
 TEST(TerrainSearch, FindsShortestPathWithoutCuttingBlockedCorners)
 {
 #ifdef FAR_PLANNER_ROS1
