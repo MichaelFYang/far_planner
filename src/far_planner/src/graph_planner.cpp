@@ -426,33 +426,21 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
         const int C_IF = FARUtil::kObsInflate;
         for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-            for (int i = -C_IF; i <= C_IF; i++) {
-                for (int j = -C_IF; j <= C_IF; j++) {
-                    Eigen::Vector3i sub = c_sub;
-                    sub.x() += i, sub.y() += j, sub.z() = 0;
-                    if (free_terrain_grid_->InRange(sub)) {
-                        has_terrain_cell = true;
-                        const int ind = free_terrain_grid_->Sub2Ind(sub);
-                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
-                    }
-                }
-            }
+            c_sub.z() = 0;
+            free_terrain_grid_->ForEachXYCellInRadius(c_sub, C_IF, [&](int ind) {
+                has_terrain_cell = true;
+                free_terrain_grid_->GetCell(ind) |= OBS_BIT;
+            });
         }
         for (const auto& point : freeCloudIn->points) { // Set free cloud in free terrain grid
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-            for (int i = -1; i <= 1; i++) {
-                for (int j = -1; j <= 1; j++) {
-                    Eigen::Vector3i sub = c_sub;
-                    sub.x() += i, sub.y() += j, sub.z() = 0;
-                    if (free_terrain_grid_->InRange(sub)) {
-                        has_terrain_cell = true;
-                        const int ind = free_terrain_grid_->Sub2Ind(sub);
-                        auto& cell = free_terrain_grid_->GetCell(ind);
-                        cell |= FREE_BIT;
-                        if (cell == FREE_BIT) is_goal_in_freespace_ = true;
-                    }
-                }
-            }
+            c_sub.z() = 0;
+            free_terrain_grid_->ForEachXYCellInRadius(c_sub, 1, [&](int ind) {
+                has_terrain_cell = true;
+                auto& cell = free_terrain_grid_->GetCell(ind);
+                cell |= FREE_BIT;
+                if (cell == FREE_BIT) is_goal_in_freespace_ = true;
+            });
         }
     }
     if (!is_goal_in_freespace_ && !has_terrain_cell) { // fallback only without local terrain evidence

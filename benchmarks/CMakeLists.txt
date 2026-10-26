@@ -30,4 +30,8 @@ add_executable(goal_grid_search goal_grid_search.cpp)
 target_include_directories(goal_grid_search PRIVATE ../src/far_planner/include)
 target_link_libraries(goal_grid_search PRIVATE Eigen3::Eigen)
 
+add_executable(grid_inflation grid_inflation.cpp)
+target_include_directories(grid_inflation PRIVATE ../src/far_planner/include)
+target_link_libraries(grid_inflation PRIVATE Eigen3::Eigen)
+
 add_executable(contour_compaction contour_compaction.cpp)
