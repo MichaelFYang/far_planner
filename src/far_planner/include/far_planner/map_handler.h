@@ -192,15 +192,12 @@ private:
     static std::unordered_set<int> extend_obs_indices_;    // extended surrounding obs cloud grid indices stack
 
     std::unordered_set<int> visited_cell_indices_;
-    std::vector<int> util_obs_modified_list_;
-    std::vector<int> util_free_modified_list_;
-    std::vector<int> util_remove_check_list_;
     static std::vector<int> terrain_grid_occupy_list_;
     static std::vector<int> terrain_grid_traverse_list_;
 
     
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> world_free_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> world_obs_cloud_grid_;
     static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_;
  
 };

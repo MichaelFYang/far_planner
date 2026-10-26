@@ -22,6 +22,20 @@ TEST(GridStorage, RejectsInvalidDimensionsBeforeAllocating) {
                                      Eigen::Vector3d::Zero(), Eigen::Vector3d(1, 0, 1))), std::invalid_argument);
 }
 
+TEST(GridStorage, SparseCellsMaterializeOnlyWhenWritten) {
+    grid_ns::Grid<int, true> grid(Eigen::Vector3i(10000, 10000, 1), 0);
+    EXPECT_EQ(grid.GetCellNumber(), 100000000);
+    EXPECT_EQ(grid.MaterializedCellCount(), 0U);
+    EXPECT_EQ(grid.GetCellValue(99999999), 0);
+    EXPECT_EQ(grid.MaterializedCellCount(), 0U);
+    grid.GetCell(99999999) = 7;
+    EXPECT_EQ(grid.GetCellValue(99999999), 7);
+    EXPECT_EQ(grid.MaterializedCellCount(), 1U);
+    grid.EraseCell(99999999);
+    EXPECT_EQ(grid.MaterializedCellCount(), 0U);
+    EXPECT_EQ(grid.GetCellValue(99999999), 0);
+}
+
 namespace {
 
 struct RestoreMapParameters {
@@ -78,6 +92,9 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     map.RemoveObsCloudFromGrid(CloudAt(1.0f));
     EXPECT_EQ(CellSize(map, 1.0f, OBS_CLOUD), 0U);
     EXPECT_EQ(CellSize(map, 5.0f, OBS_CLOUD), 1U);
+    PointStack after_removal;
+    map.GetOccupancyCeilsCenters(after_removal);
+    EXPECT_EQ(after_removal.size(), 1U);
 
     map.UpdateObsCloudGrid(CloudAt(1.0f));
     map.RemoveObsCloudFromGrid(CloudAt(5.0f));
