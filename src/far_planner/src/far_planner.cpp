@@ -125,7 +125,9 @@ bool FARMaster::ValidMeasurementTime(std::uint64_t stamp) const {
 
 void FARMaster::CheckClockEpoch() {
   if (!clock_epoch_.Observe(static_cast<std::int64_t>(ros::Time::now().toNSec()))) return;
-  ROS_WARN("ROS time moved backwards: clearing sensor history, map, and graph");
+  ROS_WARN("ROS time moved backwards: clearing TF, sensor history, map, and graph");
+  // The ROS 1 listener clears on its next TF callback; a sensor can arrive first.
+  tf_listener_->clear();
   this->ResetEnvironmentAndGraph();
 }
 

@@ -86,7 +86,8 @@ if(CATKIN_ENABLE_TESTING)
     target_compile_definitions(test_frame_transforms PRIVATE FAR_PLANNER_ROS1)
     target_link_libraries(test_frame_transforms far_planner_core)
   endif()
-  catkin_install_python(PROGRAMS test/test_scan_tf_ros1.py
+  catkin_install_python(PROGRAMS test/test_scan_tf_ros1.py test/test_tf_epoch_ros1.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/test_scan_tf_ros1.test)
+  add_rostest(test/test_tf_epoch_ros1.test)
 endif()
