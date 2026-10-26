@@ -51,12 +51,15 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
 void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const PointCloudPtr& freeCloudIn) {
     if (!is_grids_init_ || scanCloudIn->empty()) return;
     // remove free scan points
-    PointCloudPtr copyObsScanCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud);
-    FARUtil::RemoveOverlapCloud(copyObsScanCloud, freeCloudIn, true);
+    PointCloudPtr obstacle_scan = scanCloudIn;
+    if (!freeCloudIn->empty()) {
+        obstacle_scan.reset(new PointCloud);
+        pcl::copyPointCloud(*scanCloudIn, *obstacle_scan);
+        FARUtil::RemoveOverlapCloud(obstacle_scan, freeCloudIn, true);
+    }
     const double max_distance = static_cast<double>(scan_params_.voxel_size) *
         (static_cast<double>(row_num_) + col_num_ + level_num_);
-    for (const auto& point : copyObsScanCloud->points) { // assign obstacle scan voxels
+    for (const auto& point : obstacle_scan->points) { // assign obstacle scan voxels
         const float r = pcl::euclideanDistance(point, center_p_);
         if (!std::isfinite(r) || static_cast<double>(r) > max_distance) continue;
         const int L = static_cast<int>(std::min<double>(
@@ -99,8 +102,8 @@ void ScanHandler::SetSurroundObsCloud(const PointCloudPtr& obsCloudIn, const boo
 }
 
 void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointCloudPtr& dyObsCloudOut) {
-    if (!is_grids_init_ || cloudIn->empty()) return;
     dyObsCloudOut->clear();
+    if (!is_grids_init_ || cloudIn->empty()) return;
     for (const auto& point : cloudIn->points) {
         Eigen::Vector3i sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!voxel_grids_->InRange(sub)) continue;
@@ -168,9 +171,9 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
 }
 
 void ScanHandler::GridVisualCloud(const PointCloudPtr& cloudOut, const GridStatus& type) {
+    cloudOut->clear();
     if (!is_grids_init_) return;
     const int N = voxel_grids_->GetCellNumber();
-    cloudOut->clear();
     char RType;
     switch (type) {
         case GridStatus::SCAN:
