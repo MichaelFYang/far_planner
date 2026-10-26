@@ -18,6 +18,8 @@ void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlanner
     tp_params_ = params;
     is_grids_init_ = false;
     occupied_cells_.clear();
+    local_obs_cloud_.reset();
+    local_terrain_revision_ = 0;
     needs_projection_ = true;
     last_projected_revision_ = 0;
     row_num_ = far_planner::CheckedDimension(
@@ -48,9 +50,14 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
     this->ResetGridsPositions();
     this->ResetGridsOccupancy();
     needs_projection_ = true;
+    if (local_obs_cloud_) {
+        this->SetLocalTerrainObsCloud(local_obs_cloud_, local_terrain_revision_);
+    }
 }
 
 void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, std::uint64_t revision) {
+    local_obs_cloud_ = obsCloudIn;
+    local_terrain_revision_ = revision;
     if (!is_grids_init_) return;
     if (!needs_projection_ && revision == last_projected_revision_) {
         this->GridVisualCloud();

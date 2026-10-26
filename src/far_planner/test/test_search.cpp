@@ -225,8 +225,11 @@ TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
     planner.SetLocalTerrainObsCloud(obstacles, 3);
     EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
     planner.UpdateCenterNode(Node(101, 1.0f, 1.0f));
-    EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
+    EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
+    obstacles->clear();
     planner.SetLocalTerrainObsCloud(obstacles, 3);
     EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
+    planner.SetLocalTerrainObsCloud(obstacles, 4);
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
 }
 }  // namespace
