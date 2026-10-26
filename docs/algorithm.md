@@ -139,6 +139,8 @@ Graph serialization moves each completed node into the outgoing message instead 
 
 The graph decoder preserves all three coordinates of both surface directions when receiving and republishing a graph. The Z coordinate carries the `-1` pillar sentinel and may also contain a nonzero direction component. A live message round-trip test checks both cases.
 
+Before encoding a graph snapshot, the planner selects the nodes it will publish. It emits connections only when their target is in that selection. This keeps all four edge lists consistent with the message's node set, even when a neighbor lacks regular edges, is unfinished, is excluded by type, or is absent from the supplied graph. A graph-message regression checks that the receiver accepts the result.
+
 ## Scan sensor origin stage
 
 When a scan arrives in a sensor frame, the cloud transform also supplies the sensor's world-frame translation at that same scan timestamp. Scan ray tracing starts from that translation, accounting for the scanner's offset from the odometry body. A scan already in the world frame still uses the interpolated odometry position because its original sensor frame is unavailable. Failed TF leaves both the accepted cloud and ray origin unchanged. Moving-TF regression tests cover the returned origin, interpolation, identity fallback, failure, and rotation while preserving intensity and cloud metadata.
