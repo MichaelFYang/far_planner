@@ -16,7 +16,9 @@
 TEST(InputParser, ParsesBoundaryAndTrajectory)
 {
     std::istringstream boundary("ply\nformat ascii 1.0\nelement vertex 2\n"
-                                "property float x\nend_header\n1 2 3 4\n5 6 7 16777217\n");
+                                "property float x\nproperty float y\nproperty float z\n"
+                                "property float poly_index\nend_header\n"
+                                "1 2 3 4\n5 6 7 16777217\n");
     const auto vertices = boundary_handler::ReadAsciiPly(boundary);
     ASSERT_EQ(vertices.size(), 2U);
     EXPECT_FLOAT_EQ(vertices[0].x, 1.0f);
@@ -26,6 +28,20 @@ TEST(InputParser, ParsesBoundaryAndTrajectory)
     EXPECT_EQ(point, (std::array<float, 3>{{0.0f, 1.0f, 2.0f}}));
 }
 
+TEST(InputParser, UsesNamedVertexColumnsInAnyOrder)
+{
+    std::istringstream boundary("ply\nformat ascii 1.0\nelement vertex 1\n"
+                                "property float poly_index\nproperty uchar red\n"
+                                "property float z\nproperty float x\nproperty float y\n"
+                                "end_header\n7 255 3 1 2\n");
+    const auto vertices = boundary_handler::ReadAsciiPly(boundary);
+    ASSERT_EQ(vertices.size(), 1U);
+    EXPECT_FLOAT_EQ(vertices[0].x, 1.0f);
+    EXPECT_FLOAT_EQ(vertices[0].y, 2.0f);
+    EXPECT_FLOAT_EQ(vertices[0].z, 3.0f);
+    EXPECT_EQ(vertices[0].polygon_index, 7);
+}
+
 TEST(InputParser, RejectsMissingOrMalformedHeader)
 {
     for (const char* content : {
@@ -33,7 +49,13 @@ TEST(InputParser, RejectsMissingOrMalformedHeader)
              "ply\nformat ascii 1.0\nelement vertex -1\nend_header\n",
              "ply\nformat binary_little_endian 1.0\nelement vertex 1\nend_header\n",
              "ply\nformat ascii 1.0\nelement vertex 1\n1 2 3 4\n",
-             "ply\nformat ascii 1.0\nelement vertex 1000001\nend_header\n"}) {
+             "ply\nformat ascii 1.0\nelement vertex 1000001\nend_header\n",
+             "ply\nformat ascii 1.0\nelement face 1\nelement vertex 1\nend_header\n",
+             "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\n"
+             "property float y\nproperty float z\nend_header\n1 2 3\n",
+             "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\n"
+             "property float x\nproperty float y\nproperty float z\n"
+             "property float poly_index\nend_header\n1 2 3 4 5\n"}) {
         std::istringstream input(content);
         EXPECT_THROW(boundary_handler::ReadAsciiPly(input), std::runtime_error);
     }
@@ -43,11 +65,14 @@ TEST(InputParser, RejectsTruncatedAndNonfiniteCoordinates)
 {
     for (const char* row : {"1 2 3", "1 2 nan 4", "1 inf 3 4", "1 2 3 2147483648",
                             "1 2 3 1.5", "1 2 3 -1.5"}) {
-        std::istringstream input(std::string("ply\nformat ascii 1.0\nelement vertex 1\nend_header\n") + row);
+        std::istringstream input(std::string("ply\nformat ascii 1.0\nelement vertex 1\n"
+                                             "property float x\nproperty float y\n"
+                                             "property float z\nproperty float poly_index\nend_header\n") + row);
         EXPECT_THROW(boundary_handler::ReadAsciiPly(input), std::runtime_error);
     }
-    std::istringstream long_header(std::string("ply\nformat ascii 1.0\n") +
-        std::string(5000, 'X') + "\nelement vertex 1\nend_header\n1 2 3 4\n");
+    std::istringstream long_header(std::string("ply\nformat ascii 1.0\nelement vertex 1\n") +
+        std::string(5000, 'X') + "\nproperty float x\nproperty float y\n"
+        "property float z\nproperty float poly_index\nend_header\n1 2 3 4\n");
     EXPECT_THROW(boundary_handler::ReadAsciiPly(long_header), std::runtime_error);
     for (const char* content : {"1", "1 2", "1 2 nan", "1 inf 3"}) {
         std::istringstream input(content);
