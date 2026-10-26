@@ -124,7 +124,7 @@ private:
     PointStack traj_;
 
 
-    void LoadParmas();
+    void LoadParams();
 
     void ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& graphOut);
 
