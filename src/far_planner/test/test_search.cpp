@@ -404,6 +404,50 @@ TEST(TerrainSearch, PathCannotCutBetweenTwoBlockedCornerCells)
     }
 }
 
+TEST(TerrainSearch, InflatedEdgeObstacleIgnoresDistantCloudPoints)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "terrain_edge_inflation_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("terrain_edge_inflation_test");
+#endif
+    const LocalPlanRangeGuard range(0.0f);
+    TerrainPlannerParams params{};
+    params.world_frame = "map";
+    params.radius = 2.5f;
+    params.voxel_size = 1.0f;
+    params.inflate_size = 1;
+    TerrainPlanner planner;
+    planner.Init(node, params);
+    planner.UpdateCenterNode(Node(104, 0.0f, 0.0f));
+
+    PointCloudPtr obstacles(new PointCloud);
+    PCLPoint point{};
+    point.x = -2.0f;
+    point.y = -2.0f;
+    obstacles->push_back(point);
+    point.x = point.y = 1e30f;
+    obstacles->push_back(point);
+    point.x = point.y = -1e30f;
+    obstacles->push_back(point);
+    planner.SetLocalTerrainObsCloud(obstacles, 1);
+    for (float x : {-2.0f, -1.0f}) {
+        for (float y : {-2.0f, -1.0f}) {
+            EXPECT_TRUE(planner.IsPointOccupy(Point3D(x, y, 0.0f)));
+        }
+    }
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
+
+    obstacles->erase(obstacles->begin());
+    planner.SetLocalTerrainObsCloud(obstacles, 2);
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(-2.0f, -2.0f, 0.0f)));
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(-1.0f, -1.0f, 0.0f)));
+}
+
 TEST(TerrainSearch, RepeatedQueriesClearPriorSearchState)
 {
 #ifdef FAR_PLANNER_ROS1

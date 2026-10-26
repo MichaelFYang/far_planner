@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -42,6 +43,36 @@ TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
         const auto sub = grid.Ind2Sub(index);
         EXPECT_EQ(grid.Sub2Ind(sub), index);
     }
+}
+
+TEST(GridStorage, XYInflationClipsToTheGridAndPreservesCellOrder) {
+    grid_ns::Grid<char> grid(Eigen::Vector3i(5, 4, 1), 0);
+    for (int x = -3; x <= 7; x += 2) {
+        for (int y = -3; y <= 6; y += 3) {
+            for (int radius = 0; radius <= 3; ++radius) {
+                std::vector<int> expected;
+                std::vector<int> actual;
+                for (int ix = 0; ix < 5; ++ix) {
+                    for (int iy = 0; iy < 4; ++iy) {
+                        if (std::abs(ix - x) <= radius && std::abs(iy - y) <= radius) {
+                            expected.push_back(grid.Sub2Ind(ix, iy, 0));
+                        }
+                    }
+                }
+                grid.ForEachXYCellInRadius(Eigen::Vector3i(x, y, 0), radius,
+                    [&](int index) { actual.push_back(index); });
+                EXPECT_EQ(actual, expected) << "center=" << x << "," << y << " radius=" << radius;
+            }
+        }
+    }
+    std::vector<int> visited;
+    for (int x : {std::numeric_limits<int>::min(), std::numeric_limits<int>::max()}) {
+        grid.ForEachXYCellInRadius(Eigen::Vector3i(x, 1, 0), 3,
+            [&](int index) { visited.push_back(index); });
+    }
+    grid.ForEachXYCellInRadius(Eigen::Vector3i(2, 2, 1), 1,
+        [&](int index) { visited.push_back(index); });
+    EXPECT_TRUE(visited.empty());
 }
 
 TEST(GridStorage, RejectsInvalidDimensionsBeforeAllocating) {

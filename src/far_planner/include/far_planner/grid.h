@@ -19,6 +19,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <unordered_map>
@@ -209,6 +210,24 @@ public:
   int Pos2Ind(const Eigen::Vector3d& pos) const
   {
     return Sub2Ind(Pos2Sub(pos));
+  }
+
+  // Visit only cells inside the grid, even when the center is far outside it.
+  template <typename Visitor>
+  void ForEachXYCellInRadius(const Eigen::Vector3i& center, int radius, Visitor&& visit) const
+  {
+    if (radius < 0 || center.z() < 0 || center.z() >= size_.z()) return;
+    const auto first_x = std::max<std::int64_t>(0, static_cast<std::int64_t>(center.x()) - radius);
+    const auto last_x = std::min<std::int64_t>(size_.x() - 1,
+                                               static_cast<std::int64_t>(center.x()) + radius);
+    const auto first_y = std::max<std::int64_t>(0, static_cast<std::int64_t>(center.y()) - radius);
+    const auto last_y = std::min<std::int64_t>(size_.y() - 1,
+                                               static_cast<std::int64_t>(center.y()) + radius);
+    for (auto x = first_x; x <= last_x; ++x) {
+      for (auto y = first_y; y <= last_y; ++y) {
+        visit(Sub2Ind(static_cast<int>(x), static_cast<int>(y), center.z()));
+      }
+    }
   }
 
   _T& GetCell(int x, int y, int z)
