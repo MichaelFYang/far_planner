@@ -170,26 +170,24 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
 }
 
 void ContourDetector::TopoFilterContours(std::vector<CVPointStack>& contoursInOut) {
-    std::unordered_set<int> remove_idxs;
+    std::vector<unsigned char> remove(contoursInOut.size(), 0);
     for (std::size_t i=0; i<contoursInOut.size(); i++) {
-        if (remove_idxs.find(i) != remove_idxs.end()) continue;
+        if (remove[i]) continue;
         const auto& poly = contoursInOut[i];
         if (poly.size() < 3) {
-            remove_idxs.insert(i);
+            remove[i] = 1;
         } else if (!FARUtil::PointInsideAPoly(poly, free_odom_resized_)) {
-            InternalContoursIdxs(refined_hierarchy_, i, remove_idxs);
+            InternalContoursIdxs(refined_hierarchy_, i, remove);
         }
     }
-    if (!remove_idxs.empty()) {
-        // Keep hierarchy indices valid until every descendant has been marked.
-        std::size_t kept = 0;
-        for (std::size_t i=0; i<contoursInOut.size(); ++i) {
-            if (remove_idxs.count(i) != 0) continue;
-            if (kept != i) contoursInOut[kept] = std::move(contoursInOut[i]);
-            ++kept;
-        }
-        contoursInOut.resize(kept);
+    // Keep hierarchy indices valid until every descendant has been marked.
+    std::size_t kept = 0;
+    for (std::size_t i=0; i<contoursInOut.size(); ++i) {
+        if (remove[i]) continue;
+        if (kept != i) contoursInOut[kept] = std::move(contoursInOut[i]);
+        ++kept;
     }
+    contoursInOut.resize(kept);
 }
 
 

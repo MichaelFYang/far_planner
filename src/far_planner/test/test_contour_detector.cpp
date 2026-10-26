@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -12,12 +12,21 @@
 
 class ContourDetectorTestAccess {
 public:
-    static std::unordered_set<int> CollectHierarchy(const std::vector<cv::Vec4i>& hierarchy,
-                                                    int first,
-                                                    std::unordered_set<int> indices = {}) {
+    static std::vector<unsigned char> CollectHierarchy(const std::vector<cv::Vec4i>& hierarchy,
+                                                       int first,
+                                                       std::vector<unsigned char> remove = {}) {
         ContourDetector detector;
-        detector.SameAndLowLevelIdxs(hierarchy, first, indices);
-        return indices;
+        if (remove.empty()) remove.resize(hierarchy.size(), 0);
+        detector.SameAndLowLevelIdxs(hierarchy, first, remove);
+        return remove;
+    }
+
+    static void FilterContours(std::vector<CVPointStack>& contours,
+                               const std::vector<cv::Vec4i>& hierarchy) {
+        ContourDetector detector;
+        detector.free_odom_resized_ = cv::Point2f(0.0f, 0.0f);
+        detector.refined_hierarchy_ = hierarchy;
+        detector.TopoFilterContours(contours);
     }
 
     static std::size_t CollapseWallRun(std::size_t count) {
@@ -45,8 +54,8 @@ TEST(ContourDetector, TraversesDeepHierarchyAndWallRunWithoutRecursion) {
     std::vector<cv::Vec4i> hierarchy(depth, cv::Vec4i(-1, -1, -1, -1));
     for (int i = 0; i + 1 < depth; ++i) hierarchy[i][2] = i + 1;
     const auto descendants = ContourDetectorTestAccess::CollectHierarchy(hierarchy, 0);
-    EXPECT_EQ(descendants.size(), static_cast<std::size_t>(depth));
-    EXPECT_EQ(descendants.count(depth - 1), 1U);
+    EXPECT_EQ(std::count(descendants.begin(), descendants.end(), 1), depth);
+    EXPECT_EQ(descendants.back(), 1U);
     EXPECT_EQ(ContourDetectorTestAccess::CollapseWallRun(depth), 1U);
     EXPECT_FALSE(ContourDetectorTestAccess::DegenerateWallVertex());
 
@@ -54,9 +63,24 @@ TEST(ContourDetector, TraversesDeepHierarchyAndWallRunWithoutRecursion) {
     siblings[1][0] = 2;
     siblings[2][2] = 3;
     const auto branch = ContourDetectorTestAccess::CollectHierarchy(siblings, 1);
-    EXPECT_EQ(branch, (std::unordered_set<int>{1, 2, 3}));
-    const auto premarked = ContourDetectorTestAccess::CollectHierarchy(siblings, 2, {2});
-    EXPECT_EQ(premarked, (std::unordered_set<int>{2, 3}));
+    EXPECT_EQ(branch, (std::vector<unsigned char>{0, 1, 1, 1}));
+    const auto premarked = ContourDetectorTestAccess::CollectHierarchy(siblings, 2, {0, 0, 1, 0});
+    EXPECT_EQ(premarked, (std::vector<unsigned char>{0, 0, 1, 1}));
+}
+
+TEST(ContourDetector, KeepsParentAndRemovesMarkedChildrenInOriginalOrder) {
+    const CVPointStack outer{{-10.0f, -10.0f}, {10.0f, -10.0f},
+                             {10.0f, 10.0f}, {-10.0f, 10.0f}};
+    const CVPointStack outside{{2.0f, 2.0f}, {3.0f, 2.0f}, {2.0f, 3.0f}};
+    const CVPointStack child{{2.2f, 2.2f}, {2.4f, 2.2f}, {2.2f, 2.4f}};
+    std::vector<CVPointStack> contours{outer, outside, child, {{1.0f, 1.0f}}};
+    std::vector<cv::Vec4i> hierarchy(4, cv::Vec4i(-1, -1, -1, -1));
+    hierarchy[0][2] = 1;
+    hierarchy[1][2] = 2;
+    ContourDetectorTestAccess::FilterContours(contours, hierarchy);
+    ASSERT_EQ(contours.size(), 2U);
+    EXPECT_EQ(contours[0], outer);
+    EXPECT_EQ(contours[1], outside);
 }
 
 TEST(ContourDetector, KeepsInflatedRectangleAfterContourFiltering)
