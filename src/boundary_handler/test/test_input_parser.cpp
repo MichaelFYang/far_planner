@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -11,7 +12,32 @@
 #include <vector>
 #include <unistd.h>
 #include "boundary_handler/input_parser.h"
+#include "boundary_handler/parameter_validation.h"
 #include <visibility_graph_msg/graph_file_writer.h>
+
+TEST(BoundaryConfiguration, ValidatesFrameAndGeometryParameters)
+{
+    EXPECT_EQ(boundary_handler::NormalizeWorldFrame("///map"), "map");
+    EXPECT_THROW(boundary_handler::NormalizeWorldFrame("/"), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::NormalizeWorldFrame("map frame"), std::invalid_argument);
+    EXPECT_NO_THROW(boundary_handler::ValidateGeometryParameters(1.0f, 0.0f));
+    EXPECT_THROW(boundary_handler::ValidateGeometryParameters(0.0f, 1.0f), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::ValidateGeometryParameters(-1.0f, 1.0f), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::ValidateGeometryParameters(1.0f, -1.0f), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::ValidateGeometryParameters(
+        std::numeric_limits<float>::infinity(), 1.0f), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::ValidateGeometryParameters(
+        1.0f, std::numeric_limits<float>::quiet_NaN()), std::invalid_argument);
+}
+
+TEST(BoundaryConfiguration, ResolvesFilesWithoutRequiringATrailingSlash)
+{
+    EXPECT_EQ(boundary_handler::ResolveFilePath("/tmp/data", "boundary.ply"), "/tmp/data/boundary.ply");
+    EXPECT_EQ(boundary_handler::ResolveFilePath("/tmp/data/", "boundary.ply"), "/tmp/data/boundary.ply");
+    EXPECT_EQ(boundary_handler::ResolveFilePath("/tmp/data", "/other/boundary.ply"), "/other/boundary.ply");
+    EXPECT_THROW(boundary_handler::ResolveFilePath("/tmp/data", ""), std::invalid_argument);
+    EXPECT_THROW(boundary_handler::ResolveFilePath("", "boundary.ply"), std::invalid_argument);
+}
 
 TEST(InputParser, ParsesBoundaryAndTrajectory)
 {
