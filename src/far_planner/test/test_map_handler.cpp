@@ -334,6 +334,22 @@ TEST(CloudUtilities, ClearingKdTreePreservesEmptyCloudAndCanRebuild) {
     EXPECT_EQ(FARUtil::PointInNewCounter(Point3D(0.0f, 0.0f, 0.0f), 1.0f), 0U);
 }
 
+TEST(CloudUtilities, ClusterFilterDoesNotRetainAnIndexForReplacedPoints) {
+    PointCloudPtr cloud(new PointCloud);
+    cloud->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, 0.0f)));
+    cloud->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.1f, 0.0f, 0.0f)));
+    cloud->push_back(FARUtil::Point3DToPCLPoint(Point3D(10.0f, 0.0f, 0.0f)));
+    FARUtil::ClusterFilterCloud(cloud, 0.5f, 1);
+    ASSERT_EQ(cloud->size(), 2U);
+    EXPECT_FLOAT_EQ(cloud->points[0].x, 0.0f);
+    EXPECT_FLOAT_EQ(cloud->points[1].x, 0.1f);
+    EXPECT_FALSE(FARUtil::kdtree_filter_cloud_->getInputCloud());
+
+    cloud->clear();
+    FARUtil::ClusterFilterCloud(cloud, 0.5f, 1);
+    EXPECT_FALSE(FARUtil::kdtree_filter_cloud_->getInputCloud());
+}
+
 TEST(CloudUtilities, DecayKeepsRecentPointsInOrder) {
 #ifdef FAR_PLANNER_ROS1
     ros::Time::init();
