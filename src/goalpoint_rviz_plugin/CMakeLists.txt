@@ -19,7 +19,6 @@ find_package(rviz_common REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -49,7 +48,6 @@ ament_target_dependencies(${PROJECT_NAME}
   "nav_msgs"
   "rviz_default_plugins"
   "rviz2"
-  "std_msgs"
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC Qt5::Widgets)
@@ -64,8 +62,7 @@ ament_export_dependencies(
   sensor_msgs
   nav_msgs
   rviz_default_plugins
-  rviz2
-  std_msgs)
+  rviz2)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
