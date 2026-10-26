@@ -372,15 +372,8 @@ void ContourGraph::EnclosePolygonsCheck() {
 void ContourGraph::CreateCTNode(const Point3D& pos, CTNodePtr& ctnode_ptr, const PolygonPtr& poly_ptr, const bool& is_pillar) {
     ctnode_ptr = std::make_shared<CTNode>();
     ctnode_ptr->position = pos;
-    ctnode_ptr->front = NULL;
-    ctnode_ptr->back  = NULL;
-    ctnode_ptr->is_global_match = false;
-    ctnode_ptr->is_contour_necessary = false;
-    ctnode_ptr->is_ground_associate = false;
-    ctnode_ptr->nav_node_id = 0;
     ctnode_ptr->poly_ptr = poly_ptr;
     ctnode_ptr->free_direct = is_pillar ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
-    ctnode_ptr->connect_nodes.clear();
 }
 
 void ContourGraph::CreatePolygon(const PointStack& poly_points, PolygonPtr& poly_ptr) {
