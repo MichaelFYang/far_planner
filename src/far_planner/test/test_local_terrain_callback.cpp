@@ -19,6 +19,12 @@ public:
         if (!rclcpp::ok()) rclcpp::init(0, nullptr);
 #endif
         FARMaster planner;
+#ifndef FAR_PLANNER_ROS1
+        // Match main(): stop the listener's ROS context before destroying the planner.
+        struct ShutdownBeforePlanner {
+            ~ShutdownBeforePlanner() { rclcpp::shutdown(); }
+        } shutdown_before_planner;
+#endif
         planner.master_params_.world_frame = "map";
         planner.sensor_time_tolerance_ns_ = 200000000ULL;
         planner.local_terrain_ptr_.reset(new PointCloud);
