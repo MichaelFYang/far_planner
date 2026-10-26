@@ -45,7 +45,6 @@
 /* PCL Library*/
 #include <pcl/pcl_macros.h>
 #include <pcl/point_cloud.h>
-#include <pcl/search/kdtree.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/common/transforms.h>
