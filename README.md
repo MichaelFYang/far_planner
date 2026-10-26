@@ -111,13 +111,13 @@ catkin_make run_tests
 catkin_test_results
 ```
 
-No dedicated behavioral test suite is registered yet. Validate planning and vehicle-control changes in the simulator, recording the environment and results.
+Registered checks cover measurement-time TF, sensor callbacks, graph/search behavior, and file parsing. The core C++ suite runs through rostest with its own ROS master; Python tests use the interpreter selected by catkin for Melodic or Noetic. Validate planning and vehicle-control changes in the simulator as well, recording the environment and results.
 
 Use `roslaunch far_planner far_planner.launch use_rviz:=false` for headless startup. The decoder subscribes to `/robot_vgraph` by default; select another topic with `roslaunch graph_decoder decoder.launch graph_topic:=/custom_graph`.
 
 Boundary inputs use ASCII PLY with a vertex element first and named scalar `x`, `y`, `z`, and `poly_index` properties in any order (up to one million vertices). Coordinates must be finite and polygon IDs must be integers. The trajectory file's first three values are finite `x y z`. Invalid files fail before the graph is saved. The boundary extractor accepts `folder_path:=/path/to/data` and `use_rviz:=false`. Direct `rosrun boundary_handler boundary_handler` uses the `far_planner/data` directory by default; pass `_graph_file:=/tmp/boundary_graph.vgh` to keep the sample graph untouched. Use a separate writable directory containing the boundary and trajectory inputs to avoid overwriting the sample graph; a trailing slash is optional. Individual file parameters may be absolute paths.
 
-TF and measurement-time regressions run with `catkin_make run_tests` and `catkin_test_results`. See the [TF and timestamp contract](docs/algorithm.md#tf-and-timestamp-contract) for input timing requirements and `/far_planner/sensor_time_tolerance`.
+See the [TF and timestamp contract](docs/algorithm.md#tf-and-timestamp-contract) for input timing requirements and `/far_planner/sensor_time_tolerance`.
 
 ## Configuration
 

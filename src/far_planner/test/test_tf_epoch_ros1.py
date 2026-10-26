@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # Copyright (c) 2026 Fan Yang and contributors
 # SPDX-License-Identifier: MIT
 """Ensure a clock rewind invalidates TF before the next TF message arrives."""
 
+import os
 import struct
 import threading
 import time
@@ -18,9 +19,13 @@ from std_msgs.msg import Header
 from tf2_msgs.msg import TFMessage
 
 
+# Melodic's Python 2 has POSIX elapsed time instead of time.monotonic.
+steady_time = getattr(time, 'monotonic', lambda: os.times()[4])
+
+
 def wait_for(predicate, timeout=8.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline and not rospy.is_shutdown():
+    deadline = steady_time() + timeout
+    while steady_time() < deadline and not rospy.is_shutdown():
         if predicate():
             return
         time.sleep(0.02)
@@ -32,20 +37,21 @@ class ClockDriver:
         self.publisher = rospy.Publisher('/clock', Clock, queue_size=10)
         self.lock = threading.Lock()
         self.base = 20.0
-        self.started = time.monotonic()
+        self.started = steady_time()
         self.stopped = threading.Event()
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target=self.run)
+        self.thread.daemon = True
         self.thread.start()
 
     def set_time(self, seconds):
         with self.lock:
             self.base = seconds
-            self.started = time.monotonic()
+            self.started = steady_time()
 
     def run(self):
         while not self.stopped.is_set() and not rospy.is_shutdown():
             with self.lock:
-                seconds = self.base + time.monotonic() - self.started
+                seconds = self.base + steady_time() - self.started
             self.publisher.publish(Clock(clock=rospy.Time.from_sec(seconds)))
             self.stopped.wait(0.02)
 

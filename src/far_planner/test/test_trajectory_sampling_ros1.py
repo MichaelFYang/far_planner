@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # Copyright (c) 2026 Fan Yang and contributors
 # SPDX-License-Identifier: MIT
 """Check free-terrain startup, trajectory sampling, and goal output in ROS 1."""
 
+import os
 import struct
 import time
 import unittest
@@ -16,9 +17,13 @@ from std_msgs.msg import Header
 from visibility_graph_msg.msg import Graph
 
 
+# Melodic's Python 2 has POSIX elapsed time instead of time.monotonic.
+steady_time = getattr(time, 'monotonic', lambda: os.times()[4])
+
+
 def wait_for(predicate, timeout=10.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline and not rospy.is_shutdown():
+    deadline = steady_time() + timeout
+    while steady_time() < deadline and not rospy.is_shutdown():
         if predicate():
             return
         time.sleep(0.02)

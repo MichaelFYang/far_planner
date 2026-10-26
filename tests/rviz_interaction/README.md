@@ -7,12 +7,14 @@ and ROS distribution.
 
 Prerequisites are CMake, Python 3, Xvfb (`xvfb` on Ubuntu), software OpenGL, and the
 ROS desktop development packages, including Qt Test. Tested SDKs are Humble,
-Jazzy, Lyrical (Qt6), and Noetic (Qt5).
+Jazzy, Lyrical (Qt6), Noetic, and Melodic (Qt5).
 
 ```sh
 # After sourcing ROS and install/setup.bash (devel/setup.bash on ROS 1):
-cmake -S tests/rviz_interaction -B /tmp/far-rviz-build
-cmake --build /tmp/far-rviz-build -j2
+far_ui_source="$(pwd)/tests/rviz_interaction"
+mkdir -p /tmp/far-rviz-build
+(cd /tmp/far-rviz-build && cmake "$far_ui_source")
+cmake --build /tmp/far-rviz-build -- -j2
 (cd /tmp/far-rviz-build && ctest --output-on-failure)
 ```
 
@@ -22,6 +24,9 @@ Alternatively, choose a results directory or a dedicated test display:
 python3 tests/rviz_interaction/run.py /tmp/far-rviz-build/rviz_interaction \
   --output /tmp/far-rviz-results
 ```
+
+These commands also work with Melodic's CMake 3.10. The standalone runner uses
+Python 3.6 or newer and does not import ROS Python bindings.
 
 The runner starts and stops its own Xvfb and, on ROS 1, its own local ROS master.
 ROS 2 uses localhost domain 227; keep that domain free of other nodes or choose

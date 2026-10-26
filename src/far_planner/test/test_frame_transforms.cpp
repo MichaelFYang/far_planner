@@ -214,11 +214,14 @@ protected:
 TEST_F(FrameTransforms, UsesCloudMeasurementTimeInsteadOfLatestTransform)
 {
     auto cloud = Cloud(10);
+    cloud->header.stamp = 123U;  // The explicit measurement stamp is authoritative.
+    cloud->header.seq = 42U;
     FARUtil::TransformPCLFrame("sensor", "map", Handle(), cloud, Stamp(10, 0));
     EXPECT_FLOAT_EQ(cloud->front().x, 3.0f);
     EXPECT_FLOAT_EQ(cloud->front().intensity, 7.0f);
     EXPECT_EQ(cloud->header.frame_id, "map");
     EXPECT_EQ(cloud->header.stamp, 10000000ULL);
+    EXPECT_EQ(cloud->header.seq, 42U);
 }
 
 TEST_F(FrameTransforms, RotatesCloudWithoutChangingOtherPointFields)

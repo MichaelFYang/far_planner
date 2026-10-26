@@ -1,6 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Exercise delayed scan and terrain inputs through the running ROS 1 planner."""
 
+import os
 import struct
 import time
 import unittest
@@ -15,9 +16,13 @@ from tf2_msgs.msg import TFMessage
 from visibility_graph_msg.msg import Graph
 
 
+# Melodic's Python 2 has POSIX elapsed time instead of time.monotonic.
+steady_time = getattr(time, 'monotonic', lambda: os.times()[4])
+
+
 def wait_for(predicate, timeout=12.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline and not rospy.is_shutdown():
+    deadline = steady_time() + timeout
+    while steady_time() < deadline and not rospy.is_shutdown():
         if predicate():
             return
         time.sleep(0.05)

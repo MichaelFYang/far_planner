@@ -59,7 +59,8 @@ TEST(GraphNodeIndex, FiltersNeighborsAndKeepsTheStrictRadiusBoundary) {
     const Point3D query(0.0f, 0.0f, 0.0f);
     EXPECT_EQ(index.Nearest(query, 0.5f, boundary), nearer);
     EXPECT_EQ(index.Nearest(query, 0.25f, boundary), nullptr);
-    EXPECT_EQ(index.Nearest(query, 1.0f, [](const NavNodePtr&) { return false; }), nullptr);
+    const auto reject_all = [](const NavNodePtr&) { return false; };
+    EXPECT_EQ(index.Nearest(query, 1.0f, reject_all), nullptr);
     EXPECT_EQ(index.Nearest(query, 1.0f), wrong_type);
 }
 

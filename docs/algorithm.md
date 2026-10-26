@@ -335,9 +335,22 @@ The indoor runs above cover one environment on native Jazzy; the garage case bel
 
 The optional [RViz interaction test](../tests/rviz_interaction/README.md) loads the installed Goalpoint and TeleopPanel plugins into RViz's real render panel and drives Qt mouse events. Its standalone CMake project is excluded from normal colcon builds. The runner owns a temporary X display and an isolated ROS environment, redirects ROS/Qt state to its artifact directory, and stops its child processes on failure or timeout. ROS 1 uses a separate local master; ROS 2 uses a dedicated localhost domain.
 
-The same test passes on Humble, Jazzy, Lyrical/Qt6, and Noetic/Qt5 with software OpenGL. Each run checks six goal/resume pairs, five file dialogs (including cancellation and an existing `.vgh` suffix), four toggle messages, graph reset, panel resume, joystick release/idle behavior, and a one-pixel widget. Missing TF and invalid goal topics reject the goal and recover after valid input. A moving-TF case produces a 2.25 m goal using odometry-time evidence; latest-TF lookup would incorrectly produce 6.25 m. All goal coordinates and joystick axes must be finite.
+The same test passes on Humble, Jazzy, Lyrical/Qt6, Noetic/Qt5, and Melodic/Qt5 with software OpenGL. Each run checks six goal/resume pairs, five file dialogs (including cancellation and an existing `.vgh` suffix), four toggle messages, graph reset, panel resume, joystick release/idle behavior, and a one-pixel widget. Missing TF and invalid goal topics reject the goal and recover after valid input. A moving-TF case produces a 2.25 m goal using odometry-time evidence; latest-TF lookup would incorrectly produce 6.25 m. All goal coordinates and joystick axes must be finite.
 
 These checks exercise a rendered RViz test window, rather than the stock application layout or hardware graphics. File dialogs verify published paths, without starting the graph decoder or writing a graph. They complement the planner replay and simulator runs. JSON results, ROS logs, and screenshots remain outside the repository. The runner also rejects missing/invalid final reports and nonzero exits; a timeout check verifies that a child ignoring SIGTERM is killed along with its process group.
+
+## ROS 1 SDK compatibility
+
+Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 265 checks, zero errors/failures/skips. The core C++ suite contains 110 tests; its new rostest wrapper accounts for the increase from the earlier 264-check total. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
+
+| SDK | GCC | CMake | PCL | Qt | ROS Python |
+| --- | --- | --- | --- | --- | --- |
+| Melodic / Ubuntu 18.04 | 7.5.0 | 3.10.2 | 1.8.1 | 5.9.5 | 2.7.17 |
+| Noetic / Ubuntu 20.04 | 9.4.0 | 3.16.3 | 1.10.0 | 5.12.8 | 3.8.10 |
+
+Melodic exposed two library differences: PCL 1.8 exports a whitespace-only compiler definition, and its cloud `swap()` leaves the destination header unchanged. The ROS 1 build discards empty options; successful cloud transforms now set the target frame and measurement stamp after swapping points. Existing moving/rotating-TF and frame-normalization regressions failed before the header fix. The measurement-time test also checks a stale input header stamp and preservation of its sequence number.
+
+The ROS 1 core suite now runs through `add_rostest_gtest`, which supplies the master required by its node handles. Python tests use catkin-rewritten shebangs and SDK-compatible standard-library APIs, following [ROS Python version rules](https://reps.openrobotics.org/rep-0151/). Python 2 test deadlines use POSIX elapsed time instead of the unavailable `time.monotonic`; no planner clock policy changes. The rendered RViz regression also passes on Melodic/Qt5.9. These are build, behavioral, and plugin checks; they do not add a Melodic closed-loop simulator run.
 
 ## Build dependency audit
 

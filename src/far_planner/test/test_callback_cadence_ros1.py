@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # Copyright (c) 2026 Fan Yang and contributors
 # SPDX-License-Identifier: MIT
 """Keep measurement-time poses available at the default graph update rate."""
 
+import os
 import struct
 import time
 import unittest
@@ -15,6 +16,10 @@ from std_msgs.msg import Header
 from visibility_graph_msg.msg import Graph
 
 
+# Melodic's Python 2 has POSIX elapsed time instead of time.monotonic.
+steady_time = getattr(time, 'monotonic', lambda: os.times()[4])
+
+
 class CallbackCadenceTest(unittest.TestCase):
     def test_delayed_terrain_matches_high_rate_odometry(self):
         odometry = rospy.Publisher('/odom_world', Odometry, queue_size=100)
@@ -23,9 +28,9 @@ class CallbackCadenceTest(unittest.TestCase):
         free_sub = rospy.Subscriber('/FAR_free_debug', PointCloud2, free_updates.append,
                                     queue_size=20)
         graph_sub = rospy.Subscriber('/robot_vgraph', Graph, graphs.append, queue_size=20)
-        deadline = time.monotonic() + 10.0
+        deadline = steady_time() + 10.0
         while not all(p.get_num_connections() for p in (odometry, terrain, free_sub, graph_sub)):
-            self.assertLess(time.monotonic(), deadline, 'Planner did not connect')
+            self.assertLess(steady_time(), deadline, 'Planner did not connect')
             time.sleep(0.02)
 
         ground = PointCloud2()
@@ -39,16 +44,16 @@ class CallbackCadenceTest(unittest.TestCase):
         ground.point_step = 16
         ground.row_step = ground.width * ground.point_step
         ground.is_dense = True
-        began = time.monotonic()
+        began = steady_time()
         next_terrain = began + 0.2
-        while time.monotonic() - began < 3.0:
+        while steady_time() - began < 3.0:
             stamp = rospy.Time.now()
             pose = Odometry()
             pose.header = Header(stamp=stamp, frame_id='map')
             pose.pose.pose.position.z = 0.75
             pose.pose.pose.orientation.w = 1.0
             odometry.publish(pose)
-            if time.monotonic() >= next_terrain:
+            if steady_time() >= next_terrain:
                 # Transport/processing delay remains within the 0.2 s policy.
                 ground.header = Header(stamp=stamp-rospy.Duration(0.12), frame_id='map')
                 terrain.publish(ground)

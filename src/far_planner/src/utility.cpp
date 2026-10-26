@@ -158,9 +158,10 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
     pcl::transformPointCloud(*cloudInOut, transformed,
         Eigen::Vector3f(translation.x(), translation.y(), translation.z()),
         Eigen::Quaternionf(rotation.w(), rotation.x(), rotation.y(), rotation.z()));
-    transformed.header.frame_id = target;
-    transformed.header.stamp = stamp.toNSec() / 1000ULL;
     cloudInOut->swap(transformed);
+    // PCL 1.8 swaps points and shape, but leaves the destination header intact.
+    cloudInOut->header.frame_id = target;
+    cloudInOut->header.stamp = stamp.toNSec() / 1000ULL;
     if (sensor_origin) {
         *sensor_origin = Point3D(translation.x(), translation.y(), translation.z());
     }

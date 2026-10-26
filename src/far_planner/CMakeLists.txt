@@ -59,7 +59,13 @@ target_include_directories(far_planner_core PUBLIC
   ${OpenCV_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
 )
-target_compile_options(far_planner_core PUBLIC ${PCL_DEFINITIONS})
+# PCL 1.8 exports a whitespace-only entry, which is not a compiler option.
+foreach(pcl_definition IN LISTS PCL_DEFINITIONS)
+  string(STRIP "${pcl_definition}" pcl_definition)
+  if(pcl_definition)
+    target_compile_options(far_planner_core PUBLIC "${pcl_definition}")
+  endif()
+endforeach()
 target_link_libraries(far_planner_core ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(${PROJECT_NAME} src/main.cpp)
@@ -84,7 +90,19 @@ if(CATKIN_ENABLE_TESTING)
   add_executable(terrain_neighbors_benchmark EXCLUDE_FROM_ALL ../../benchmarks/terrain_neighbors.cpp)
   target_link_libraries(terrain_neighbors_benchmark far_planner_core)
   find_package(rostest REQUIRED)
-  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_viewpoint_extension.cpp test/test_overlap_cloud.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp test/test_contour_detector.cpp)
+  add_rostest_gtest(test_frame_transforms test/test_frame_transforms_ros1.test
+    test/test_frame_transforms.cpp
+    test/test_sensor_timing.cpp
+    test/test_local_terrain_callback.cpp
+    test/test_viewpoint_extension.cpp
+    test/test_overlap_cloud.cpp
+    test/test_search.cpp
+    test/test_graph_lifecycle.cpp
+    test/test_graph_node_index.cpp
+    test/test_graph_message.cpp
+    test/test_map_handler.cpp
+    test/test_contour_detector.cpp
+  )
   if(TARGET test_frame_transforms)
     target_compile_definitions(test_frame_transforms PRIVATE FAR_PLANNER_ROS1)
     target_link_libraries(test_frame_transforms far_planner_core)

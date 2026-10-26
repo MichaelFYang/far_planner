@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # Copyright (c) 2026 Fan Yang and contributors
 # SPDX-License-Identifier: MIT
 """Check graph rejection and replacement in the running ROS 1 decoder."""
 
 import os
+import shutil
 import struct
 import tempfile
 import time
 import unittest
+from io import open
 
 import rospy
 import rostest
@@ -18,9 +20,13 @@ from visibility_graph_msg.msg import Graph, Node
 from visualization_msgs.msg import MarkerArray
 
 
+# Melodic's Python 2 has POSIX elapsed time instead of time.monotonic.
+steady_time = getattr(time, 'monotonic', lambda: os.times()[4])
+
+
 def wait_for(predicate, timeout=10.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline and not rospy.is_shutdown():
+    deadline = steady_time() + timeout
+    while steady_time() < deadline and not rospy.is_shutdown():
         if predicate():
             return
         time.sleep(0.02)
@@ -93,11 +99,11 @@ class DecoderCallbackTest(unittest.TestCase):
 
         marker_sub.unregister()
         time.sleep(0.2)
-        markers.clear()
+        del markers[:]
         valid.nodes[0].position.x = 2.3456789
         graphs.publish(valid)
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
+        deadline = steady_time() + 5.0
+        while steady_time() < deadline:
             snapshot = request_graph(2, 7)
             if struct.pack('f', snapshot.nodes[0].position.x) == struct.pack(
                     'f', valid.nodes[0].position.x):
@@ -110,42 +116,43 @@ class DecoderCallbackTest(unittest.TestCase):
         late_marker = {marker.ns: marker for marker in markers[-1].markers}
         self.assertEqual(struct.pack('f', late_marker['global_vertex'].points[0].x),
                          struct.pack('f', valid.nodes[0].position.x))
-        markers.clear()
+        del markers[:]
         wait_for(lambda: len(markers) > 0, timeout=3.5)
 
-        with tempfile.TemporaryDirectory(prefix='far-graph-save-') as directory:
-            save_path = os.path.join(directory, 'saved_graph.vgh')
-            save_requests.publish(String(data=save_path))
+        directory = tempfile.mkdtemp(prefix='far-graph-save-')
+        self.addCleanup(shutil.rmtree, directory)
+        save_path = os.path.join(directory, 'saved_graph.vgh')
+        save_requests.publish(String(data=save_path))
 
-            def save_complete():
-                if not os.path.exists(save_path):
-                    return False
-                with open(save_path, encoding='utf-8') as graph_file:
-                    return graph_file.read().endswith('\n')
-
-            wait_for(save_complete)
+        def save_complete():
+            if not os.path.exists(save_path):
+                return False
             with open(save_path, encoding='utf-8') as graph_file:
-                saved_x = float(graph_file.readline().split()[2])
-            self.assertEqual(struct.pack('f', saved_x),
-                             struct.pack('f', valid.nodes[0].position.x))
-            marker_sub.unregister()
-            time.sleep(0.2)
-            markers.clear()
-            previous = len(published)
-            read_requests.publish(String(data=save_path))
-            wait_for(lambda: len(published) > previous)
-            loaded = published[-1]
-            self.assertEqual([node.id for node in loaded.nodes], [1, 2])
-            self.assertEqual(loaded.robot_id, 0)
-            self.assertEqual(struct.pack('f', loaded.nodes[0].position.x),
-                             struct.pack('f', valid.nodes[0].position.x))
-            for field in ('connect_nodes', 'poly_connects',
-                          'contour_connects', 'trajectory_connects'):
-                self.assertEqual(list(getattr(loaded.nodes[0], field)), [2])
-            marker_sub = rospy.Subscriber('/graph_decoder_viz', MarkerArray, markers.append,
-                                          queue_size=10)
-            wait_for(lambda: len(markers) > 0)
-            self.assertEqual([node.id for node in request_graph(2, 0).nodes], [1, 2])
+                return graph_file.read().endswith('\n')
+
+        wait_for(save_complete)
+        with open(save_path, encoding='utf-8') as graph_file:
+            saved_x = float(graph_file.readline().split()[2])
+        self.assertEqual(struct.pack('f', saved_x),
+                         struct.pack('f', valid.nodes[0].position.x))
+        marker_sub.unregister()
+        time.sleep(0.2)
+        del markers[:]
+        previous = len(published)
+        read_requests.publish(String(data=save_path))
+        wait_for(lambda: len(published) > previous)
+        loaded = published[-1]
+        self.assertEqual([node.id for node in loaded.nodes], [1, 2])
+        self.assertEqual(loaded.robot_id, 0)
+        self.assertEqual(struct.pack('f', loaded.nodes[0].position.x),
+                         struct.pack('f', valid.nodes[0].position.x))
+        for field in ('connect_nodes', 'poly_connects',
+                      'contour_connects', 'trajectory_connects'):
+            self.assertEqual(list(getattr(loaded.nodes[0], field)), [2])
+        marker_sub = rospy.Subscriber('/graph_decoder_viz', MarkerArray, markers.append,
+                                      queue_size=10)
+        wait_for(lambda: len(markers) > 0)
+        self.assertEqual([node.id for node in request_graph(2, 0).nodes], [1, 2])
 
         malformed = Graph()
         malformed.header.frame_id = 'map'
