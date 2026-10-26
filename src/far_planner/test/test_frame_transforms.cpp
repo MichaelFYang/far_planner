@@ -84,6 +84,31 @@ TEST(CloudLayout, RequiresCoordinatesAndTerrainClassification)
     EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
 }
 
+TEST(CloudLayout, RejectsDuplicateAndOverlappingUsedFields)
+{
+    auto cloud = ValidCloudMessage();
+    cloud.point_step = cloud.row_step = 20;
+    cloud.data.resize(20);
+    auto duplicate_x = cloud.fields.front();
+    duplicate_x.offset = 16;
+    cloud.fields.push_back(duplicate_x);
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+
+    cloud = ValidCloudMessage();
+    cloud.fields[1].offset = 2;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+
+    cloud = ValidCloudMessage();
+    cloud.fields[3].offset = cloud.fields[2].offset;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, false));
+
+    cloud = ValidCloudMessage();
+    auto unrelated = cloud.fields.front();
+    unrelated.name = "timestamp";
+    cloud.fields.push_back(unrelated);
+    EXPECT_TRUE(far_planner::ValidPointCloudLayout(cloud, true));
+}
+
 TEST(CloudValues, TerrainDropsNonfiniteIntensity)
 {
     PointCloudPtr cloud(new PointCloud);
