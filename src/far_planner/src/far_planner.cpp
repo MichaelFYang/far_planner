@@ -425,14 +425,14 @@ Point3D FARMaster::ProjectNavWaypoint(const NavNodePtr& nav_node_ptr, const NavN
 }
 
 Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist) {
-  if (nav_node_ptr_->free_direct != NodeFreeDirect::CONVEX || obsCloudIn->empty()) return nav_node_ptr_->position;
-  FARUtil::CropPCLCloud(obsCloudIn, viewpoint_around_ptr_, nav_node_ptr_->position, free_dist + FARUtil::kNearDist);
-  float maxR = std::min((nav_node_ptr_->position - robot_pos_).norm(), free_dist) - FARUtil::kNearDist;
+  if (nav_node_ptr->free_direct != NodeFreeDirect::CONVEX || obsCloudIn->empty()) return nav_node_ptr->position;
+  FARUtil::CropPCLCloud(obsCloudIn, viewpoint_around_ptr_, nav_node_ptr->position, free_dist + FARUtil::kNearDist);
+  float maxR = std::min((nav_node_ptr->position - robot_pos_).norm(), free_dist) - FARUtil::kNearDist;
   maxR = std::max(maxR, 0.0f);
   bool is_wall = false;
-  const Point3D direct = -FARUtil::SurfTopoDirect(nav_node_ptr_->surf_dirs, is_wall);
+  const Point3D direct = -FARUtil::SurfTopoDirect(nav_node_ptr->surf_dirs, is_wall);
   if (!is_wall) {
-    Point3D waypoint = nav_node_ptr_->position;
+    Point3D waypoint = nav_node_ptr->position;
     if (viewpoint_around_ptr_->empty()) {
       waypoint = waypoint + direct * maxR;
     } else {
@@ -453,14 +453,14 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
         }
       }
       if (is_occupied) {
-        waypoint = (nav_node_ptr_->position + waypoint - direct * FARUtil::kNearDist) / 2.0f;
-        waypoint.z = nav_node_ptr_->position.z;
+        waypoint = (nav_node_ptr->position + waypoint - direct * FARUtil::kNearDist) / 2.0f;
+        waypoint.z = nav_node_ptr->position.z;
         free_dist = ray_dist - FARUtil::kNearDist;
       }
-      return waypoint;
     }
+    return waypoint;
   }
-  return nav_node_ptr_->position;
+  return nav_node_ptr->position;
 }
 
 

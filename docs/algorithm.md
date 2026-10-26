@@ -52,6 +52,8 @@ flowchart TD
 
 `TerrainPlanner` is a separate A*-style search over an eight-neighbor local grid, constrained to a corridor around a candidate trajectory edge. It does not replace the persistent visibility-graph route search.
 
+For a convex waypoint with no obstacles inside its local crop, viewpoint extension now returns the computed projected point instead of silently returning the unextended navigation point. The ROS 1 helper also uses its supplied node argument consistently. A focused regression covers this branch; it does not measure navigation performance.
+
 ## State and scheduling
 
 `Polygon` and `CTNode` represent local topology. `NavNode` stores persistent geometry, multiple adjacency lists, vote histories, coverage flags, and search state. `FARUtil`, `DynamicGraph`, `ContourGraph`, and `MapHandler` also hold substantial static state. Containers often copy shared pointers, so a copied node vector is not an immutable graph snapshot.
