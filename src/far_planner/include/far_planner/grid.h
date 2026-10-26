@@ -20,15 +20,18 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <unordered_map>
+#include <utility>
 
 namespace grid_ns
 {
-template <typename _T>
+template <typename _T, bool Sparse = false>
 class Grid
 {
 public:
   explicit Grid(const Eigen::Vector3i& size, _T init_value, const Eigen::Vector3d& origin = Eigen::Vector3d(0, 0, 0),
                 const Eigen::Vector3d& resolution = Eigen::Vector3d(1, 1, 1), int dimension = 3)
+    : init_value_(std::move(init_value))
   {
     origin_ = origin;
     size_ = size;
@@ -53,7 +56,7 @@ public:
       resolution_inv_(i) = 1.0 / resolution_(i);
     }
     cell_number_ = count;
-    cells_.assign(cell_number_, init_value);
+    if (!Sparse) cells_.assign(cell_number_, init_value_);
   }
 
   virtual ~Grid() = default;
@@ -80,7 +83,9 @@ public:
 
   void ReInitGrid(const _T& init_value) 
   {
-    std::fill(cells_.begin(), cells_.end(), init_value);
+    init_value_ = init_value;
+    if (Sparse) sparse_cells_.clear();
+    else std::fill(cells_.begin(), cells_.end(), init_value_);
   }
 
   void SetResolution(const Eigen::Vector3d& resolution)
@@ -186,21 +191,22 @@ public:
 
   _T& GetCell(const Eigen::Vector3i& sub)
   {
-    // MY_ASSERT(InRange(sub));
-    int index = Sub2Ind(sub);
-    return cells_[index];
+    return GetCell(Sub2Ind(sub));
   }
 
   _T& GetCell(int index)
   {
-    // MY_ASSERT(InRange(index));
+    if (Sparse) {
+      const auto found = sparse_cells_.find(index);
+      if (found != sparse_cells_.end()) return found->second;
+      return sparse_cells_.emplace(index, init_value_).first->second;
+    }
     return cells_[index];
   }
 
   _T GetCellValue(int x, int y, int z) const
   {
-    int index = Sub2Ind(x, y, z);
-    return cells_[index];
+    return GetCellValue(Sub2Ind(x, y, z));
   }
 
   _T GetCellValue(const Eigen::Vector3i& sub) const
@@ -211,14 +217,28 @@ public:
 
   _T GetCellValue(int index) const
   {
-    // MY_ASSERT(InRange(index));
+    if (Sparse) {
+      const auto found = sparse_cells_.find(index);
+      return found == sparse_cells_.end() ? init_value_ : found->second;
+    }
     return cells_[index];
+  }
+
+  void EraseCell(int index)
+  {
+    if (Sparse) sparse_cells_.erase(index);
+    else cells_[index] = init_value_;
+  }
+
+  std::size_t MaterializedCellCount() const
+  {
+    return Sparse ? sparse_cells_.size() : cells_.size();
   }
 
   void SetCellValue(int x, int y, int z, _T value)
   {
     int index = Sub2Ind(x, y, z);
-    cells_[index] = value;
+    GetCell(index) = value;
   }
 
   void SetCellValue(const Eigen::Vector3i& sub, _T value)
@@ -230,7 +250,7 @@ public:
   void SetCellValue(int index, const _T& value)
   {
     // MY_ASSERT(InRange(index));
-    cells_[index] = value;
+    GetCell(index) = value;
   }
 
   void RayTraceSubs(const Eigen::Vector3i& start_sub, 
@@ -296,6 +316,8 @@ private:
   Eigen::Vector3d resolution_;
   Eigen::Vector3d resolution_inv_;
   std::vector<_T> cells_;
+  std::unordered_map<int, _T> sparse_cells_;
+  _T init_value_;
   int cell_number_;
   int dimension_;
 

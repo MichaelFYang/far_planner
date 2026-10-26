@@ -1154,6 +1154,6 @@ std::vector<int> MapHandler::terrain_grid_occupy_list_;
 std::vector<int> MapHandler::terrain_grid_traverse_list_;
 std::unordered_set<int> MapHandler::neighbor_obs_indices_;
 std::unordered_set<int> MapHandler::extend_obs_indices_;
-std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_free_cloud_grid_;
-std::unique_ptr<grid_ns::Grid<PointCloudPtr>> MapHandler::world_obs_cloud_grid_;
+std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> MapHandler::world_free_cloud_grid_;
+std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> MapHandler::world_obs_cloud_grid_;
 std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_grid_;

@@ -9,6 +9,14 @@
 
 #include "far_planner/map_handler.h"
 
+namespace {
+PointCloudPtr& EnsureCloud(grid_ns::Grid<PointCloudPtr, true>& grid, int index) {
+    auto& cloud = grid.GetCell(index);
+    if (!cloud) cloud.reset(new PointCloud);
+    return cloud;
+}
+}
+
 /***************************************************************************************/
 
 void MapHandler::Init(const MapHandlerParams& params) {
@@ -26,23 +34,13 @@ void MapHandler::Init(const MapHandlerParams& params) {
     Eigen::Vector3d pointcloud_grid_origin(0,0,0);
     Eigen::Vector3d pointcloud_grid_resolution(map_params_.cell_length, map_params_.cell_length, map_params_.cell_height);
     PointCloudPtr cloud_ptr_tmp;
-    world_obs_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr>>(
+    world_obs_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr, true>>(
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
 
-    world_free_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr>>(
+    world_free_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr, true>>(
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
 
-    const int n_cell  = world_obs_cloud_grid_->GetCellNumber();
-    for (int i = 0; i < n_cell; i++) {
-        world_obs_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
-        world_free_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
-    }
     visited_cell_indices_.clear();
-    util_remove_check_list_.resize(n_cell);
-    util_obs_modified_list_.resize(n_cell), util_free_modified_list_.resize(n_cell);
-    std::fill(util_obs_modified_list_.begin(), util_obs_modified_list_.end(), 0);
-    std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
-    std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
 
     // init terrain height map
     int height_dim = std::ceil((map_params_.sensor_range + map_params_.cell_length) * 2.0f / FARUtil::robot_dim);
@@ -67,13 +65,10 @@ void MapHandler::Init(const MapHandlerParams& params) {
 
 void MapHandler::ResetGripMapCloud() {
     for (const int ind : visited_cell_indices_) {
-        world_obs_cloud_grid_->GetCell(ind)->clear();
-        world_free_cloud_grid_->GetCell(ind)->clear();
+        world_obs_cloud_grid_->EraseCell(ind);
+        world_free_cloud_grid_->EraseCell(ind);
     }
     visited_cell_indices_.clear();
-    std::fill(util_obs_modified_list_.begin(),     util_obs_modified_list_.end(),     0);
-    std::fill(util_free_modified_list_.begin(),    util_free_modified_list_.end(),    0);
-    std::fill(util_remove_check_list_.begin(),     util_remove_check_list_.end(),     0);
     std::fill(terrain_grid_occupy_list_.begin(),   terrain_grid_occupy_list_.end(),   0);
     std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0);
 }
@@ -89,8 +84,9 @@ void MapHandler::ClearObsCellThroughPosition(const Point3D& point) {
             csub.z() += k;
             const int ind = world_obs_cloud_grid_->Sub2Ind(csub);
             if (!world_obs_cloud_grid_->InRange(csub) || neighbor_obs_indices_.find(ind) == neighbor_obs_indices_.end()) continue; 
-            world_obs_cloud_grid_->GetCell(ind)->clear();
-            if (world_free_cloud_grid_->GetCell(ind)->empty()) {
+            world_obs_cloud_grid_->EraseCell(ind);
+            const auto free_cloud = world_free_cloud_grid_->GetCellValue(ind);
+            if (!free_cloud || free_cloud->empty()) {
                 visited_cell_indices_.erase(ind);
             }
         }
@@ -113,9 +109,11 @@ void MapHandler::GetCloudOfPoint(const Point3D& center,
                 csub.x() += i, csub.y() += j, csub.z() += k;
                 if (!world_obs_cloud_grid_->InRange(csub)) continue;
                 if (type == CloudType::FREE_CLOUD) {
-                    *cloudOut += *(world_free_cloud_grid_->GetCell(csub));
+                    const auto cell = world_free_cloud_grid_->GetCellValue(csub);
+                    if (cell) *cloudOut += *cell;
                 } else if (type == CloudType::OBS_CLOUD) {
-                    *cloudOut += *(world_obs_cloud_grid_->GetCell(csub));
+                    const auto cell = world_obs_cloud_grid_->GetCellValue(csub);
+                    if (cell) *cloudOut += *cell;
                 } else {
                     if (FARUtil::IsDebug) std::cout << "MH: Assigned cloud type invalid." << std::endl;
                     return;
@@ -185,8 +183,8 @@ void MapHandler::GetSurroundObsCloud(const PointCloudPtr& obsCloudOut) {
     if (!is_init_) return;
     obsCloudOut->clear();
     for (const auto& neighbor_ind : neighbor_obs_indices_) {
-        if (world_obs_cloud_grid_->GetCell(neighbor_ind)->empty()) continue;
-        *obsCloudOut += *(world_obs_cloud_grid_->GetCell(neighbor_ind));
+        const auto cell = world_obs_cloud_grid_->GetCellValue(neighbor_ind);
+        if (cell && !cell->empty()) *obsCloudOut += *cell;
     }
 }
 
@@ -194,24 +192,24 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
     if (!is_init_) return;
     freeCloudOut->clear();
     for (const auto& neighbor_ind : neighbor_free_indices_) {
-        if (world_free_cloud_grid_->GetCell(neighbor_ind)->empty()) continue;
-        *freeCloudOut += *(world_free_cloud_grid_->GetCell(neighbor_ind));
+        const auto cell = world_free_cloud_grid_->GetCellValue(neighbor_ind);
+        if (cell && !cell->empty()) *freeCloudOut += *cell;
     }
 }
 
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
     std::vector<int> modified_indices;
+    std::unordered_set<int> modified_set;
     PointCloudPtr obs_valid_ptr(new pcl::PointCloud<PCLPoint>());
     for (const auto& point : obsCloudInOut->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub);
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
-            world_obs_cloud_grid_->GetCell(ind)->points.push_back(point);
+            EnsureCloud(*world_obs_cloud_grid_, ind)->points.push_back(point);
             obs_valid_ptr->points.push_back(point);
-            if (util_obs_modified_list_[ind] == 0) {
-                util_obs_modified_list_[ind] = 1;
+            if (modified_set.insert(ind).second) {
                 modified_indices.push_back(ind);
             }
             visited_cell_indices_.insert(ind);
@@ -220,27 +218,25 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     *obsCloudInOut = *obs_valid_ptr;
     for (const int ind : modified_indices) {
         FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
-        util_obs_modified_list_[ind] = 0;
     }
 }
 
 void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     if (!is_init_ || freeCloudIn->empty()) return;
     std::vector<int> modified_indices;
+    std::unordered_set<int> modified_set;
     for (const auto& point : freeCloudIn->points) {
         Eigen::Vector3i sub = world_free_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
-        world_free_cloud_grid_->GetCell(ind)->points.push_back(point);
-        if (util_free_modified_list_[ind] == 0) {
-            util_free_modified_list_[ind] = 1;
+        EnsureCloud(*world_free_cloud_grid_, ind)->points.push_back(point);
+        if (modified_set.insert(ind).second) {
             modified_indices.push_back(ind);
         }
         visited_cell_indices_.insert(ind);
     }
     for (const int ind : modified_indices) {
         FARUtil::FilterCloud(world_free_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
-        util_free_modified_list_[ind] = 0;
     }
 }
 
@@ -272,10 +268,11 @@ float MapHandler::NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_
         Eigen::Vector3i dw_near_sub = ori_sub;
         float dw_terrain_h = p_th;
         while (world_free_cloud_grid_->InRange(dw_near_sub)) {
-            if (!world_free_cloud_grid_->GetCell(dw_near_sub)->empty()) {
+            const auto cell = world_free_cloud_grid_->GetCellValue(dw_near_sub);
+            if (cell && !cell->empty()) {
                 int counter = 0;
                 dw_terrain_h = 0.0f;
-                for (const auto& pcl_p : world_free_cloud_grid_->GetCell(dw_near_sub)->points) {
+                for (const auto& pcl_p : cell->points) {
                     dw_terrain_h += pcl_p.z, counter ++;
                 }
                 dw_terrain_h /= (float)counter;
@@ -289,10 +286,11 @@ float MapHandler::NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_
         Eigen::Vector3i up_near_sub = ori_sub;
         float up_terrain_h = p_th;
         while (world_free_cloud_grid_->InRange(up_near_sub)) {
-            if (!world_free_cloud_grid_->GetCell(up_near_sub)->empty()) {
+            const auto cell = world_free_cloud_grid_->GetCellValue(up_near_sub);
+            if (cell && !cell->empty()) {
                 int counter = 0;
                 up_terrain_h = 0.0f;
-                for (const auto& pcl_p : world_free_cloud_grid_->GetCell(up_near_sub)->points) {
+                for (const auto& pcl_p : cell->points) {
                     up_terrain_h += pcl_p.z, counter ++;
                 }
                 up_terrain_h /= (float)counter;
@@ -532,20 +530,27 @@ void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
 
 void MapHandler::RemoveObsCloudFromGrid(const PointCloudPtr& obsCloud) {
     std::vector<int> marked_indices;
+    std::unordered_set<int> marked_set;
     for (const auto& point : obsCloud->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
-        if (util_remove_check_list_[ind] == 0) {
-            util_remove_check_list_[ind] = 1;
+        if (marked_set.insert(ind).second) {
             marked_indices.push_back(ind);
         }
     }
     for (const int ind : marked_indices) {
         if (neighbor_obs_indices_.count(ind) != 0 && visited_cell_indices_.count(ind) != 0) {
-            FARUtil::RemoveOverlapCloud(world_obs_cloud_grid_->GetCell(ind), obsCloud);
+            const auto cell = world_obs_cloud_grid_->GetCellValue(ind);
+            if (cell) {
+                FARUtil::RemoveOverlapCloud(cell, obsCloud);
+                if (cell->empty()) {
+                    world_obs_cloud_grid_->EraseCell(ind);
+                    const auto free_cell = world_free_cloud_grid_->GetCellValue(ind);
+                    if (!free_cell || free_cell->empty()) visited_cell_indices_.erase(ind);
+                }
+            }
         }
-        util_remove_check_list_[ind] = 0;
     }
 }
 
