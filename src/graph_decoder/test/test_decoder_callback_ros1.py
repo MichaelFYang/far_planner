@@ -51,6 +51,7 @@ class DecoderCallbackTest(unittest.TestCase):
             graph = published[-1]
             self.assertEqual(graph.size, expected_size)
             self.assertEqual(graph.robot_id, expected_robot)
+            self.assertEqual(graph.header.frame_id, 'map')
             self.assertEqual(len(graph.nodes), expected_size)
             return graph
 

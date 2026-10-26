@@ -10,6 +10,9 @@
 #include "graph_decoder/decoder_node.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 #include <visibility_graph_msg/graph_validation.h>
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
 #include <utility>
 
 
@@ -121,6 +124,17 @@ void GraphDecoder::LoadParams() {
     const std::string prefix = "/graph_decoder/";
     nh.param<std::string>(prefix + "world_frame", gd_params_.frame_id, "map");
     nh.param<float>(prefix + "visual_scale_ratio", gd_params_.viz_scale_ratio, 1.0);
+    const auto frame_begin = gd_params_.frame_id.find_first_not_of('/');
+    if (frame_begin == std::string::npos) {
+        throw std::invalid_argument("world_frame must name a nonempty frame");
+    }
+    gd_params_.frame_id.erase(0, frame_begin);
+    if (gd_params_.frame_id.find_first_of(" \t\n\r") != std::string::npos) {
+        throw std::invalid_argument("world_frame must not contain whitespace");
+    }
+    if (!std::isfinite(gd_params_.viz_scale_ratio) || gd_params_.viz_scale_ratio <= 0.0f) {
+        throw std::invalid_argument("visual_scale_ratio must be finite and positive");
+    }
 
 }
 
@@ -434,7 +448,14 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "graph_decoder_node");
-  GraphDecoder gd_node;
-  gd_node.Init();
-  gd_node.Loop();
+  try {
+    GraphDecoder gd_node;
+    gd_node.Init();
+    gd_node.Loop();
+  } catch (const std::exception& ex) {
+    std::cerr << "Decoder startup error: " << ex.what() << '\n';
+    ROS_FATAL("Decoder startup error: %s", ex.what());
+    return 1;
+  }
+  return 0;
 }

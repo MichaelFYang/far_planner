@@ -1,6 +1,6 @@
 <launch>
   <node pkg="graph_decoder" type="graph_decoder" name="graph_decoder" output="screen">
-    <param name="world_frame" value="map"/>
+    <param name="world_frame" value="/map"/>
   </node>
   <test pkg="graph_decoder" type="test_decoder_callback_ros1.py"
         test-name="test_decoder_callback_ros1" time-limit="35"/>
