@@ -26,6 +26,22 @@ void Link(const NavNodePtr& a, const NavNodePtr& b)
     b->connect_nodes.push_back(a);
 }
 
+class LocalPlanRangeGuard {
+public:
+    explicit LocalPlanRangeGuard(float range) : previous_(FARUtil::kLocalPlanRange)
+    {
+        FARUtil::kLocalPlanRange = range;
+    }
+
+    ~LocalPlanRangeGuard()
+    {
+        FARUtil::kLocalPlanRange = previous_;
+    }
+
+private:
+    float previous_;
+};
+
 TEST(GraphSearch, DecreaseOfQueuedNodeMustReorderBothTraversals)
 {
     // The queue initially contains node 1 via 4. Later 3 improves its cost,
@@ -122,8 +138,7 @@ TEST(TerrainSearch, QueueDecreaseMustReturnTheShortestGridPath)
     if (!rclcpp::ok()) rclcpp::init(0, nullptr);
     auto node = rclcpp::Node::make_shared("terrain_search_test");
 #endif
-    const float previous_range = FARUtil::kLocalPlanRange;
-    FARUtil::kLocalPlanRange = 0.0f;  // A five by five test grid.
+    const LocalPlanRangeGuard range(0.0f);  // A five by five test grid.
     TerrainPlannerParams params;
     params.world_frame = "map";
     params.radius = 2.5f;
@@ -144,12 +159,68 @@ TEST(TerrainSearch, QueueDecreaseMustReturnTheShortestGridPath)
     PointStack path;
     const bool found = planner.PlanPathFromPToP(Point3D(-2.0f, -1.0f, 0.0f),
                                                 Point3D(2.0f, 1.0f, 0.0f), path);
-    FARUtil::kLocalPlanRange = previous_range;
     ASSERT_TRUE(found);
     float length = 0.0f;
     for (std::size_t i = 1; i < path.size(); ++i) {
         length += (path[i] - path[i - 1]).norm();
     }
     EXPECT_NEAR(length, 4.0f + std::sqrt(2.0f), 1e-4f);
+}
+
+TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "terrain_replace_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("terrain_replace_test");
+#endif
+    const LocalPlanRangeGuard range(0.0f);
+    TerrainPlannerParams params;
+    params.world_frame = "map";
+    params.radius = 2.5f;
+    params.voxel_size = 1.0f;
+    params.inflate_size = 0;
+    TerrainPlanner planner;
+    planner.Init(node, params);
+    planner.UpdateCenterNode(Node(100, 0.0f, 0.0f));
+
+    PointCloudPtr obstacles(new PointCloud);
+    PCLPoint point{};
+    point.x = 0.0f;
+    point.y = 0.0f;
+    obstacles->push_back(point);
+    planner.SetLocalTerrainObsCloud(obstacles);
+    ASSERT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
+
+    PointStack path;
+    ASSERT_TRUE(planner.PlanPathFromPToP(Point3D(-1.0f, 0.0f, 0.0f),
+                                        Point3D(1.0f, 0.0f, 0.0f), path));
+    float blocked_length = 0.0f;
+    for (std::size_t i = 1; i < path.size(); ++i) {
+        blocked_length += (path[i] - path[i - 1]).norm();
+    }
+    EXPECT_GT(blocked_length, 2.0f);
+
+    obstacles->clear();
+    planner.SetLocalTerrainObsCloud(obstacles);
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(planner.PlanPathFromPToP(Point3D(-1.0f, 0.0f, 0.0f),
+                                        Point3D(1.0f, 0.0f, 0.0f), path));
+    float clear_length = 0.0f;
+    for (std::size_t i = 1; i < path.size(); ++i) {
+        clear_length += (path[i] - path[i - 1]).norm();
+    }
+    EXPECT_NEAR(clear_length, 2.0f, 1e-4f);
+
+    point.y = 1.0f;
+    obstacles->push_back(point);
+    planner.SetLocalTerrainObsCloud(obstacles);
+    EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
+    planner.UpdateCenterNode(Node(101, 1.0f, 1.0f));
+    EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
 }
 }  // namespace

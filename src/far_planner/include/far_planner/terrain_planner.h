@@ -16,7 +16,7 @@ struct TerrainNode {
     TerrainNode() = default;
     int id;
     Point3D position;
-    bool is_occupied;
+    bool is_occupied = false;
     float fscore;
     float gscore;
     std::shared_ptr<TerrainNode> parent;
@@ -67,6 +67,7 @@ private:
     ros::Publisher local_path_pub_, terrain_map_pub_;
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
+    std::vector<int> occupied_cells_;
 
     void ExtractPath(const TerrainNodePtr& end_ptr, PointStack& path);
 
@@ -85,9 +86,10 @@ private:
 
     inline void ResetGridsOccupancy() {
         if (!is_grids_init_) return;
-        for (std::size_t i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (const int i : occupied_cells_) {
             terrain_grids_->GetCell(i)->is_occupied = false;
         }
+        occupied_cells_.clear();
     }
 
     inline void ResetGridsPositions() {
