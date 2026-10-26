@@ -18,3 +18,6 @@ target_link_libraries(cloud_decay PRIVATE ${PCL_LIBRARIES})
 add_executable(grid_position grid_position.cpp)
 target_include_directories(grid_position PRIVATE ../src/far_planner/include)
 target_link_libraries(grid_position PRIVATE Eigen3::Eigen)
+
+add_executable(contour_vote_rank contour_vote_rank.cpp)
+target_include_directories(contour_vote_rank PRIVATE ../src/far_planner/include)
