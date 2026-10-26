@@ -99,7 +99,7 @@ void FARMaster::Init() {
   planner_viz_.Init(nh_);
   map_handler_.Init(map_params_);
   scan_handler_.Init(scan_params_);
-  graph_msger_.Init(nh_, msger_parmas_);
+  graph_msger_.Init(nh_, msger_params_);
 
   //print processing objects init complete
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner Processing Objects Initiated");
@@ -676,12 +676,12 @@ void FARMaster::LoadROSParams() {
 
   // graph messager params
   nh_->declare_parameter<int>(msger_prefix + "/robot_id", 0);
-  nh_->get_parameter(msger_prefix + "/robot_id", msger_parmas_.robot_id);
+  nh_->get_parameter(msger_prefix + "/robot_id", msger_params_.robot_id);
 
-  msger_parmas_.frame_id    = master_params_.world_frame;
-  msger_parmas_.votes_size  = graph_params_.votes_size;
-  msger_parmas_.pool_size   = graph_params_.pool_size;
-  msger_parmas_.dist_margin = graph_params_.filter_pos_margin;
+  msger_params_.frame_id    = master_params_.world_frame;
+  msger_params_.votes_size  = graph_params_.votes_size;
+  msger_params_.pool_size   = graph_params_.pool_size;
+  msger_params_.dist_margin = graph_params_.filter_pos_margin;
 
   // scan handler params
   scan_params_.terrain_range = master_params_.terrain_range;

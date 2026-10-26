@@ -99,7 +99,7 @@ private:
     MarkerArray graph_marker_array_;
     std::size_t robot_id_;
 
-    void LoadParmas();
+    void LoadParams();
 
     void SetMarker(const VizColor& color, 
                    const std::string& ns,

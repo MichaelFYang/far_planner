@@ -30,7 +30,7 @@ void GraphDecoder::Init() {
 
     graph_viz_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/graph_decoder_viz", rclcpp::QoS(5));
 
-    this->LoadParmas();
+    this->LoadParams();
 
     save_graph_sub_ = nh_->create_subscription<std_msgs::msg::String>(
         "/save_file_dir", 
@@ -143,8 +143,7 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::msg::Node& msg, Nav
 }
 
 
-void GraphDecoder::LoadParmas() {
-    const std::string prefix = "graph_decoder.";
+void GraphDecoder::LoadParams() {
 
     // Declare the parameters
     nh_->declare_parameter("world_frame", "map");
