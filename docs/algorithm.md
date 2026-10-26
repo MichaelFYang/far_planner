@@ -124,6 +124,8 @@ Graph publishers set the graph header and each node header to the same world fra
 
 `GraphMsger` now packs only searchable nodes into its KD-tree cloud and keeps a parallel pointer for each point. Search returns the exact node pointer, avoiding both empty/ghost slots and loss of integer ID precision through a float intensity field. PCL returns squared distances, so the matcher compares them with the squared linear radius. Tests cover skipped nodes, a large ID, radius semantics, empty rebuilds, and invalid queries.
 
+Graph serialization moves each completed node into the outgoing message instead of copying its connection vectors. The decoder iterates validated connection IDs in the incoming message directly and reserves its node and ID-index containers up front. This removes four temporary connection arrays and their per-node copies; planner throughput has not been measured from this change.
+
 ## Scan sensor origin stage
 
 When a scan arrives in a sensor frame, the cloud transform also supplies the sensor's world-frame translation at that same scan timestamp. Scan ray tracing starts from that translation, accounting for the scanner's offset from the odometry body. A scan already in the world frame still uses the interpolated odometry position because its original sensor frame is unavailable. Failed TF leaves both the accepted cloud and ray origin unchanged. Moving-TF regression tests cover the returned origin, interpolation, identity fallback, and failure.
