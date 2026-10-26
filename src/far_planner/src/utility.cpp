@@ -775,14 +775,6 @@ bool FARUtil::IsVoteTrue(const std::deque<int>& votes, const bool& is_balance) {
   return false;
 }
 
-int FARUtil::VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes) {
-  int idx = 0;
-  while (idx < int(ordered_votes.size()) && c < ordered_votes[idx]) {
-      idx ++;
-  }
-  return idx;
-}
-
 bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {
   // check whether or not this node is connect to a node beyond planning range
   for (const auto& cnode : node_ptr->connect_nodes) {
