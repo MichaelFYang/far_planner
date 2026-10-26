@@ -6,6 +6,8 @@
 
 
 #include "goalpoint_rviz_plugin/goalpoint_tool.hpp"
+#include <rviz/frame_manager.h>
+#include <cmath>
 
 namespace rviz
 {
@@ -23,7 +25,6 @@ void GoalPointTool::onInitialize()
   PoseTool::onInitialize();
   setName("Goalpoint");
   updateTopic();
-  vehicle_z = 0;
 }
 
 void GoalPointTool::updateTopic()
@@ -36,11 +37,41 @@ void GoalPointTool::updateTopic()
 
 void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr & odom)
 {
-  vehicle_z = odom->pose.pose.position.z;
+  std::lock_guard<std::mutex> lock(odom_mutex_);
+  latest_odom_ = odom;
 }
 
-void GoalPointTool::onPoseSet(double x, double y, double theta)
+void GoalPointTool::onPoseSet(double x, double y, double /* theta */)
 {
+  const std::string fixed_frame = context_->getFixedFrame().toStdString();
+  if (fixed_frame.empty()) {
+    ROS_WARN("Cannot set a goal without an RViz fixed frame");
+    return;
+  }
+  nav_msgs::Odometry::ConstPtr odom;
+  {
+    std::lock_guard<std::mutex> lock(odom_mutex_);
+    odom = latest_odom_;
+  }
+  double goal_height = 0.0;
+  if (odom) {
+    if (odom->header.frame_id == fixed_frame) {
+      goal_height = odom->pose.pose.position.z;
+    } else {
+      Ogre::Vector3 position;
+      Ogre::Quaternion orientation;
+      if (!context_->getFrameManager()->transform(
+          odom->header, odom->pose.pose, position, orientation)) {
+        ROS_WARN("Cannot transform odometry into the RViz fixed frame for goal height");
+        return;
+      }
+      goal_height = position.z;
+    }
+    if (!std::isfinite(goal_height)) {
+      ROS_WARN("Cannot set a goal with invalid odometry height");
+      return;
+    }
+  }
   sensor_msgs::Joy joy;
 
   joy.axes.push_back(0);
@@ -68,11 +99,11 @@ void GoalPointTool::onPoseSet(double x, double y, double theta)
   joy.header.frame_id = "goalpoint_tool";
 
   geometry_msgs::PointStamped goal_point;
-  goal_point.header.frame_id = "map";
+  goal_point.header.frame_id = fixed_frame;
   goal_point.header.stamp = ros::Time::now();
   goal_point.point.x = x;
   goal_point.point.y = y;
-  goal_point.point.z = vehicle_z;
+  goal_point.point.z = goal_height;
 
   pub_.publish(goal_point);
   usleep(10000);

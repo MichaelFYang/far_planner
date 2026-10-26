@@ -9,6 +9,7 @@
 #define GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_
 
 #include <sstream>
+#include <mutex>
 #include <ros/ros.h>
 #include <QObject>
 
@@ -43,7 +44,8 @@ private Q_SLOTS:
   void updateTopic();
 
 private:
-  float vehicle_z;
+  std::mutex odom_mutex_;
+  nav_msgs::Odometry::ConstPtr latest_odom_;
 
   ros::NodeHandle nh_;
   ros::Subscriber sub_;
