@@ -8,9 +8,31 @@
 #include <random>
 
 #include "far_planner/graph_planner.h"
+#include "far_planner/goal_grid_search.h"
 #include "far_planner/terrain_planner.h"
 
 namespace {
+TEST(GoalGridSearch, KeepsNearestFreeCellAndTieOrder)
+{
+    grid_ns::Grid<char> grid(Eigen::Vector3i(5, 5, 1), 0);
+    far_planner::GoalGridSearch search;
+    const int seed = grid.Sub2Ind(2, 2, 0);
+    const int left = grid.Sub2Ind(1, 2, 0);
+    const int up = grid.Sub2Ind(2, 3, 0);
+    grid.GetCell(left) = 2;
+    grid.GetCell(up) = 2;
+    EXPECT_EQ(search.Find(grid, seed, 2), left);
+
+    grid.GetCell(left) = 3;  // Obstacle and free bits together are not free.
+    EXPECT_EQ(search.Find(grid, seed, 2), up);
+    grid.GetCell(up) = 0;
+    EXPECT_EQ(search.Find(grid, seed, 2), -1);
+    EXPECT_EQ(search.Find(grid, -1, 2), -1);
+    EXPECT_EQ(search.Find(grid, grid.GetCellNumber(), 2), -1);
+    grid.GetCell(left) = 2;
+    EXPECT_EQ(search.Find(grid, seed, 2), left);  // A failed search leaves no visited state.
+}
+
 NavNodePtr Node(std::size_t id, float x, float y)
 {
     auto node = std::make_shared<NavNode>();
