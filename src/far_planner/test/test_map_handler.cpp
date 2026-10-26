@@ -16,6 +16,13 @@ public:
     }
 };
 
+class MapHandlerTestAccess {
+public:
+    static void SetTerrainInflation(MapHandler& map, int cells) {
+        map.INFLATE_N = cells;
+    }
+};
+
 TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
     grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
     for (int index = 0; index < grid.GetCellNumber(); ++index) {
@@ -291,6 +298,31 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     EXPECT_FALSE(matched);
     EXPECT_FLOAT_EQ(map.TerrainHeightOfPoint(query, matched, true), 4.0f);
     EXPECT_FALSE(matched);
+}
+
+TEST(MapHandler, FindsConnectedGroundAfterSearchingFromEmptyRobotCell) {
+    RestoreMapParameters restore;
+    FARUtil::kLeafSize = 0.2f;
+    FARUtil::robot_dim = 1.0f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams params{};
+    params.sensor_range = 3.0f;
+    params.floor_height = 2.5f;
+    params.cell_length = 1.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 10.0f;
+    params.grid_max_height = 6.0f;
+    params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    MapHandlerTestAccess::SetTerrainInflation(map, 0);
+    PointCloudPtr ground(new PointCloud);
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, -0.75f)));
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 1.0f, -0.75f)));
+    PointCloudPtr heights(new PointCloud);
+    map.UpdateTerrainHeightGrid(ground, heights);
+    EXPECT_EQ(heights->size(), 2U);
 }
 
 TEST(MapHandler, EmptyTerrainAndResetDiscardOldHeightSamples) {

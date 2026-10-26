@@ -132,6 +132,7 @@ public:
     void ClearObsCellThroughPosition(const Point3D& point);
 
 private:
+    friend class MapHandlerTestAccess;
     MapHandlerParams map_params_;
     int neighbor_Lnum_, neighbor_Hnum_;
     Eigen::Vector3i robot_cell_sub_;
