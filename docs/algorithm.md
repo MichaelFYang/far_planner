@@ -123,6 +123,8 @@ The boundary extractor reads ASCII PLY through a bounded, checked parser. The ve
 
 Boundary configuration normalizes `world_frame`, requires a positive finite `visual_scale_ratio` and a nonnegative finite `height_tolz`, and resolves relative filenames against `folder_path` with or without a trailing slash. Absolute filenames remain unchanged. Invalid settings fail before reading inputs or writing a graph.
 
+The extractor builds graph and free-position markers only while their topics have subscribers. Its one-second loop checks again for viewers that connect later. Completed graph markers move into the outgoing array instead of copying their point lists.
+
 ## Saved graph decoder stage
 
 The decoder now parses the complete saved graph before publishing it. Each line requires the 15 scalar fields and three `|` separators; the four connection groups may be empty. IDs use the message's full `uint32` range, including the final token on a line without a trailing space. Invalid coordinates, duplicate IDs, missing fields, and references to absent nodes reject the file without publishing a partial graph. Parser tests read both bundled `.vgh` files and exercise malformed input.
