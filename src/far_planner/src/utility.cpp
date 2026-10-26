@@ -129,12 +129,13 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
     if (source.empty() || target.empty()) {
         throw tf2::InvalidArgumentException("Point cloud source and target frames must be nonempty");
     }
-    if (stamp.nanoseconds() == 0) {
-        throw tf2::InvalidArgumentException("Sensor clouds require a nonzero measurement timestamp");
+    if (stamp.nanoseconds() <= 0) {
+        throw tf2::InvalidArgumentException("Sensor clouds require a positive measurement timestamp");
     }
     if (cloudInOut->empty()) return;
     if (source == target) {
         cloudInOut->header.frame_id = target;
+        cloudInOut->header.stamp = static_cast<std::uint64_t>(stamp.nanoseconds()) / 1000ULL;
         return;
     }
 
