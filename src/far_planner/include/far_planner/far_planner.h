@@ -83,6 +83,7 @@ private:
     far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_local_terrains_{2};
     far_planner::ClockEpoch clock_epoch_;
     std::uint64_t last_scan_stamp_ = 0, last_terrain_stamp_ = 0, last_local_terrain_stamp_ = 0;
+    std::uint64_t local_terrain_revision_ = 0;
     std::uint64_t sensor_time_tolerance_ns_ = 200000000ULL;
 
     bool is_reset_env_, is_stop_update_, is_init_completed_;
