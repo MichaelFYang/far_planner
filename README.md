@@ -99,6 +99,8 @@ Terrain intensity must encode traversability height cost, not lidar reflectivity
 
 See [the algorithm and refactor guide](docs/algorithm.md) for the data flow, TF/time contract, invariants, and validation plan.
 
+For rendered Goalpoint and TeleopPanel regression checks, see the optional [RViz interaction test](tests/rviz_interaction/README.md). It builds separately and keeps its logs and screenshots outside the source tree.
+
 This branch contains six ROS 1 catkin packages under `src/`. See [AGENTS.md](AGENTS.md) for contributor conventions. `catkin_make` generates the local `src/CMakeLists.txt`; do not commit that machine-specific file.
 
 Build and run registered tests with:

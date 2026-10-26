@@ -329,7 +329,15 @@ The 50.6-second input recording was replayed with ROS simulated time under Addre
 
 After correcting the scan/terrain wiring, the installed Jazzy launch ran with `is_static_env=false` for five cycles of the same route: all 15 goals reported arrival, with a maximum final XY error of 0.133 m. During 222 seconds of observation it published 1,074 nonempty scan-ray debug clouds and 538 graph snapshots. After the first 60 seconds, sampled planner RSS stayed between 122.1 and 129.5 MiB; the published graph peaked at 91 nodes and ended at 80. This short repeat run exercises dynamic-mode processing in a static world; it does not establish moving-obstacle performance or long-duration memory stability.
 
-The indoor runs above cover one environment on native Jazzy; the garage case below adds a ramp route. Broader moving-obstacle cases, additional multi-layer routes, interactive RViz behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+The indoor runs above cover one environment on native Jazzy; the garage case below adds a ramp route. Broader moving-obstacle cases, additional multi-layer routes, stock RViz layout behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+
+## Rendered RViz interaction regression
+
+The optional [RViz interaction test](../tests/rviz_interaction/README.md) loads the installed Goalpoint and TeleopPanel plugins into RViz's real render panel and drives Qt mouse events. Its standalone CMake project is excluded from normal colcon builds. The runner owns a temporary X display and an isolated ROS environment, redirects ROS/Qt state to its artifact directory, and stops its child processes on failure or timeout. ROS 1 uses a separate local master; ROS 2 uses a dedicated localhost domain.
+
+The same test passes on Humble, Jazzy, Lyrical/Qt6, and Noetic/Qt5 with software OpenGL. Each run checks six goal/resume pairs, five file dialogs (including cancellation and an existing `.vgh` suffix), four toggle messages, graph reset, panel resume, joystick release/idle behavior, and a one-pixel widget. Missing TF and invalid goal topics reject the goal and recover after valid input. A moving-TF case produces a 2.25 m goal using odometry-time evidence; latest-TF lookup would incorrectly produce 6.25 m. All goal coordinates and joystick axes must be finite.
+
+These checks exercise a rendered RViz test window, rather than the stock application layout or hardware graphics. File dialogs verify published paths, without starting the graph decoder or writing a graph. They complement the planner replay and simulator runs. JSON results, ROS logs, and screenshots remain outside the repository. The runner also rejects missing/invalid final reports and nonzero exits; a timeout check verifies that a child ignoring SIGTERM is killed along with its process group.
 
 ## Build dependency audit
 
