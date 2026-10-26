@@ -10,6 +10,7 @@
 #include "graph_decoder/decoder_node.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 #include <visibility_graph_msg/graph_validation.h>
+#include <utility>
 
 
 /***************************************************************************************/
@@ -48,11 +49,22 @@ void GraphDecoder::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg)
         nodeIdx_idx_map.emplace(node.id, next_graph.size());
         next_graph.push_back(temp_node_ptr);
     }
-    for (const auto& node_ptr : next_graph) {
-        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->connect_idxs, node_ptr->connect_nodes);
-        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->poly_idxs, node_ptr->poly_connects);
-        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->contour_idxs, node_ptr->contour_connects);
-        AssignConnectNodes(nodeIdx_idx_map, next_graph, node_ptr->traj_idxs, node_ptr->traj_connects);
+    const auto assign_validated = [&nodeIdx_idx_map, &next_graph](const auto& ids,
+                                      std::vector<std::size_t>& indexes, NodePtrStack& connects) {
+        indexes.reserve(ids.size());
+        connects.reserve(ids.size());
+        for (const auto id : ids) {
+            indexes.push_back(id);
+            connects.push_back(next_graph[nodeIdx_idx_map.at(id)]);
+        }
+    };
+    for (std::size_t i = 0; i < msg->nodes.size(); ++i) {
+        const auto& input = msg->nodes[i];
+        const auto& node = next_graph[i];
+        assign_validated(input.connect_nodes, node->connect_idxs, node->connect_nodes);
+        assign_validated(input.poly_connects, node->poly_idxs, node->poly_connects);
+        assign_validated(input.contour_connects, node->contour_idxs, node->contour_connects);
+        assign_validated(input.trajectory_connects, node->traj_idxs, node->traj_connects);
     }
     ResetGraph(received_graph_);
     received_graph_.swap(next_graph);
@@ -65,18 +77,19 @@ void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std:
                                       std::vector<std::size_t>& node_idxs,
                                       std::vector<NavNodePtr>& connects)
 {
-    std::vector<std::size_t> clean_idx;
     connects.clear();
-    for (const auto& cid : node_idxs) {
-        const auto it = idxs_map.find(cid);
+    connects.reserve(node_idxs.size());
+    std::size_t valid_count = 0;
+    for (std::size_t i = 0; i < node_idxs.size(); ++i) {
+        const auto it = idxs_map.find(node_idxs[i]);
         if (it != idxs_map.end()) {
             const std::size_t idx = it->second;
             const NavNodePtr cnode_ptr = graph[idx];
             connects.push_back(cnode_ptr);
-            clean_idx.push_back(cnode_ptr->id);
+            node_idxs[valid_count++] = cnode_ptr->id;
         }
     }
-    node_idxs = clean_idx;
+    node_idxs.resize(valid_count);
 }
 
 void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
@@ -101,21 +114,6 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
     node_ptr->is_frontier = msg.is_frontier;
     node_ptr->is_navpoint = msg.is_navpoint;
     node_ptr->is_boundary = msg.is_boundary;
-    // assigan connection idxs
-    node_ptr->connect_idxs.clear(), node_ptr->poly_idxs.clear(), node_ptr->contour_idxs.clear(), node_ptr->traj_idxs.clear();
-    for (const auto& cid : msg.connect_nodes) {
-        node_ptr->connect_idxs.push_back((std::size_t)cid);
-    }
-    for (const auto& cid : msg.poly_connects) {
-        node_ptr->poly_idxs.push_back((std::size_t)cid);
-    }
-    for (const auto& cid : msg.contour_connects) {
-        node_ptr->contour_idxs.push_back((std::size_t)cid);
-    }
-    for (const auto& cid : msg.trajectory_connects) {
-        node_ptr->traj_idxs.push_back((std::size_t)cid);
-    }
-    node_ptr->connect_nodes.clear(), node_ptr->poly_connects.clear(), node_ptr->contour_connects.clear(), node_ptr->traj_connects.clear();
 }
 
 
@@ -215,6 +213,7 @@ void GraphDecoder::CreateNavNode(const graph_file::NodeRecord& record, NavNodePt
 
 void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
     graphOut.nodes.clear();
+    graphOut.nodes.reserve(graphIn.size());
     const std::string frame_id = graphOut.header.frame_id;
     for (const auto& node_ptr : graphIn) {
         visibility_graph_msg::Node msg_node;
@@ -247,7 +246,7 @@ void GraphDecoder::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg
         for (const auto& cid : node_ptr->traj_idxs) {
             msg_node.trajectory_connects.push_back(cid);
         }
-        graphOut.nodes.push_back(msg_node);
+        graphOut.nodes.push_back(std::move(msg_node));
     }
     graphOut.size = graphOut.nodes.size();
 }
@@ -268,7 +267,9 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::StringConstPtr& msg) {
         return;
     }
     NodePtrStack loaded_graph;
+    loaded_graph.reserve(records.size());
     std::unordered_map<std::size_t, std::size_t> nodeIdx_idx_map;
+    nodeIdx_idx_map.reserve(records.size());
     for (const auto& record : records) {
         NavNodePtr node;
         CreateNavNode(record, node);

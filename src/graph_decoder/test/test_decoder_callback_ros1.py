@@ -69,6 +69,9 @@ class DecoderCallbackTest(unittest.TestCase):
             node.FreeType = 3 if identifier == 1 else 1
             valid.nodes.append(node)
         valid.nodes[0].connect_nodes = [2]
+        valid.nodes[0].poly_connects = [2]
+        valid.nodes[0].contour_connects = [2]
+        valid.nodes[0].trajectory_connects = [2]
         valid.size = 2
         graphs.publish(valid)
         wait_for(lambda: len(markers) > 0)
@@ -77,6 +80,10 @@ class DecoderCallbackTest(unittest.TestCase):
         for original, decoded in zip(valid.nodes, round_trip.nodes):
             self.assertEqual(decoded.FreeType, original.FreeType)
             self.assertEqual(decoded.surface_dirs, original.surface_dirs)
+            for field in ('connect_nodes', 'poly_connects',
+                          'contour_connects', 'trajectory_connects'):
+                self.assertEqual(list(getattr(decoded, field)),
+                                 list(getattr(original, field)))
 
         with tempfile.TemporaryDirectory(prefix='far-graph-save-') as directory:
             save_path = os.path.join(directory, 'saved_graph.vgh')
@@ -100,6 +107,9 @@ class DecoderCallbackTest(unittest.TestCase):
             self.assertEqual([node.id for node in loaded.nodes], [1, 2])
             self.assertEqual(struct.pack('f', loaded.nodes[0].position.x),
                              struct.pack('f', valid.nodes[0].position.x))
+            for field in ('connect_nodes', 'poly_connects',
+                          'contour_connects', 'trajectory_connects'):
+                self.assertEqual(list(getattr(loaded.nodes[0], field)), [2])
 
         malformed = Graph()
         malformed.header.frame_id = 'map'
