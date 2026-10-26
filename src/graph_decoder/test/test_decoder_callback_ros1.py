@@ -32,7 +32,7 @@ class DecoderCallbackTest(unittest.TestCase):
         published = []
         markers = []
         rospy.Subscriber('/decoded_vgraph', Graph, published.append, queue_size=10)
-        rospy.Subscriber('/graph_decoder_viz', MarkerArray, markers.append, queue_size=10)
+        marker_sub = rospy.Subscriber('/graph_decoder_viz', MarkerArray, markers.append, queue_size=10)
         graphs = rospy.Publisher('/robot_vgraph', Graph, queue_size=10)
         save_requests = rospy.Publisher('/save_file_dir', String, queue_size=10)
         read_requests = rospy.Publisher('/read_file_dir', String, queue_size=10)
@@ -40,7 +40,8 @@ class DecoderCallbackTest(unittest.TestCase):
         request = rospy.ServiceProxy('/request_graph_service', Trigger)
         wait_for(lambda: graphs.get_num_connections() > 0
                  and save_requests.get_num_connections() > 0
-                 and read_requests.get_num_connections() > 0)
+                 and read_requests.get_num_connections() > 0
+                 and marker_sub.get_num_connections() > 0)
 
         def request_graph(expected_size, expected_robot):
             previous = len(published)
@@ -75,6 +76,10 @@ class DecoderCallbackTest(unittest.TestCase):
         valid.size = 2
         graphs.publish(valid)
         wait_for(lambda: len(markers) > 0)
+        marker_by_name = {marker.ns: marker for marker in markers[-1].markers}
+        self.assertEqual(len(marker_by_name), 12)
+        for name in ('global_vgraph', 'visibility_edge', 'polygon_edge'):
+            self.assertEqual(len(marker_by_name[name].points), 2)
         round_trip = request_graph(2, 7)
         self.assertEqual([n.id for n in round_trip.nodes], [1, 2])
         for original, decoded in zip(valid.nodes, round_trip.nodes):
