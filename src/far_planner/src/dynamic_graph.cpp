@@ -26,9 +26,10 @@ void DynamicGraph::Init(const rclcpp::Node::SharedPtr nh, const DynamicGraphPara
     terrain_planner_.Init(nh, tp_params_);
 }
 
-void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos) {
+void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos,
+                                       std::uint64_t local_terrain_revision) {
     robot_pos_ = robot_pos;
-    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_);
+    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_, local_terrain_revision);
     if (odom_node_ptr_ == NULL) {
         this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true);
         this->AddNodeToGraph(odom_node_ptr_);

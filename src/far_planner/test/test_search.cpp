@@ -155,7 +155,7 @@ TEST(TerrainSearch, QueueDecreaseMustReturnTheShortestGridPath)
         point.z = 0.0f;
         obstacles->push_back(point);
     }
-    planner.SetLocalTerrainObsCloud(obstacles);
+    planner.SetLocalTerrainObsCloud(obstacles, 1);
     PointStack path;
     const bool found = planner.PlanPathFromPToP(Point3D(-2.0f, -1.0f, 0.0f),
                                                 Point3D(2.0f, 1.0f, 0.0f), path);
@@ -193,7 +193,7 @@ TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
     point.x = 0.0f;
     point.y = 0.0f;
     obstacles->push_back(point);
-    planner.SetLocalTerrainObsCloud(obstacles);
+    planner.SetLocalTerrainObsCloud(obstacles, 1);
     ASSERT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
 
     PointStack path;
@@ -206,7 +206,11 @@ TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
     EXPECT_GT(blocked_length, 2.0f);
 
     obstacles->clear();
-    planner.SetLocalTerrainObsCloud(obstacles);
+    // The same revision must reuse the last projection even when the caller's
+    // mutable cloud buffer has changed; accepted clouds advance the revision.
+    planner.SetLocalTerrainObsCloud(obstacles, 1);
+    EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
+    planner.SetLocalTerrainObsCloud(obstacles, 2);
     EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(planner.PlanPathFromPToP(Point3D(-1.0f, 0.0f, 0.0f),
                                         Point3D(1.0f, 0.0f, 0.0f), path));
@@ -218,9 +222,11 @@ TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
 
     point.y = 1.0f;
     obstacles->push_back(point);
-    planner.SetLocalTerrainObsCloud(obstacles);
+    planner.SetLocalTerrainObsCloud(obstacles, 3);
     EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
     planner.UpdateCenterNode(Node(101, 1.0f, 1.0f));
     EXPECT_FALSE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
+    planner.SetLocalTerrainObsCloud(obstacles, 3);
+    EXPECT_TRUE(planner.IsPointOccupy(Point3D(0.0f, 1.0f, 0.0f)));
 }
 }  // namespace

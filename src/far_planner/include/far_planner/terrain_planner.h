@@ -1,6 +1,8 @@
 #ifndef TERRIAN_PLANNER_H
 #define TERRIAN_PLANNER_H
 
+#include <cstdint>
+
 #include "utility.h"
 #include "planner_visualizer.h"
 
@@ -36,7 +38,7 @@ public:
 
     void UpdateCenterNode(const NavNodePtr& node_ptr);
     
-    void SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn);
+    void SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, std::uint64_t revision);
     
     bool PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p, PointStack& path);
 
@@ -69,6 +71,8 @@ private:
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
     std::vector<int> occupied_cells_;
+    std::uint64_t last_projected_revision_ = 0;
+    bool needs_projection_ = true;
 
     void ExtractPath(const TerrainNodePtr& end_ptr, PointStack& path);
 
