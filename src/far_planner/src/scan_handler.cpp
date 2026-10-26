@@ -105,7 +105,7 @@ void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointClo
         const int ind = voxel_grids_->Sub2Ind(sub);
         const char cell_c = voxel_grids_->GetCell(ind);
         if ((cell_c | RAY_BIT) == cell_c) {
-            dyObsCloudOut->points.push_back(point);
+            dyObsCloudOut->push_back(point);
         }
     }
 }
@@ -187,7 +187,7 @@ void ScanHandler::GridVisualCloud(const PointCloudPtr& cloudOut, const GridStatu
     for (int ind=0; ind<N; ind++) {
         const char c_type = voxel_grids_->GetCell(ind);
         if ((c_type | RType) == c_type) {
-            cloudOut->points.push_back(this->Ind2PCLPoint(ind));
+            cloudOut->push_back(this->Ind2PCLPoint(ind));
         }
     }
 }

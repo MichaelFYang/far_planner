@@ -213,8 +213,8 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub);
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
-            EnsureCloud(*world_obs_cloud_grid_, ind)->points.push_back(point);
-            obs_valid_ptr->points.push_back(point);
+            EnsureCloud(*world_obs_cloud_grid_, ind)->push_back(point);
+            obs_valid_ptr->push_back(point);
             if (modified_set.insert(ind).second) {
                 modified_indices.push_back(ind);
             }
@@ -235,7 +235,7 @@ void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
         Eigen::Vector3i sub = world_free_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
-        EnsureCloud(*world_free_cloud_grid_, ind)->points.push_back(point);
+        EnsureCloud(*world_free_cloud_grid_, ind)->push_back(point);
         if (modified_set.insert(ind).second) {
             modified_indices.push_back(ind);
         }
@@ -464,7 +464,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
         Eigen::Vector3d cpos = terrain_height_grid_->Ind2Pos(idx);
         cpos.z() = terrain_height_grid_->GetCell(idx)[0];
         const PCLPoint p = FARUtil::Point3DToPCLPoint(Point3D(cpos));
-        terrainHeightOut->points.push_back(p);
+        terrainHeightOut->push_back(p);
         terrain_grid_traverse_list_[idx] = 1;
     };
 
