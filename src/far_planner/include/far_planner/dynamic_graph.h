@@ -606,6 +606,7 @@ public:
         ClearNodeConnectInGraph(node_ptr);
         //DEBUG
         if (!node_ptr->contour_connects.empty()) ROS_ERROR("DG: Goal node should not have contour connections.");
+        RemoveNodeIdFromMap(node_ptr);
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 
