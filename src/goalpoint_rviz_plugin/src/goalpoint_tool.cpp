@@ -110,21 +110,19 @@ void GoalPointTool::onPoseSet(double x, double y, double /* theta */)
   joy.buttons.push_back(0);
   joy.buttons.push_back(0);
 
-  joy.header.stamp = ros::Time::now();
+  const ros::Time click_stamp = ros::Time::now();
+  joy.header.stamp = click_stamp;
   joy.header.frame_id = "goalpoint_tool";
 
   geometry_msgs::PointStamped goal_point;
   goal_point.header.frame_id = fixed_frame;
-  goal_point.header.stamp = ros::Time::now();
+  goal_point.header.stamp = click_stamp;
   goal_point.point.x = x;
   goal_point.point.y = y;
   goal_point.point.z = goal_height;
 
   pub_.publish(goal_point);
   usleep(10000);
-  pub_.publish(goal_point);
-
-  usleep(10000); // set to 1000000us (1s) on real robot
   pub_joy_.publish(joy);
 }
 }  // end namespace rviz
