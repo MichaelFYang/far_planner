@@ -27,8 +27,9 @@ def generate_launch_description():
             remappings=[
                 ('/odom_world', '/state_estimation'),
                 ('/terrain_cloud', '/terrain_map_ext'),
-                ('/scan_cloud', '/terrain_map'),
-                ('/terrain_local_cloud', '/registered_scan'),
+                # Ray tracing uses raw returns; local occupancy uses height costs.
+                ('/scan_cloud', '/registered_scan'),
+                ('/terrain_local_cloud', '/terrain_map'),
             ],
         ),
         Node(

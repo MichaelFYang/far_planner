@@ -82,6 +82,19 @@ Users have the option to define custom navigation boundaries. To do this, user
 ros2 launch boundary_handler boundary_handler.launch
 ```
 
+## Sensor inputs
+
+The default launch connects these inputs to the autonomous exploration development environment:
+
+| Planner input | Default topic | Content |
+| --- | --- | --- |
+| `/odom_world` | `/state_estimation` | Stamped robot pose |
+| `/scan_cloud` | `/registered_scan` | Raw registered XYZ returns for ray tracing; intensity is optional |
+| `/terrain_cloud` | `/terrain_map_ext` | Extended terrain with height cost in intensity |
+| `/terrain_local_cloud` | `/terrain_map` | Local terrain with height cost in intensity |
+
+Terrain intensity must encode traversability height cost, not lidar reflectivity. For example, zero reflectivity on a wall must not be interpreted as free terrain. Clouds and odometry must use the same ROS clock; see the [TF/time contract](docs/algorithm.md#tf-and-timestamp-contract) for interpolation and queue limits.
+
 ## Development
 
 See [the algorithm and refactor guide](docs/algorithm.md) for the data flow, TF/time contract, invariants, and validation plan.
