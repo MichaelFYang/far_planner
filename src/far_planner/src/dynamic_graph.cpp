@@ -8,6 +8,7 @@
 
 
 #include "far_planner/dynamic_graph.h"
+#include "far_planner/vote_selection.h"
 
 /***************************************************************************************/
 
@@ -536,19 +537,21 @@ void DynamicGraph::ReEvaluateConvexity(const NavNodePtr& node_ptr) {
 }
 
 void DynamicGraph::TopTwoContourConnector(const NavNodePtr& node_ptr) {
-    std::vector<int> votesc;
+    far_planner::TopTwoScores top_scores;
     for (const auto& vote : node_ptr->contour_votes) {
         if (FARUtil::IsVoteTrue(vote.second, false)) {
-            votesc.push_back(std::accumulate(vote.second.begin(), vote.second.end(), 0));
+            top_scores.Observe(std::accumulate(vote.second.begin(), vote.second.end(), 0));
         }
     }
-    std::sort(votesc.begin(), votesc.end(), std::greater<int>());
     for (const auto& cnode_ptr : node_ptr->potential_contours) {
         const auto it = node_ptr->contour_votes.find(cnode_ptr->id);
-        // DEBUG
-        if (it == node_ptr->contour_votes.end()) ROS_ERROR("DG: contour potential node matching error");
-        const int itc = std::accumulate(it->second.begin(), it->second.end(), 0);
-        if (FARUtil::VoteRankInVotes(itc, votesc) < 2 && FARUtil::IsVoteTrue(it->second, false)) {
+        if (it == node_ptr->contour_votes.end()) {
+            ROS_ERROR("DG: contour potential node matching error");
+        }
+        const bool selected = it != node_ptr->contour_votes.end() &&
+            FARUtil::IsVoteTrue(it->second, false) &&
+            top_scores.Includes(std::accumulate(it->second.begin(), it->second.end(), 0));
+        if (selected) {
             DynamicGraph::AddContourConnect(node_ptr, cnode_ptr);
             this->AddEdge(node_ptr, cnode_ptr);
         } else if (DynamicGraph::DeleteContourConnect(node_ptr, cnode_ptr) && !FARUtil::IsTypeInStack(cnode_ptr, node_ptr->poly_connects)) {

@@ -21,6 +21,7 @@ struct DynamicGraphParams {
 
 class DynamicGraph {  
 private:
+    friend class GraphVoteTestAccess;
     Point3D robot_pos_;
     NavNodePtr odom_node_ptr_     = NULL;
     NavNodePtr cur_internav_ptr_  = NULL;

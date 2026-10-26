@@ -261,8 +261,6 @@ public:
 
     static bool IsVoteTrue(const std::deque<int>& votes, const bool& is_balance=true);
 
-    static int VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes);
-
     static bool IsDirsConverage(const PointPair& cur_directs,
                                 const PointPair& update_directs);
 
