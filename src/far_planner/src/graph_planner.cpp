@@ -8,6 +8,7 @@
 
 
 #include "far_planner/graph_planner.h"
+#include "far_planner/parameter_validation.h"
 
 #include <functional>
 
@@ -26,7 +27,9 @@ void GraphPlanner::Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerPara
     // attemptable planning listener
     attemptable_sub_ = nh_->create_subscription<std_msgs::msg::Bool>("/planning_attemptable", 5, std::bind(&GraphPlanner::AttemptStatusCallBack, this, std::placeholders::_1));
     // initialize terrain grid
-    const int col_num = std::ceil(gp_params_.adjust_radius * 2.0f / FARUtil::kLeafSize);
+    const int col_num = far_planner::CheckedDimension(
+        static_cast<double>(gp_params_.adjust_radius) * 2.0, FARUtil::kLeafSize,
+        "goal terrain grid width");
     Eigen::Vector3i grid_size(col_num, col_num, 1);
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(FARUtil::kLeafSize, FARUtil::kLeafSize, FARUtil::kLeafSize);

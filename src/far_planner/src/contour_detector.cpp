@@ -6,6 +6,7 @@
  */
 
 #include "far_planner/contour_detector.h"
+#include "far_planner/parameter_validation.h"
 
 // const static int BLUR_SIZE = 10;
 
@@ -16,15 +17,20 @@ void ContourDetector::Init(const ContourDetectParams& params) {
     /* Allocate Pointcloud pointer memory */
     new_corners_cloud_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     // Init projection cv Mat
-    MAT_SIZE = std::ceil(cd_params_.sensor_range * 2.0f / cd_params_.voxel_dim);
-    if (MAT_SIZE % 2 == 0) MAT_SIZE ++;
-    MAT_RESIZE = MAT_SIZE * (int)cd_params_.kRatio;
+    far_planner::RequirePositiveFinite(cd_params_.kRatio, "c_detector/resize_ratio");
+    if (cd_params_.kBlurSize < 1)
+        throw std::invalid_argument("contour blur size must be positive");
+    MAT_SIZE = far_planner::CheckedDimension(
+        static_cast<double>(cd_params_.sensor_range) * 2.0, cd_params_.voxel_dim,
+        "contour image width", 0, true);
+    MAT_RESIZE = far_planner::CheckedRoundedDimension(
+        static_cast<double>(MAT_SIZE) * cd_params_.kRatio, "resized contour image width");
     CMAT = MAT_SIZE / 2, CMAT_RESIZE = MAT_RESIZE / 2;
     img_mat_ = cv::Mat::zeros(MAT_SIZE, MAT_SIZE, CV_32FC1);
     img_counter_ = 0;
     odom_node_ptr_ = NULL;
     refined_contours_.clear(), refined_hierarchy_.clear();
-    DIST_LIMIT = cd_params_.kRatio * 1.5f;
+    DIST_LIMIT = static_cast<float>(MAT_RESIZE) / MAT_SIZE * 1.5f;
     ALIGN_ANGLE_COS = cos(FARUtil::kAcceptAlign / 2.0f);
     VOXEL_DIM_INV = 1.0f / cd_params_.voxel_dim;
 }
@@ -63,7 +69,7 @@ void ContourDetector::UpdateImgMatWithCloud(const PointCloudPtr& pc, cv::Mat& im
 
 void ContourDetector::ResizeAndBlurImg(const cv::Mat& img, cv::Mat& Rimg) {
     img.convertTo(Rimg, CV_8UC1, 255);
-    cv::resize(Rimg, Rimg, cv::Size(), cd_params_.kRatio, cd_params_.kRatio, 
+    cv::resize(Rimg, Rimg, cv::Size(MAT_RESIZE, MAT_RESIZE), 0, 0,
                cv::InterpolationFlags::INTER_LINEAR);
     //cv::morphologyEx(Rimg, Rimg, cv::MORPH_OPEN, getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
     cv::boxFilter(Rimg, Rimg, -1, cv::Size(cd_params_.kBlurSize, cd_params_.kBlurSize), cv::Point2i(-1, -1), false);
@@ -94,7 +100,7 @@ void ContourDetector::ConvertContoursToRealWorld(const std::vector<CVPointStack>
 
 void ContourDetector::ShowCornerImage(const cv::Mat& img_mat, const PointCloudPtr& pc) {
     cv::Mat dst = cv::Mat::zeros(MAT_RESIZE, MAT_RESIZE, CV_8UC3);
-    const int circle_size = (int)(cd_params_.kRatio*1.5);
+    const int circle_size = std::max(1, static_cast<int>(static_cast<float>(MAT_RESIZE) / MAT_SIZE * 1.5f));
     for (std::size_t i=0; i<pc->size(); i++) {
         cv::Point2f cv_p = this->ConvertPoint3DToCVPoint(pc->points[i], odom_pos_, true);
         cv::circle(dst, cv_p, circle_size, cv::Scalar(128,128,128), -1);

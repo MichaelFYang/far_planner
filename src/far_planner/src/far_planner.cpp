@@ -8,6 +8,7 @@
 
 
 #include "far_planner/far_planner.h"
+#include "far_planner/parameter_validation.h"
 
 #include <stdexcept>
 
@@ -73,9 +74,9 @@ void FARMaster::Init() {
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner ROS Params Initiated");
 
   /*init path generation thred callback*/
-  const float duration_time = 1.0f / master_params_.main_run_freq;
-  main_event_     = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::MainLoopCallBack, this));
-  planning_event_ = nh_->create_wall_timer(std::chrono::milliseconds(int(duration_time * 1000)), std::bind(&FARMaster::PlanningCallBack, this));
+  const auto period = std::chrono::nanoseconds(far_planner::CheckedTimerPeriodNs(master_params_.main_run_freq));
+  main_event_     = nh_->create_wall_timer(period, std::bind(&FARMaster::MainLoopCallBack, this));
+  planning_event_ = nh_->create_wall_timer(period, std::bind(&FARMaster::PlanningCallBack, this));
   sensor_retry_event_ = nh_->create_wall_timer(std::chrono::milliseconds(50), [this]() {
     if (pending_odometry_.Size() == 0 && pending_scans_.Size() == 0 &&
         pending_terrains_.Size() == 0 && pending_local_terrains_.Size() == 0) return;
@@ -548,6 +549,16 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter("is_debug_output", master_params_.is_debug_output);
   nh_->get_parameter("is_attempt_autoswitch", master_params_.is_attempt_autoswitch);
   nh_->get_parameter<std::string>("world_frame", master_params_.world_frame);
+  far_planner::CheckedTimerPeriodNs(master_params_.main_run_freq);
+  far_planner::RequirePositiveFinite(master_params_.voxel_dim, "voxel_dim");
+  far_planner::RequirePositiveFinite(master_params_.robot_dim, "robot_dim");
+  far_planner::RequirePositiveFinite(master_params_.vehicle_height, "vehicle_height");
+  far_planner::RequirePositiveFinite(master_params_.sensor_range, "sensor_range");
+  far_planner::RequirePositiveFinite(master_params_.terrain_range, "terrain_range");
+  far_planner::RequirePositiveFinite(master_params_.local_planner_range, "local_planner_range");
+  far_planner::RequirePositiveFinite(master_params_.viz_ratio, "visualize_ratio");
+  if (FARUtil::NormalizeFrameID(master_params_.world_frame).empty())
+    throw std::invalid_argument("world_frame must not be empty");
   master_params_.terrain_range = std::min(master_params_.terrain_range, master_params_.sensor_range);
 
   // print voxel_dim paramter in ROS2
@@ -566,6 +577,10 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(map_prefix + "/map_grad_max_height", map_params_.grid_max_height);
 
   // Compute dependent parameters
+  far_planner::RequirePositiveFinite(map_params_.floor_height, "map_handler/floor_height");
+  far_planner::RequirePositiveFinite(map_params_.cell_length, "map_handler/cell_length");
+  far_planner::RequirePositiveFinite(map_params_.grid_max_length, "map_handler/map_grid_max_length");
+  far_planner::RequirePositiveFinite(map_params_.grid_max_height, "map_handler/map_grad_max_height");
   map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f;
   map_params_.cell_height = map_params_.floor_height / 2.5f;
   map_params_.sensor_range = master_params_.sensor_range;
@@ -593,6 +608,10 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(utility_prefix + "/dynamic_obs_dacay_time", FARUtil::kObsDecayTime);
   nh_->get_parameter(utility_prefix + "/new_points_decay_time", FARUtil::kNewDecayTime);
   nh_->get_parameter(utility_prefix + "/obs_inflate_size", FARUtil::kObsInflate);
+  far_planner::RequireNonNegativeFinite(FARUtil::kObsDecayTime, "util/dynamic_obs_dacay_time");
+  far_planner::RequireNonNegativeFinite(FARUtil::kNewDecayTime, "util/new_points_decay_time");
+  if (FARUtil::kObsInflate < 0)
+    throw std::invalid_argument("util/obs_inflate_size must be nonnegative");
   FARUtil::kLeafSize       = master_params_.voxel_dim;
   FARUtil::kNearDist       = master_params_.robot_dim;
   FARUtil::kHeightVoxel    = map_params_.height_voxel_dim;
@@ -631,6 +650,7 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(planner_prefix + "/reach_goal_vote_size", gp_params_.votes_size);
   nh_->get_parameter(planner_prefix + "/path_momentum_thred", gp_params_.momentum_thred);
 
+  far_planner::RequirePositiveFinite(gp_params_.adjust_radius, "g_planner/goal_adjust_radius");
   gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
 
@@ -682,7 +702,10 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(cdetect_prefix + "/is_save_img", cdetect_params_.is_save_img);
   nh_->get_parameter(cdetect_prefix + "/img_folder_path", cdetect_params_.img_path);
 
-  cdetect_params_.kBlurSize    = (int)std::round(FARUtil::kNavClearDist / master_params_.voxel_dim);
+  far_planner::RequirePositiveFinite(cdetect_params_.kRatio, "c_detector/resize_ratio");
+  cdetect_params_.kBlurSize = far_planner::CheckedRoundedDimension(
+      std::max(1.0, static_cast<double>(FARUtil::kNavClearDist) / master_params_.voxel_dim),
+      "contour blur size");
   cdetect_params_.sensor_range = master_params_.sensor_range;
   cdetect_params_.voxel_dim    = master_params_.voxel_dim;
 }
