@@ -3,7 +3,6 @@
 
 #include "utility.h"
 #include "dynamic_graph.h"
-#include "graph_node_index.h"
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -37,9 +36,6 @@ private:
     rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr  graph_pub_;
     rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_;
 
-    NodePtrStack   global_graph_;
-    GraphNodeIndex graph_node_index_;
-    
     void CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr);
 
     static inline bool IsEncodeType(const NavNodePtr& node_ptr) {
@@ -69,13 +65,9 @@ private:
         return NULL;
     }
 
-    NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
-
     static bool EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
     void GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg);
-
-    void PublishGlobalGraph(const NodePtrStack& graphIn);
 
 };
 
