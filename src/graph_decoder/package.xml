@@ -12,8 +12,6 @@
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>visibility_graph_msg</depend>
-  <depend>pcl_ros</depend>
-  <depend>libpcl-all-dev</depend>
   <test_depend>gtest</test_depend>
   <exec_depend>roslaunch</exec_depend>
 </package>
