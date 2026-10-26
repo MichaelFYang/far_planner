@@ -216,21 +216,21 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
     std::vector<int> modified_indices;
     std::unordered_set<int> modified_set;
-    PointCloudPtr obs_valid_ptr(new pcl::PointCloud<PCLPoint>());
+    PointCloud obs_valid;
     for (const auto& point : obsCloudInOut->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub);
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
             EnsureCloud(*world_obs_cloud_grid_, ind)->push_back(point);
-            obs_valid_ptr->push_back(point);
+            obs_valid.push_back(point);
             if (modified_set.insert(ind).second) {
                 modified_indices.push_back(ind);
             }
             visited_cell_indices_.insert(ind);
         }
     }
-    *obsCloudInOut = *obs_valid_ptr;
+    obsCloudInOut->swap(obs_valid);
     for (const int ind : modified_indices) {
         FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(ind), FARUtil::kLeafSize);
     }
@@ -380,10 +380,9 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
 }
 
 void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs, std::unordered_set<int>& extend_terrain_obs) {
-    std::unordered_set<int> neighbor_copy = neighbor_obs;
-    neighbor_obs.clear();
     const float R = map_params_.cell_length * 0.7071f; // sqrt(2)/2
-    for (const auto& idx : neighbor_copy) {
+    for (auto it = neighbor_obs.begin(); it != neighbor_obs.end();) {
+        const int idx = *it;
         const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx));
         bool inRange = false;
         float minH, maxH;
@@ -391,14 +390,15 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
         if (inRange && pos.z + map_params_.cell_height > minH &&
                        pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
         {
-            neighbor_obs.insert(idx);
+            ++it;
+        } else {
+            it = neighbor_obs.erase(it);
         }
     }
     extend_terrain_obs.clear(); // assign extended terrain obs indices
-    const std::vector<int> inflate_vec{-1, 0};
     for (const int& idx : neighbor_obs) {
         const Eigen::Vector3i csub = world_obs_cloud_grid_->Ind2Sub(idx);
-        for (const int& plus : inflate_vec) {
+        for (int plus = -1; plus <= 0; ++plus) {
             Eigen::Vector3i sub = csub; 
             sub.z() += plus;
             if (!world_obs_cloud_grid_->InRange(sub)) continue;
