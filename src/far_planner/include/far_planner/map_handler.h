@@ -60,6 +60,8 @@ public:
         pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
         minH = maxH = p.z;
         is_matched = false;
+        if (!kdtree_terrain_clould_ || !kdtree_terrain_clould_->getInputCloud() ||
+            kdtree_terrain_clould_->getInputCloud()->empty()) return p.z;
         if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) {
             float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity;
             minH = maxH = avgH;
@@ -147,6 +149,8 @@ private:
         PCLPoint pcl_p;
         dist_square = FARUtil::kINF;
         pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
+        if (!kdtree_terrain_clould_ || !kdtree_terrain_clould_->getInputCloud() ||
+            kdtree_terrain_clould_->getInputCloud()->empty()) return p.z;
         if (kdtree_terrain_clould_->nearestKSearch(pcl_p, 1, pIdxK, pdDistK) > 0) {
             pcl_p = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]];
             dist_square = pdDistK[0];
