@@ -441,7 +441,7 @@ public:
      *  Updtae robot pos and odom node 
      *  @param robot_pos current robot position in world frame
     */
-    void UpdateRobotPosition(const Point3D& robot_pos);
+    void UpdateRobotPosition(const Point3D& robot_pos, std::uint64_t local_terrain_revision);
     
     /**
      * Extract Navigation Nodes from Vertices Detected -> Update [new_nodes_] internally.

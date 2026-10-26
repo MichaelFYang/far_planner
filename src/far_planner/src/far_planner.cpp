@@ -144,6 +144,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   FARUtil::cur_scan_cloud_->clear();
   FARUtil::local_terrain_obs_->clear();
   FARUtil::local_terrain_free_->clear();
+  ++local_terrain_revision_;
   scan_handler_.ReInitGrids();
   if (!FARUtil::IsDebug) { // Terminal Output
     printf("\033[A"), printf("\033[A"), printf("\033[2K");
@@ -190,7 +191,7 @@ void FARMaster::Loop() {
       continue;
     }
     /* add main process after this line */
-    graph_manager_.UpdateRobotPosition(robot_pos_);
+    graph_manager_.UpdateRobotPosition(robot_pos_, local_terrain_revision_);
     odom_node_ptr_ = graph_manager_.GetOdomNode();
     if (odom_node_ptr_ == NULL) {
       ROS_WARN("FAR: Waiting for Odometry...");
@@ -796,15 +797,21 @@ void FARMaster::ProcessPendingLocalTerrain() {
     if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
         !tf_listener_->canTransform(master_params_.world_frame, source,
                                     pc->header.stamp)) break;
-    const auto result = this->ProcessCloud(pc, local_terrain_ptr_);
-    if (result == CloudProcessResult::TF_UNAVAILABLE) break;
-    if (result == CloudProcessResult::INVALID) {
-      pending_local_terrains_.PopReady();
-      continue;
+    // Only an explicitly empty measurement may clear the local obstacle view.
+    if (pc->width == 0 && pc->data.empty()) {
+      local_terrain_ptr_->clear();
+    } else {
+      const auto result = this->ProcessCloud(pc, local_terrain_ptr_);
+      if (result == CloudProcessResult::TF_UNAVAILABLE) break;
+      if (result == CloudProcessResult::INVALID) {
+        pending_local_terrains_.PopReady();
+        continue;
+      }
     }
     last_local_terrain_stamp_ = entry.stamp;
     pending_local_terrains_.PopReady();
     FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
+    ++local_terrain_revision_;
   }
 }
 

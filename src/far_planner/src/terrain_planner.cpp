@@ -18,6 +18,8 @@ void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams&
     tp_params_ = params;
     is_grids_init_ = false;
     occupied_cells_.clear();
+    needs_projection_ = true;
+    last_projected_revision_ = 0;
     row_num_ = far_planner::CheckedDimension(
         (static_cast<double>(FARUtil::kLocalPlanRange) + tp_params_.radius) * 2.0,
         tp_params_.voxel_size, "local terrain grid width");
@@ -45,10 +47,15 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
     is_grids_init_ = true;
     this->ResetGridsPositions();
     this->ResetGridsOccupancy();
+    needs_projection_ = true;
 }
 
-void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
+void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, std::uint64_t revision) {
     if (!is_grids_init_) return;
+    if (!needs_projection_ && revision == last_projected_revision_) {
+        this->GridVisualCloud();
+        return;
+    }
     this->ResetGridsOccupancy();
     const int N_IF = tp_params_.inflate_size;
     for (const auto& point : obsCloudIn->points) {
@@ -68,6 +75,8 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
             }
         }
     }
+    last_projected_revision_ = revision;
+    needs_projection_ = false;
     /* visualize terrain planner map and path */
     this->GridVisualCloud();
 }
