@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "far_planner/graph_msger.h"
+#include "far_planner/parameter_validation.h"
 
 namespace {
 #ifdef FAR_PLANNER_ROS1
@@ -33,10 +34,14 @@ NavNodePtr EncodeNode(std::size_t id) {
 
 class GraphEncodingTestAccess {
 public:
+    static bool TryEncode(const NodePtrStack& nodes, GraphMessage& graph) {
+        graph.header.frame_id = "map";
+        return GraphMsger::EncodeGraph(nodes, graph);
+    }
+
     static GraphMessage Encode(const NodePtrStack& nodes) {
         GraphMessage graph;
-        graph.header.frame_id = "map";
-        GraphMsger::EncodeGraph(nodes, graph);
+        EXPECT_TRUE(TryEncode(nodes, graph));
         return graph;
     }
 };
@@ -173,4 +178,44 @@ TEST(GraphMessage, RetainsNodesWithOnlyNonVisibilityEdges) {
     EXPECT_EQ(graph.nodes[5].poly_connects, std::vector<std::uint32_t>({31}));
     std::string error;
     EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error)) << error;
+}
+
+TEST(GraphMessage, RejectsUnrepresentableAndDuplicateNodeIds) {
+    const std::size_t largest_id = std::numeric_limits<std::uint32_t>::max();
+    const auto largest = EncodeNode(largest_id);
+    const auto neighbor = EncodeNode(7);
+    largest->connect_nodes = {neighbor};
+    neighbor->connect_nodes = {largest};
+    auto graph = GraphEncodingTestAccess::Encode({largest, neighbor});
+    largest->connect_nodes.clear();
+    neighbor->connect_nodes.clear();
+    ASSERT_EQ(graph.nodes.size(), 2U);
+    EXPECT_EQ(graph.nodes[0].id, largest_id);
+
+    if (std::numeric_limits<std::size_t>::max() > largest_id) {
+        const auto oversized = EncodeNode(largest_id + 1U);
+        oversized->connect_nodes = {neighbor};
+        neighbor->connect_nodes = {oversized};
+        EXPECT_FALSE(GraphEncodingTestAccess::TryEncode({oversized, neighbor}, graph));
+        oversized->connect_nodes.clear();
+        neighbor->connect_nodes.clear();
+        EXPECT_TRUE(graph.nodes.empty());
+        EXPECT_EQ(graph.size, 0U);
+    }
+
+    const auto duplicate = EncodeNode(neighbor->id);
+    neighbor->connect_nodes = {largest};
+    duplicate->connect_nodes = {largest};
+    EXPECT_FALSE(GraphEncodingTestAccess::TryEncode({neighbor, duplicate}, graph));
+    neighbor->connect_nodes.clear();
+    duplicate->connect_nodes.clear();
+    EXPECT_TRUE(graph.nodes.empty());
+    EXPECT_EQ(graph.size, 0U);
+}
+
+TEST(GraphMessage, RejectsRobotIdsOutsideWireRange) {
+    EXPECT_EQ(far_planner::CheckedRobotId(0), 0U);
+    EXPECT_EQ(far_planner::CheckedRobotId(65535), 65535U);
+    EXPECT_THROW(far_planner::CheckedRobotId(-1), std::invalid_argument);
+    EXPECT_THROW(far_planner::CheckedRobotId(65536), std::invalid_argument);
 }

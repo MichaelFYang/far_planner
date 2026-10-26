@@ -8,14 +8,17 @@
 
 
 #include "far_planner/graph_msger.h"
+#include "far_planner/parameter_validation.h"
 #include <visibility_graph_msg/graph_validation.h>
 
+#include <limits>
 #include <utility>
 #include <unordered_set>
 
 /***************************************************************************************/
 
 void GraphMsger::Init(const rclcpp::Node::SharedPtr nh, const GraphMsgerParams& params) {
+    far_planner::CheckedRobotId(params.robot_id);
     nh_ = nh;
     gm_params_ = params;
     graph_pub_ = nh_->create_publisher<visibility_graph_msg::msg::Graph>("/robot_vgraph", 5);
@@ -25,18 +28,24 @@ void GraphMsger::Init(const rclcpp::Node::SharedPtr nh, const GraphMsgerParams& 
     graph_node_index_.Build(global_graph_);
 }
 
-void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
+bool GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
     graphOut.nodes.clear();
+    graphOut.size = 0;
     const std::string frame_id = graphOut.header.frame_id;
     std::unordered_set<const NavNode*> encoded_nodes;
+    std::unordered_set<std::uint32_t> encoded_ids;
     encoded_nodes.reserve(graphIn.size());
+    encoded_ids.reserve(graphIn.size());
     for (const auto& node_ptr : graphIn) {
         if (!node_ptr || !IsEncodeType(node_ptr)) continue;
         if (!node_ptr->connect_nodes.empty() || !node_ptr->poly_connects.empty() ||
             !node_ptr->contour_connects.empty() || !node_ptr->trajectory_connects.empty()) {
+            if (node_ptr->id > std::numeric_limits<std::uint32_t>::max() ||
+                !encoded_ids.insert(static_cast<std::uint32_t>(node_ptr->id)).second) return false;
             encoded_nodes.insert(node_ptr.get());
         }
     }
+    if (encoded_nodes.size() > std::numeric_limits<std::uint32_t>::max()) return false;
     graphOut.nodes.reserve(encoded_nodes.size());
     const auto is_encoded = [&encoded_nodes](const NavNodePtr& node_ptr) {
         return node_ptr && encoded_nodes.count(node_ptr.get()) != 0;
@@ -47,7 +56,7 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         msg_node.header.frame_id = frame_id;
         msg_node.header.stamp = graphOut.header.stamp;
         msg_node.position    = FARUtil::Point3DToGeoMsgPoint(node_ptr->position);
-        msg_node.id          = node_ptr->id;
+        msg_node.id          = static_cast<std::uint32_t>(node_ptr->id);
         msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
         msg_node.is_covered  = node_ptr->is_covered;
         msg_node.is_frontier = node_ptr->is_frontier;
@@ -58,23 +67,24 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         // Encode connections
         for (const auto& cnode_ptr : node_ptr->connect_nodes) {
             if (!is_encoded(cnode_ptr)) continue;
-            msg_node.connect_nodes.push_back(cnode_ptr->id);
+            msg_node.connect_nodes.push_back(static_cast<std::uint32_t>(cnode_ptr->id));
         }
         for (const auto& cnode_ptr : node_ptr->poly_connects) {
             if (!is_encoded(cnode_ptr)) continue;
-            msg_node.poly_connects.push_back(cnode_ptr->id);
+            msg_node.poly_connects.push_back(static_cast<std::uint32_t>(cnode_ptr->id));
         }
         for (const auto& cnode_ptr : node_ptr->contour_connects) {
             if (!is_encoded(cnode_ptr)) continue;
-            msg_node.contour_connects.push_back(cnode_ptr->id);
+            msg_node.contour_connects.push_back(static_cast<std::uint32_t>(cnode_ptr->id));
         }
         for (const auto& cnode_ptr : node_ptr->trajectory_connects) {
             if (!is_encoded(cnode_ptr)) continue;
-            msg_node.trajectory_connects.push_back(cnode_ptr->id);
+            msg_node.trajectory_connects.push_back(static_cast<std::uint32_t>(cnode_ptr->id));
         }
         graphOut.nodes.push_back(std::move(msg_node));
     }
-    graphOut.size = graphOut.nodes.size();
+    graphOut.size = static_cast<std::uint32_t>(graphOut.nodes.size());
+    return true;
 }
 
 void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
@@ -87,8 +97,11 @@ void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
     visibility_graph_msg::msg::Graph graph_msg;
     graph_msg.header.frame_id = gm_params_.frame_id;
     graph_msg.header.stamp = nh_->now();
-    graph_msg.robot_id = gm_params_.robot_id;
-    this->EncodeGraph(graphIn, graph_msg);
+    graph_msg.robot_id = static_cast<std::uint16_t>(gm_params_.robot_id);
+    if (!EncodeGraph(graphIn, graph_msg)) {
+        RCLCPP_ERROR_ONCE(nh_->get_logger(), "Skipping graph snapshot with duplicate or out-of-range node IDs");
+        return;
+    }
     graph_pub_->publish(graph_msg);
 }
 
