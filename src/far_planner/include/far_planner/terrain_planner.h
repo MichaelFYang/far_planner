@@ -68,6 +68,8 @@ private:
 
     rclcpp::Publisher<Marker>::SharedPtr local_path_pub_; 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_map_pub_;
+    sensor_msgs::msg::PointCloud2 terrain_map_msg_;
+    bool terrain_map_dirty_ = true;
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
     std::vector<int> occupied_cells_;

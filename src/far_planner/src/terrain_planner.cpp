@@ -17,6 +17,8 @@ void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlanner
     nh_ = nh;
     tp_params_ = params;
     is_grids_init_ = false;
+    terrain_map_dirty_ = true;
+    terrain_map_msg_ = sensor_msgs::msg::PointCloud2();
     occupied_cells_.clear();
     searched_cells_.clear();
     local_obs_cloud_.reset();
@@ -51,6 +53,7 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
     this->ResetGridsPositions();
     this->ResetGridsOccupancy();
     needs_projection_ = true;
+    terrain_map_dirty_ = true;
     if (local_obs_cloud_) {
         this->SetLocalTerrainObsCloud(local_obs_cloud_, local_terrain_revision_);
     }
@@ -85,24 +88,28 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, st
     }
     last_projected_revision_ = revision;
     needs_projection_ = false;
+    terrain_map_dirty_ = true;
     /* visualize terrain planner map and path */
     this->GridVisualCloud();
 }
 
 void TerrainPlanner::GridVisualCloud() {
     if (!is_grids_init_ || terrain_map_pub_->get_subscription_count() == 0) return;
-    PointCloudPtr temp_cloud_ptr(new pcl::PointCloud<PCLPoint>());
-    const int N = terrain_grids_->GetCellNumber();
-    for (int ind=0; ind<N; ind++) {
-        if (!terrain_grids_->GetCell(ind)->is_occupied) {
-            temp_cloud_ptr->points.push_back(this->Ind2PCLPoint(ind));
+    if (terrain_map_dirty_) {
+        PointCloud temp_cloud;
+        const int N = terrain_grids_->GetCellNumber();
+        temp_cloud.points.reserve(N);
+        for (int ind=0; ind<N; ind++) {
+            if (!terrain_grids_->GetCell(ind)->is_occupied) {
+                temp_cloud.points.push_back(this->Ind2PCLPoint(ind));
+            }
         }
+        pcl::toROSMsg(temp_cloud, terrain_map_msg_);
+        terrain_map_msg_.header.frame_id = tp_params_.world_frame;
+        terrain_map_dirty_ = false;
     }
-    sensor_msgs::msg::PointCloud2 msg_pc;
-    pcl::toROSMsg(*temp_cloud_ptr, msg_pc);
-    msg_pc.header.frame_id = tp_params_.world_frame;
-    msg_pc.header.stamp = nh_->now();
-    terrain_map_pub_->publish(msg_pc);
+    terrain_map_msg_.header.stamp = nh_->now();
+    terrain_map_pub_->publish(terrain_map_msg_);
 }
 
 bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p, PointStack& path) {
