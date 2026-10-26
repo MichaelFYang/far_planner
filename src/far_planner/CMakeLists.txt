@@ -80,6 +80,9 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 )
 
 if(CATKIN_ENABLE_TESTING)
+  add_executable(terrain_search_benchmark EXCLUDE_FROM_ALL ../../benchmarks/terrain_search.cpp)
+  target_compile_definitions(terrain_search_benchmark PRIVATE FAR_PLANNER_ROS1)
+  target_link_libraries(terrain_search_benchmark far_planner_core)
   find_package(rostest REQUIRED)
   catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_viewpoint_extension.cpp test/test_overlap_cloud.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp test/test_contour_detector.cpp)
   if(TARGET test_frame_transforms)

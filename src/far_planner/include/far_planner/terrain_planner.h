@@ -19,6 +19,7 @@ struct TerrainNode {
     int id;
     Point3D position;
     bool is_occupied = false;
+    bool is_closed = false;
     float fscore = FARUtil::kINF;
     float gscore = FARUtil::kINF;
     std::shared_ptr<TerrainNode> parent;
@@ -111,6 +112,7 @@ private:
     inline void ResetGridsPlanStatus() {
         if (!is_grids_init_) return;
         for (const int i : searched_cells_) {
+            terrain_grids_->GetCell(i)->is_closed = false;
             terrain_grids_->GetCell(i)->fscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->gscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->parent = NULL;
