@@ -18,6 +18,7 @@ void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlanner
     tp_params_ = params;
     is_grids_init_ = false;
     occupied_cells_.clear();
+    searched_cells_.clear();
     local_obs_cloud_.reset();
     local_terrain_revision_ = 0;
     needs_projection_ = true;
@@ -138,6 +139,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
     std::array<int, 8> dx = {1, 1, 0,-1,-1, 0, 1,-1};
     std::array<int, 8> dy = {0, 1, 1, 0, 1,-1,-1,-1};
     start_node_ptr->gscore = 0.0;
+    searched_cells_.push_back(start_node_ptr->id);
     using SearchEntry = std::pair<float, TerrainNodePtr>;
     std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> open_queue;
     std::unordered_set<int> close_set;
@@ -161,6 +163,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
             if (close_set.count(neighbor->id) || (neighbor->is_occupied && neighbor != end_node_ptr) || !InCylinder(neighbor)) continue;
             const float temp_gscore = current->gscore + this->EulerCost(current, neighbor);
             if (temp_gscore < neighbor->gscore) {
+                if (neighbor->gscore == FARUtil::kINF) searched_cells_.push_back(neighbor->id);
                 neighbor->parent = current;
                 neighbor->gscore = temp_gscore;
                 neighbor->fscore = temp_gscore + this->EulerCost(neighbor, end_node_ptr);
