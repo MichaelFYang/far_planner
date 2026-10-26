@@ -73,8 +73,14 @@ void MapHandler::ResetGripMapCloud() {
         world_free_cloud_grid_->EraseCell(ind);
     }
     visited_cell_indices_.clear();
-    std::fill(terrain_grid_occupy_list_.begin(),   terrain_grid_occupy_list_.end(),   0);
+    this->ClearTerrainHeightData();
+}
+
+void MapHandler::ClearTerrainHeightData() {
+    std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0);
     std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0);
+    extend_obs_indices_.clear();
+    FARUtil::ClearKdTree(flat_terrain_cloud_, kdtree_terrain_clould_);
 }
 
 void MapHandler::ClearObsCellThroughPosition(const Point3D& point) {
@@ -400,7 +406,11 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
 }
 
 void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const PointCloudPtr& terrainHeightOut) {
-    if (freeCloudIn->empty()) return;
+    if (freeCloudIn->empty()) {
+        terrainHeightOut->clear();
+        this->ClearTerrainHeightData();
+        return;
+    }
     PointCloudPtr copy_free_ptr(new pcl::PointCloud<PCLPoint>());
     pcl::copyPointCloud(*freeCloudIn, *copy_free_ptr);
     FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution());

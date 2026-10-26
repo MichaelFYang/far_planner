@@ -171,6 +171,8 @@ Potential costs are point-cloud conversion/downsampling and neighborhood reconst
 
 Cloud overlap and new-obstacle extraction now tag a combined working cloud before voxel filtering. Source and reference intensities stay unchanged; `RemoveOverlapCloud` no longer makes a second copy of the reference when its legacy copy flag is true. New obstacle, dynamic obstacle, scan-grid, map-cell, terrain-height, and terrain debug outputs use PCL's cloud append API so `width` and `height` match their points. Finite-point filtering and height cropping also resize the cloud itself after compaction, keeping those dimensions consistent. `test/test_overlap_cloud.cpp` and the cloud/map/scan tests check results, input preservation, and cloud dimensions. Planner throughput from this change has not been measured.
 
+An empty neighborhood free cloud now clears the previous terrain-height output, traversability flags, extended terrain-neighbor indices, and height KD-tree. Map reset clears the same state; planner reset also clears its cached sensor and debug clouds. The map regression first finds a valid ground height, then verifies that both an empty update and reset stop returning it.
+
 An isolated retention-stage benchmark is reproducible with `cmake -S benchmarks -B /tmp/far-cloud-decay-build -DCMAKE_BUILD_TYPE=Release`, `cmake --build /tmp/far-cloud-decay-build`, and `/tmp/far-cloud-decay-build/cloud_decay`. `benchmarks/COLCON_IGNORE` keeps this optional build out of normal workspace builds. On an i9-12900K with GCC 13.3 and PCL 1.14, half the points expired; runs alternated implementation order. Median/p95 milliseconds were:
 
 | Points | `ExtractIndices` | In-place compaction | Runs |
