@@ -193,7 +193,7 @@ public:
 
     static bool IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame);
     
-    static void RemoveNanInfPoints(const PointCloudPtr& cloudInOut);
+    static void RemoveNanInfPoints(const PointCloudPtr& cloudInOut, bool require_finite_intensity);
 
     static bool IsPointNearNewPoints(const Point3D& p, const bool& is_creation=false);
 

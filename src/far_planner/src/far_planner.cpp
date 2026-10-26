@@ -815,7 +815,7 @@ FARMaster::CloudProcessResult FARMaster::ProcessCloud(const sensor_msgs::msg::Po
   if (!far_planner::ValidPointCloudLayout(*pc, require_intensity)) return CloudProcessResult::INVALID;
   PointCloudPtr candidate(new PointCloud);
   pcl::fromROSMsg(*pc, *candidate);
-  FARUtil::RemoveNanInfPoints(candidate);
+  FARUtil::RemoveNanInfPoints(candidate, require_intensity);
   if (candidate->empty()) return CloudProcessResult::INVALID;
   FARUtil::FilterCloud(candidate, master_params_.voxel_dim);
   try {

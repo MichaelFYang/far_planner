@@ -25,12 +25,13 @@ void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_si
   FilterCloud(point_cloud, leaf);
 }
 
-void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut) {
+void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut, bool require_finite_intensity) {
   pcl::PointCloud<PCLPoint> temp_cloud;
   temp_cloud.resize(cloudInOut->points.size());
   std::size_t idx = 0;
   for (const auto& p : cloudInOut->points) {
-    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
+        (require_finite_intensity && !std::isfinite(p.intensity))) {
       if (FARUtil::IsDebug) std::cout << "FARUtil: nan or inf point detected." <<std::endl;
       continue;
     }
