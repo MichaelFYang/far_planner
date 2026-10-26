@@ -23,3 +23,5 @@ add_executable(contour_vote_rank contour_vote_rank.cpp)
 target_include_directories(contour_vote_rank PRIVATE ../src/far_planner/include)
 
 add_executable(contour_vote_fill contour_vote_fill.cpp)
+
+add_executable(scan_grid_reset scan_grid_reset.cpp)
