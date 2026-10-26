@@ -7,8 +7,10 @@
 #include "goalpoint_rviz_plugin/goalpoint_tool.hpp"
 
 #include <string>
+#include <cmath>
 
 #include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/logging.hpp>
 #include <rviz_common/properties/string_property.hpp>
 #include <rviz_common/properties/qos_profile_property.hpp>
@@ -37,7 +39,6 @@ void GoalpointTool::onInitialize()
     [this](rclcpp::QoS profile) {this->qos_profile_ = profile;});
   setName("Goalpoint");
   updateTopic();
-  vehicle_z = 0;
 }
 
 void GoalpointTool::updateTopic()
@@ -55,11 +56,45 @@ void GoalpointTool::updateTopic()
 
 void GoalpointTool::odomHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
 {
-  vehicle_z = odom->pose.pose.position.z;
+  std::lock_guard<std::mutex> lock(odom_mutex_);
+  latest_odom_ = odom;
 }
 
 void GoalpointTool::onPoseSet(double x, double y, double /* theta */)
 {
+  const std::string fixed_frame = context_->getFixedFrame().toStdString();
+  if (fixed_frame.empty()) {
+    RCLCPP_WARN(rclcpp::get_logger("goalpoint_rviz_plugin"),
+        "Cannot set a goal without an RViz fixed frame");
+    return;
+  }
+  nav_msgs::msg::Odometry::ConstSharedPtr odom;
+  {
+    std::lock_guard<std::mutex> lock(odom_mutex_);
+    odom = latest_odom_;
+  }
+  double goal_height = 0.0;
+  if (odom) {
+    if (odom->header.frame_id == fixed_frame) {
+      goal_height = odom->pose.pose.position.z;
+    } else {
+      Ogre::Vector3 position;
+      Ogre::Quaternion orientation;
+      if (!context_->getFrameManager()->transform(
+          odom->header, odom->pose.pose, position, orientation))
+      {
+        RCLCPP_WARN(rclcpp::get_logger("goalpoint_rviz_plugin"),
+          "Cannot transform odometry into the RViz fixed frame for goal height");
+        return;
+      }
+      goal_height = position.z;
+    }
+    if (!std::isfinite(goal_height)) {
+      RCLCPP_WARN(rclcpp::get_logger("goalpoint_rviz_plugin"),
+          "Cannot set a goal with invalid odometry height");
+      return;
+    }
+  }
   sensor_msgs::msg::Joy joy;
 
   joy.axes.push_back(0);
@@ -88,11 +123,11 @@ void GoalpointTool::onPoseSet(double x, double y, double /* theta */)
   pub_joy_->publish(joy);
 
   geometry_msgs::msg::PointStamped goalpoint;
-  goalpoint.header.frame_id = "map";
+  goalpoint.header.frame_id = fixed_frame;
   goalpoint.header.stamp = joy.header.stamp;
   goalpoint.point.x = x;
   goalpoint.point.y = y;
-  goalpoint.point.z = vehicle_z;
+  goalpoint.point.z = goal_height;
 
   pub_->publish(goalpoint);
   usleep(10000);
