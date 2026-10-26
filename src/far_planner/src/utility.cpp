@@ -51,7 +51,7 @@ void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut, bool require_f
     temp_cloud.points[idx] = p;
     idx ++;
   }
-  temp_cloud.points.resize(idx);
+  temp_cloud.resize(idx);
   cloudInOut->swap(temp_cloud);
 }
 
@@ -120,7 +120,7 @@ void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float
     temp_cloud.points[idx] = p;
     idx ++;
   }
-  temp_cloud.points.resize(idx);
+  temp_cloud.resize(idx);
   cloudInOut->swap(temp_cloud);
 }
 
