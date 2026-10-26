@@ -537,7 +537,7 @@ void FARMaster::LoadROSParams() {
   nh.param<float>(utility_prefix + "terrain_free_Z",         FARUtil::kFreeZ, 0.1);
   nh.param<int>(utility_prefix   + "dyosb_update_thred",     FARUtil::kDyObsThred, 4);
   nh.param<int>(utility_prefix   + "new_point_counter",      FARUtil::KNewPointC, 10);
-  nh.param<float>(utility_prefix + "dynamic_obs_dacay_time", FARUtil::kObsDecayTime, 10.0);
+  nh.param<float>(utility_prefix + "dynamic_obs_dacay_time", FARUtil::kObsDecayTime, 15.0);
   nh.param<float>(utility_prefix + "new_points_decay_time",  FARUtil::kNewDecayTime, 2.0);
   nh.param<int>(utility_prefix   + "obs_inflate_size",       FARUtil::kObsInflate, 2);
   far_planner::RequireNonNegativeFinite(FARUtil::kObsDecayTime, "util/dynamic_obs_dacay_time");

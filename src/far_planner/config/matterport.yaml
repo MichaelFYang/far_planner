@@ -34,7 +34,7 @@ Util/new_intensity_thred                : 2.0
 Util/terrain_free_Z                     : 0.15
 Util/dyosb_update_thred                 : 4
 Util/new_point_counter                  : 5
-Util/dynamic_obs_dacay_time             : 10.0  # Unit: second
+Util/dynamic_obs_dacay_time             : 15.0 # Seconds; exceed retained terrain lifetime and update lag
 Util/new_points_decay_time              : 1.0   # Unit: second
 
 # Dynamic Graph Params
