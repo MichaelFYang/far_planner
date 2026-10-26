@@ -109,6 +109,20 @@ TEST(SensorTiming, PendingScanWaitsForLaterOdometryAndRejectsReordering)
     EXPECT_FALSE(scans.Push(150, 5, 170, 1002));
 }
 
+TEST(SensorTiming, FindsTimestampCompatibleScanAnywhereInPendingQueue)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    ASSERT_TRUE(scans.Push(100, 1, 0, 1000));
+    ASSERT_TRUE(scans.Push(200, 2, 0, 1001));
+    ASSERT_TRUE(scans.Push(300, 3, 0, 1002));
+    EXPECT_TRUE(scans.HasStampWithin(225, 25));
+    EXPECT_TRUE(scans.HasStampWithin(275, 25));
+    EXPECT_FALSE(scans.HasStampWithin(250, 25));
+    scans.PopReady();
+    scans.PopReady();
+    EXPECT_FALSE(scans.HasStampWithin(200, 0));
+}
+
 TEST(SensorTiming, PendingScanQueueIsBoundedExpiresAndResets)
 {
     far_planner::PendingMeasurementQueue<int> scans;
