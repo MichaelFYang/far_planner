@@ -165,6 +165,17 @@ Confirmed input and graph-index defects have regression coverage: trajectory Y/Z
 
 The near-node pair loop now visits only `j < i`, preserving each pair and its evaluation order. For `n` nearby nodes, index visits fall from `n²` to `n(n−1)/2`; connection checks already ran only for that lower triangle, so this saves skipped loop work rather than changing graph decisions.
 
+Contour edge selection now tracks the two highest qualifying vote scores in one pass instead of allocating and sorting a score vector, then scanning that vector for each candidate. Equal scores retain the original strict-rank rule: every candidate tied at the second slot qualifies. A missing vote record logs an error and follows the edge-removal path instead of dereferencing `end()`. Randomized rank comparisons and a missing-vote regression cover both cases. Run `cmake --build /tmp/far-cloud-decay-build --target contour_vote_rank` and `/tmp/far-cloud-decay-build/contour_vote_rank` after configuring `benchmarks/`. On an i9-12900K with GCC 13.3, the isolated benchmark's median batch times were:
+
+| Vote records | Calls per batch | Sorted rank (ms) | Top-two scan (ms) |
+| ---: | ---: | ---: | ---: |
+| 4 | 20,000 | 2.35 | 1.69 |
+| 16 | 10,000 | 3.66 | 3.39 |
+| 64 | 3,000 | 6.44 | 4.88 |
+| 256 | 1,000 | 13.65 | 6.49 |
+
+The benchmark checks identical selected IDs for 32 generated vote maps at each size and alternates implementation order across 20 timed samples. It excludes edge mutation, ROS callbacks, and contour extraction, so it does not establish whole-planner latency gains.
+
 Potential costs are point-cloud conversion/downsampling and neighborhood reconstruction, image processing, roughly quadratic nearby-node pair checks, graph serialization/KD-tree rebuilds, and graph traversals. Complexity is a prioritization aid, not a measured bottleneck. Existing `/runtime` and `/planning_time` measurements cover different scopes and units; normalize benchmark reporting before comparing them. Record point count, contour/graph size, edge count, configuration, CPU, ROS version, and correctness results with each performance claim.
 
 `Grid` computes an index's three coordinates when requested instead of storing them for every cell. The constructor rejects invalid dimensions, nonpositive resolutions, and cell counts beyond its `int` index range before allocation. World obstacle/free cloud grids now use sparse storage and allocate clouds only for cells receiving points. Empty reads do not create cells; reset and obstacle removal release empty entries. Per-update sets replace three dense marker arrays. Terrain-height and scan grids remain dense because their local dimensions are much smaller. Startup now validates timer frequency and geometry settings before dividing or converting to integer grid and image sizes. Invalid values produce a named startup error; oversized derived dimensions are rejected before allocation. Contour resize bookkeeping uses the same rounded output size as OpenCV, including fractional ratios. Grid position conversion now keeps extreme or nonfinite coordinates outside the index range without an overflowing integer cast. Ray traces use double precision for squared distances and stop immediately for invalid starts. Goal-grid searches require an in-range seed; scan inflation skips points too distant to affect its local grid and caps angular expansion by the grid dimensions.
