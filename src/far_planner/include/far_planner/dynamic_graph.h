@@ -574,10 +574,18 @@ public:
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_edges);
             pt_cnode_ptr->edge_votes.erase(node_ptr->id);
         }
+        // Terrain checks can reject a pair before it gains a visibility edge.
+        for (const auto& vote : node_ptr->terrain_votes) {
+            const auto neighbor = MappedNavNodeFromId(vote.first);
+            if (neighbor && neighbor != node_ptr) {
+                neighbor->terrain_votes.erase(node_ptr->id);
+            }
+        }
         node_ptr->connect_nodes.clear();
         node_ptr->poly_connects.clear();
         node_ptr->edge_votes.clear();
         node_ptr->potential_edges.clear();
+        node_ptr->terrain_votes.clear();
     }
 
     static inline void ClearGoalNodeInGraph(const NavNodePtr& node_ptr) {

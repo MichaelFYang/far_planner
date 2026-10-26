@@ -111,6 +111,8 @@ Terrain A* now rejects a diagonal step if either adjacent cardinal cell is occup
 
 A full graph reset now clears reciprocal navigation edges, potential connections, trajectory links, search-parent links, and navigation-to-contour references before releasing graph storage. Full contour reset clears the reciprocal vertex links and contour-node edges. `test/test_graph_lifecycle.cpp` verifies first/last/consecutive erasure and that linked navigation and contour vertices are actually destroyed after reset; both ownership tests failed before the fix.
 
+Merged-node and temporary-goal deletion also clear both sides of terrain-feasibility vote histories through the node ID map. These histories can exist for rejected pairs with no visibility edge, so adjacency alone cannot find them. Histories between surviving nodes remain intact. Regressions cover terrain-only neighbors and 32 goal replacements; the previous implementation retained stale node IDs after each removal.
+
 Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.

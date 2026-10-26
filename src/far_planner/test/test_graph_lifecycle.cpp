@@ -7,6 +7,7 @@
 #include <deque>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -43,6 +44,10 @@ public:
         graph.is_bridge_internav_ = true;
         graph.last_connect_pos_ = Point3D(0.0f, 0.0f, 0.0f);
         return graph.IsInterNavpointNecessary();
+    }
+
+    static void ClearMerged(DynamicGraph& graph) {
+        graph.ClearMergedNodesInGraph();
     }
 };
 
@@ -321,4 +326,63 @@ TEST(GraphLifecycle, RechecksFreeOdomAfterEnclosingContourShrinks)
     graph.UpdateContourGraph(odom, {narrowed});
     EXPECT_FALSE(FARUtil::PointInsideAPoly(narrowed, FARUtil::free_odom_p));
     graph.ResetCurrentContour();
+}
+
+class TerrainVoteLifecycle : public ::testing::Test {
+protected:
+    void SetUp() override {
+#ifdef FAR_PLANNER_ROS1
+        if (!ros::isInitialized()) {
+            int argc = 0;
+            char** argv = nullptr;
+            ros::init(argc, argv, "terrain_vote_lifecycle_test");
+        }
+#endif
+        graph_ = std::make_unique<DynamicGraph>();
+        graph_->ResetCurrentGraph();
+    }
+
+    void TearDown() override { graph_->ResetCurrentGraph(); }
+
+    NavNodePtr AddNode(float x, bool is_goal = false) {
+        NavNodePtr node;
+        DynamicGraph::CreateNavNodeFromPoint(Point3D(x, 0.0f, 0.0f), node,
+                                             false, false, is_goal);
+        DynamicGraph::AddNodeToGraph(node);
+        return node;
+    }
+
+    std::unique_ptr<DynamicGraph> graph_;
+};
+
+TEST_F(TerrainVoteLifecycle, DeletingMergedNodeClearsVotesWithoutVisibilityEdges) {
+    const auto removed = AddNode(0.0f);
+    const auto first = AddNode(1.0f);
+    const auto second = AddNode(2.0f);
+    DynamicGraph::RemoveInvaildTerrainConnect(removed, first);
+    DynamicGraph::RemoveInvaildTerrainConnect(removed, second);
+    DynamicGraph::RemoveInvaildTerrainConnect(first, second);
+    ASSERT_TRUE(removed->connect_nodes.empty());
+    ASSERT_TRUE(removed->potential_edges.empty());
+    removed->is_merged = true;
+    GraphVoteTestAccess::ClearMerged(*graph_);
+    ASSERT_EQ(graph_->GetNavGraph().size(), 2U);
+    EXPECT_EQ(DynamicGraph::MappedNavNodeFromId(removed->id), nullptr);
+    EXPECT_TRUE(removed->terrain_votes.empty());
+    ASSERT_EQ(first->terrain_votes.size(), 1U);
+    ASSERT_EQ(second->terrain_votes.size(), 1U);
+    EXPECT_EQ(first->terrain_votes.at(second->id), 1);
+    EXPECT_EQ(second->terrain_votes.at(first->id), 1);
+}
+
+TEST_F(TerrainVoteLifecycle, GoalReplacementDoesNotAccumulateTerrainHistory) {
+    const auto neighbor = AddNode(1.0f);
+    for (int replacement = 0; replacement < 32; ++replacement) {
+        const auto goal = AddNode(0.0f, true);
+        DynamicGraph::RemoveInvaildTerrainConnect(goal, neighbor);
+        DynamicGraph::ClearGoalNodeInGraph(goal);
+        ASSERT_EQ(graph_->GetNavGraph().size(), 1U);
+        EXPECT_TRUE(goal->terrain_votes.empty());
+        EXPECT_TRUE(neighbor->terrain_votes.empty());
+    }
 }
