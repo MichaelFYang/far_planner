@@ -331,9 +331,7 @@ bool DynamicGraph::IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNode
 
 bool DynamicGraph::IsNodeFullyCovered(const NavNodePtr& node_ptr) {
     if (FARUtil::IsFreeNavNode(node_ptr) || node_ptr->is_covered) return true;
-    NodePtrStack check_odom_list = internav_near_nodes_;
-    check_odom_list.push_back(odom_node_ptr_);
-    for (const auto& near_optr : check_odom_list) {
+    const auto covered_by = [&node_ptr](const NavNodePtr& near_optr) {
         const float cur_dist = (node_ptr->position - near_optr->position).norm();
         if (cur_dist < FARUtil::kMatchDist) return true;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -346,8 +344,10 @@ bool DynamicGraph::IsNodeFullyCovered(const NavNodePtr& node_ptr) {
                 }
             }
         }
-    }
-    return false;
+        return false;
+    };
+    return std::any_of(internav_near_nodes_.begin(), internav_near_nodes_.end(), covered_by) ||
+           covered_by(odom_node_ptr_);
 }
 
 bool DynamicGraph::IsFrontierNode(const NavNodePtr& node_ptr) {
