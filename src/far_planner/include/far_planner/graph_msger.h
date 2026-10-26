@@ -74,12 +74,6 @@ private:
 
     bool PublishGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
 
-    void ExtractConnectIdxs(const visibility_graph_msg::Node& node,
-                            IdxStack& connect_idxs,
-                            IdxStack& poly_idxs,
-                            IdxStack& contour_idxs,
-                            IdxStack& traj_idxs);
-
 };
 
 
