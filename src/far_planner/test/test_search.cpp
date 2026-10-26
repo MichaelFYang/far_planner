@@ -212,6 +212,57 @@ TEST(GraphGoal, AdjustsFirstGoalBeforeAnyGraphSearch)
     }
 }
 
+TEST(GraphGoal, AssociatesNearestTerrainHeightOnlyInSingleLayerMode)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "goal_height_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("goal_height_test");
+#endif
+    const GoalSnapGuard goal_guard;
+    struct RestoreDimensions {
+        float robot = FARUtil::robot_dim;
+        float height = FARUtil::vehicle_height;
+        ~RestoreDimensions() {
+            FARUtil::robot_dim = robot;
+            FARUtil::vehicle_height = height;
+        }
+    } restore;
+    FARUtil::robot_dim = 1.0f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams map_params{};
+    map_params.sensor_range = 3.0f;
+    map_params.floor_height = 2.5f;
+    map_params.cell_length = 1.0f;
+    map_params.cell_height = 1.0f;
+    map_params.grid_max_length = 10.0f;
+    map_params.grid_max_height = 6.0f;
+    map_params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(map_params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    PointCloudPtr ground(new PointCloud);
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, -0.7f)));
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, 1.3f)));
+    map.UpdateFreeCloudGrid(ground);
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+    for (const bool multi_layer : {false, true}) {
+        FARUtil::IsMultiLayer = multi_layer;
+        planner.UpdateGoal(Point3D(0.0f, 0.0f, 1.25f));
+        const auto goal = planner.GetGoalNodePtr();
+        ASSERT_NE(goal, nullptr);
+        EXPECT_FLOAT_EQ(goal->position.z, multi_layer ? 1.25f : 2.05f);
+        planner.ResetPlannerInternalValues();
+    }
+}
+
 TEST(GraphGoal, OnlyTheNearestSnappedNavpointIsMarkedAsGoal)
 {
 #ifdef FAR_PLANNER_ROS1
