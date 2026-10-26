@@ -42,6 +42,63 @@ private:
     float previous_;
 };
 
+class GoalSnapGuard {
+public:
+    GoalSnapGuard()
+        : previous_near_dist_(FARUtil::kNearDist), previous_leaf_size_(FARUtil::kLeafSize),
+          previous_multi_layer_(FARUtil::IsMultiLayer)
+    {
+        FARUtil::kNearDist = 1.0f;
+        FARUtil::kLeafSize = 1.0f;
+        FARUtil::IsMultiLayer = true;
+    }
+
+    ~GoalSnapGuard()
+    {
+        FARUtil::kNearDist = previous_near_dist_;
+        FARUtil::kLeafSize = previous_leaf_size_;
+        FARUtil::IsMultiLayer = previous_multi_layer_;
+    }
+
+private:
+    float previous_near_dist_;
+    float previous_leaf_size_;
+    bool previous_multi_layer_;
+};
+
+TEST(GraphGoal, OnlyTheNearestSnappedNavpointIsMarkedAsGoal)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "graph_goal_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("graph_goal_test");
+#endif
+    const GoalSnapGuard guard;
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+
+    const auto farther = Node(1, 0.5f, 0.0f);
+    const auto nearer = Node(2, 0.1f, 0.0f);
+    farther->is_navpoint = nearer->is_navpoint = true;
+    farther->is_goal = nearer->is_goal = false;
+    planner.UpdaetVGraph({farther, nearer});
+
+    planner.UpdateGoal(Point3D(0.0f, 0.0f, 0.0f));
+    EXPECT_EQ(planner.GetGoalNodePtr(), nearer);
+    EXPECT_FALSE(farther->is_goal);
+    EXPECT_TRUE(nearer->is_goal);
+    planner.UpdateGoal(Point3D(0.6f, 0.0f, 0.0f));
+    EXPECT_EQ(planner.GetGoalNodePtr(), farther);
+    EXPECT_TRUE(farther->is_goal);
+    EXPECT_FALSE(nearer->is_goal);
+}
+
 TEST(GraphSearch, DecreaseOfQueuedNodeMustReorderBothTraversals)
 {
     // The queue initially contains node 1 via 4. Later 3 improves its cost,
