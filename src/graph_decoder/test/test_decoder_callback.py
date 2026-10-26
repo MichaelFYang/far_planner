@@ -62,7 +62,8 @@ def test_decoder_keeps_last_valid_graph():
                 spin_until(lambda: client.service_is_ready()
                            and graphs.get_subscription_count() > 0
                            and save_requests.get_subscription_count() > 0
-                           and read_requests.get_subscription_count() > 0)
+                           and read_requests.get_subscription_count() > 0
+                           and node.count_publishers('/graph_decoder_viz') > 0)
                 valid = Graph()
                 valid.header.frame_id = 'map'
                 valid.robot_id = 7
@@ -85,6 +86,10 @@ def test_decoder_keeps_last_valid_graph():
                 valid.size = 2
                 graphs.publish(valid)
                 spin_until(lambda: len(markers) > 0)
+                marker_by_name = {marker.ns: marker for marker in markers[-1].markers}
+                assert len(marker_by_name) == 12
+                for name in ('global_vgraph', 'visibility_edge', 'polygon_edge'):
+                    assert len(marker_by_name[name].points) == 2
                 round_trip = request_graph(2, 7)
                 assert [n.id for n in round_trip.nodes] == [1, 2]
                 for original, decoded in zip(valid.nodes, round_trip.nodes):

@@ -96,7 +96,6 @@ private:
 
     GraphDecoderParams gd_params_;
     NodePtrStack received_graph_;
-    MarkerArray graph_marker_array_;
     std::size_t robot_id_;
 
     void LoadParams();
