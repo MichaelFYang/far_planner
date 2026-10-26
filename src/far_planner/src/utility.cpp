@@ -12,17 +12,15 @@
 /***************************************************************************************/
 
 void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size) {
-  // filter point cloud with constant leaf size 0.2m
   pcl::PointCloud<PCLPoint> filter_rs_cloud;
   pcl::VoxelGrid<PCLPoint> vg;
   vg.setInputCloud(point_cloud);
   vg.setLeafSize(leaf_size.x(), leaf_size.y(), leaf_size.z());
   vg.filter(filter_rs_cloud);
-  *point_cloud = filter_rs_cloud;
+  point_cloud->swap(filter_rs_cloud);
 }
 
 void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_size) {
-  // filter point cloud with constant leaf size 0.2m
   const Eigen::Vector3d leaf(leaf_size, leaf_size, leaf_size);
   FilterCloud(point_cloud, leaf);
 }
@@ -40,7 +38,7 @@ void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut) {
     idx ++;
   }
   temp_cloud.points.resize(idx);
-  *cloudInOut = temp_cloud;
+  cloudInOut->swap(temp_cloud);
 }
 
 PCLPoint FARUtil::Point3DToPCLPoint(const Point3D& point) {
@@ -107,7 +105,7 @@ void FARUtil::CropPCLCloud(const PointCloudPtr& cloudInOut,
 {
   PointCloudPtr temp_crop_ptr(new pcl::PointCloud<PCLPoint>());
   FARUtil::CropPCLCloud(cloudInOut, temp_crop_ptr, centriod, range);
-  *cloudInOut = *temp_crop_ptr;
+  cloudInOut->swap(*temp_crop_ptr);
 }
 
 void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float& height) {
@@ -120,7 +118,7 @@ void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float
     idx ++;
   }
   temp_cloud.points.resize(idx);
-  *cloudInOut = temp_cloud;
+  cloudInOut->swap(temp_cloud);
 }
 
 std::string FARUtil::NormalizeFrameID(const std::string& frame_id) {
@@ -469,10 +467,10 @@ float FARUtil::NoiseCosValue(const float& dot_value, const bool& is_large, const
 void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
                                 const float& radius,
                                 const std::size_t c_thred) {
-  PointCloudPtr temp_ptr(new pcl::PointCloud<PCLPoint>());
   if (cloudInOut->empty()) return;
+  PointCloudPtr temp_ptr(new pcl::PointCloud<PCLPoint>());
   FARUtil::kdtree_filter_cloud_->setInputCloud(cloudInOut);
-  temp_ptr->clear(), temp_ptr->resize(cloudInOut->size());
+  temp_ptr->resize(cloudInOut->size());
   std::size_t idx = 0;
   for (const auto& p : cloudInOut->points) {
     const std::size_t counter = FARUtil::PointInXCounter(Point3D(p), radius, FARUtil::kdtree_filter_cloud_);
@@ -481,8 +479,8 @@ void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
       idx ++;
     }
   }
-  temp_ptr->resize(idx), *cloudInOut = *temp_ptr;
-  return;
+  temp_ptr->resize(idx);
+  cloudInOut->swap(*temp_ptr);
 }
 
 void FARUtil::TransferCloud(const Point3D& transPoint, const PointCloudPtr& cloudInOut) {
