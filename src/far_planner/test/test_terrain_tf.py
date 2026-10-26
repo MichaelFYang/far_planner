@@ -106,6 +106,16 @@ def test_terrain_transform_is_timestamped_and_atomic():
                     samples.append(tf)
                 transforms.publish(TFMessage(transforms=samples))
                 settle()
+                malformed = cloud('sensor', 10)
+                malformed.data = bytes()
+                clouds.publish(malformed)
+                settle()
+                assert len(received) == 0, 'Truncated terrain cloud reached the map'
+                malformed = cloud('sensor', 10)
+                malformed.fields = malformed.fields[1:]
+                clouds.publish(malformed)
+                settle()
+                assert len(received) == 0, 'Terrain cloud without X reached the map'
                 clouds.publish(cloud('sensor', 10))
                 spin_until(lambda: len(received) == 1)
                 result = received[-1]

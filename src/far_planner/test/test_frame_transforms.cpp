@@ -3,6 +3,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+
+#include "far_planner/point_cloud_validation.h"
 #include "far_planner/utility.h"
 
 namespace
@@ -10,10 +13,74 @@ namespace
 #ifdef FAR_PLANNER_ROS1
 using TransformError = tf::TransformException;
 using Stamp = ros::Time;
+using CloudMessage = sensor_msgs::PointCloud2;
+using CloudField = sensor_msgs::PointField;
 #else
 using TransformError = tf2::TransformException;
 using Stamp = rclcpp::Time;
+using CloudMessage = sensor_msgs::msg::PointCloud2;
+using CloudField = sensor_msgs::msg::PointField;
 #endif
+
+CloudMessage ValidCloudMessage()
+{
+    CloudMessage cloud;
+    cloud.width = cloud.height = 1;
+    cloud.point_step = cloud.row_step = 16;
+    cloud.data.resize(16);
+    const std::uint16_t one = 1;
+    cloud.is_bigendian = *reinterpret_cast<const unsigned char*>(&one) == 0;
+    const char* names[] = {"x", "y", "z", "intensity"};
+    for (std::size_t i = 0; i < 4; ++i) {
+        CloudField field;
+        field.name = names[i];
+        field.offset = static_cast<std::uint32_t>(i * sizeof(float));
+        field.datatype = CloudField::FLOAT32;
+        field.count = 1;
+        cloud.fields.push_back(field);
+    }
+    return cloud;
+}
+
+TEST(CloudLayout, RejectsTruncatedAndMisdeclaredBuffers)
+{
+    auto cloud = ValidCloudMessage();
+    EXPECT_TRUE(far_planner::ValidPointCloudLayout(cloud, true));
+    cloud.height = 2;
+    cloud.row_step = 20;
+    cloud.data.resize(40);  // Organized rows may include padding.
+    EXPECT_TRUE(far_planner::ValidPointCloudLayout(cloud, true));
+
+    cloud = ValidCloudMessage();
+    cloud.data.clear();
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+    cloud = ValidCloudMessage();
+    cloud.data.pop_back();
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+    cloud = ValidCloudMessage();
+    cloud.row_step = 12;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+    cloud = ValidCloudMessage();
+    cloud.fields[0].offset = 14;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+}
+
+TEST(CloudLayout, RequiresCoordinatesAndTerrainClassification)
+{
+    auto cloud = ValidCloudMessage();
+    cloud.fields.pop_back();
+    EXPECT_TRUE(far_planner::ValidPointCloudLayout(cloud, false));
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+    cloud = ValidCloudMessage();
+    cloud.fields.erase(cloud.fields.begin());
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, false));
+    cloud = ValidCloudMessage();
+    cloud.fields[1].datatype = CloudField::FLOAT64;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, false));
+    cloud = ValidCloudMessage();
+    cloud.is_bigendian = !cloud.is_bigendian;
+    EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+}
 
 class FrameTransforms : public ::testing::Test
 {
