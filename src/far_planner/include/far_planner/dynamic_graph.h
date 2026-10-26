@@ -680,7 +680,7 @@ public:
 
     /* Get Internal Values */
     const NavNodePtr    GetOdomNode()         const { return odom_node_ptr_;};
-    const NodePtrStack& GetNavGraph()         const { return globalGraphNodes_;};
+    static const NodePtrStack& GetNavGraph()        { return globalGraphNodes_;};
     const NodePtrStack& GetExtendLocalNode()  const { return extend_match_nodes_;};
     const NodePtrStack& GetOutContourNodes()  const { return out_contour_nodes_;};
     const NodePtrStack& GetNewNodes()         const { return new_nodes_;};

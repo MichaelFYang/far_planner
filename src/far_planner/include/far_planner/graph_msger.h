@@ -3,7 +3,6 @@
 
 #include "utility.h"
 #include "dynamic_graph.h"
-#include "graph_node_index.h"
 
 struct GraphMsgerParams {
     GraphMsgerParams() = default;
@@ -34,9 +33,6 @@ private:
     ros::Publisher  graph_pub_;
     ros::Subscriber graph_sub_;
 
-    NodePtrStack   global_graph_;
-    GraphNodeIndex graph_node_index_;
-    
     void CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr);
 
     static inline bool IsEncodeType(const NavNodePtr& node_ptr) {
@@ -65,13 +61,9 @@ private:
         return NULL;
     }
 
-    NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
-
     static bool EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut);
 
     void GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg);
-
-    void PublishGlobalGraph(const NodePtrStack& graphIn);
 
     bool PublishGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
 

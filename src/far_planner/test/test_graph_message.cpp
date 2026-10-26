@@ -44,6 +44,28 @@ public:
         EXPECT_TRUE(TryEncode(nodes, graph));
         return graph;
     }
+
+    static void PrepareImport(GraphMsger& messenger) {
+        GraphMsgerParams params{};
+        params.frame_id = "map";
+        params.dist_margin = 0.5f;
+        params.pool_size = 3;
+        params.votes_size = 3;
+#ifdef FAR_PLANNER_ROS1
+        messenger.Init(ros::NodeHandle(), params);
+#else
+        if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+        messenger.Init(rclcpp::Node::make_shared("graph_import_test"), params);
+#endif
+    }
+
+    static void Import(GraphMsger& messenger, const GraphMessage& graph) {
+#ifdef FAR_PLANNER_ROS1
+        messenger.GraphCallBack(GraphMessage::ConstPtr(new GraphMessage(graph)));
+#else
+        messenger.GraphCallBack(std::make_shared<GraphMessage>(graph));
+#endif
+    }
 };
 
 namespace {
@@ -218,4 +240,81 @@ TEST(GraphMessage, RejectsRobotIdsOutsideWireRange) {
     EXPECT_EQ(far_planner::CheckedRobotId(65535), 65535U);
     EXPECT_THROW(far_planner::CheckedRobotId(-1), std::invalid_argument);
     EXPECT_THROW(far_planner::CheckedRobotId(65536), std::invalid_argument);
+}
+
+class GraphImport : public ::testing::Test {
+protected:
+    void SetUp() override {
+#ifdef FAR_PLANNER_ROS1
+        if (!ros::isInitialized()) {
+            int argc = 0;
+            char** argv = nullptr;
+            ros::init(argc, argv, "graph_import_test");
+        }
+#endif
+        graph_ = std::make_unique<DynamicGraph>();
+        graph_->ResetCurrentGraph();
+    }
+
+    void TearDown() override { graph_->ResetCurrentGraph(); }
+
+    std::unique_ptr<DynamicGraph> graph_;
+};
+
+TEST_F(GraphImport, RepeatedCallbacksReuseNodesBeforeNextPublication) {
+    GraphMsger messenger;
+    GraphEncodingTestAccess::PrepareImport(messenger);
+    auto message = ValidGraph();
+    auto second = message.nodes.front();
+    second.id = 9;
+    second.position.x = 3.0;
+    message.nodes.push_back(second);
+    message.size = 2;
+    for (std::size_t i = 0; i < message.nodes.size(); ++i) {
+        const auto other_id = message.nodes[1 - i].id;
+        message.nodes[i].connect_nodes = {other_id};
+        message.nodes[i].poly_connects = {other_id};
+        message.nodes[i].contour_connects = {other_id};
+        message.nodes[i].trajectory_connects = {other_id};
+    }
+    GraphEncodingTestAccess::Import(messenger, message);
+    const auto original = graph_->GetNavGraph();
+    ASSERT_EQ(original.size(), 2U);
+    GraphEncodingTestAccess::Import(messenger, message);
+    GraphEncodingTestAccess::Import(messenger, message);
+    ASSERT_EQ(graph_->GetNavGraph().size(), original.size());
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        EXPECT_EQ(graph_->GetNavGraph()[i], original[i]);
+        const NodePtrStack other{original[1 - i]};
+        EXPECT_EQ(original[i]->connect_nodes, other);
+        EXPECT_EQ(original[i]->poly_connects, other);
+        EXPECT_EQ(original[i]->contour_connects, other);
+        EXPECT_EQ(original[i]->trajectory_connects, other);
+    }
+}
+
+TEST_F(GraphImport, MatchesCurrentNodePositionsAfterTheIndexWasBuilt) {
+    GraphMsger messenger;
+    GraphEncodingTestAccess::PrepareImport(messenger);
+    NavNodePtr existing;
+    DynamicGraph::CreateNavNodeFromPoint(Point3D(1.0f, 0.0f, 0.0f), existing, false);
+    DynamicGraph::AddNodeToGraph(existing);
+    messenger.UpdateGlobalGraph(graph_->GetNavGraph());
+    existing->position.x = 10.0f;
+    auto message = ValidGraph();
+    message.nodes[0].position.x = 10.0;
+    GraphEncodingTestAccess::Import(messenger, message);
+    ASSERT_EQ(graph_->GetNavGraph().size(), 1U);
+    EXPECT_EQ(graph_->GetNavGraph().front(), existing);
+}
+
+TEST_F(GraphImport, PublicationDoesNotRetainNodesAfterGraphReset) {
+    GraphMsger messenger;
+    GraphEncodingTestAccess::PrepareImport(messenger);
+    GraphEncodingTestAccess::Import(messenger, ValidGraph());
+    ASSERT_EQ(graph_->GetNavGraph().size(), 1U);
+    std::weak_ptr<NavNode> imported = graph_->GetNavGraph().front();
+    messenger.UpdateGlobalGraph(graph_->GetNavGraph());
+    graph_->ResetCurrentGraph();
+    EXPECT_TRUE(imported.expired());
 }

@@ -8,6 +8,7 @@
 
 
 #include "far_planner/graph_msger.h"
+#include "far_planner/graph_node_index.h"
 #include "far_planner/parameter_validation.h"
 #include <visibility_graph_msg/graph_validation.h>
 
@@ -23,9 +24,6 @@ void GraphMsger::Init(const ros::NodeHandle& nh, const GraphMsgerParams& params)
     gm_params_ = params;
     graph_pub_ = nh_.advertise<visibility_graph_msg::Graph>("/robot_vgraph", 5);
     graph_sub_ = nh_.subscribe("/decoded_vgraph", 5, &GraphMsger::GraphCallBack, this);
-
-    global_graph_.clear();
-    graph_node_index_.Build(global_graph_);
 }
 
 bool GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::Graph& graphOut) {
@@ -87,13 +85,7 @@ bool GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
     return true;
 }
 
-void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
-    global_graph_ = graph;
-    graph_node_index_.Build(global_graph_);
-    this->PublishGlobalGraph(global_graph_);
-}
-
-void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
+void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graphIn) {
     visibility_graph_msg::Graph graph_msg;
     graph_msg.header.frame_id = gm_params_.frame_id;
     graph_msg.header.stamp = ros::Time::now();
@@ -118,6 +110,9 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
         ROS_WARN("Ignoring decoded graph: %s", error.c_str());
         return;
     }
+    // Earlier imports and local node updates may precede the next publication.
+    GraphNodeIndex node_index;
+    node_index.Build(DynamicGraph::GetNavGraph());
     NodePtrStack decoded_nodes;
     IdxMap nodeIdx_idx_map;
     decoded_nodes.reserve(msg->nodes.size());
@@ -125,7 +120,10 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
     for (std::size_t i=0; i<msg->nodes.size(); i++) {
         const auto& node = msg->nodes[i];
         const Point3D node_p = Point3D(node.position.x, node.position.y, node.position.z);
-        NavNodePtr nearest_node_ptr = NearestNodePtrOnGraph(node_p, gm_params_.dist_margin);
+        NavNodePtr nearest_node_ptr = node_index.Nearest(node_p, gm_params_.dist_margin);
+        if (nearest_node_ptr && DynamicGraph::MappedNavNodeFromId(nearest_node_ptr->id) != nearest_node_ptr) {
+            nearest_node_ptr.reset();
+        }
         if (nearest_node_ptr == NULL || IsMismatchFreeNode(nearest_node_ptr, node)) {
             CreateDecodedNavNode(node, nearest_node_ptr);
             DynamicGraph::AddNodeToGraph(nearest_node_ptr);
@@ -167,11 +165,6 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
             }
         }
     }
-}
-
-NavNodePtr GraphMsger::NearestNodePtrOnGraph(const Point3D p, const float radius) {
-    const auto node = graph_node_index_.Nearest(p, radius);
-    return node && DynamicGraph::MappedNavNodeFromId(node->id) == node ? node : nullptr;
 }
 
 void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::Node& vnode, NavNodePtr& node_ptr) {
