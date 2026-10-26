@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 
 #include "far_planner/point_cloud_validation.h"
 #include "far_planner/utility.h"
@@ -80,6 +81,28 @@ TEST(CloudLayout, RequiresCoordinatesAndTerrainClassification)
     cloud = ValidCloudMessage();
     cloud.is_bigendian = !cloud.is_bigendian;
     EXPECT_FALSE(far_planner::ValidPointCloudLayout(cloud, true));
+}
+
+TEST(CloudValues, TerrainDropsNonfiniteIntensity)
+{
+    PointCloudPtr cloud(new PointCloud);
+    PCLPoint valid{};
+    valid.x = 1.0f;
+    valid.intensity = 0.5f;
+    cloud->push_back(valid);
+    PCLPoint invalid = valid;
+    invalid.x = 2.0f;
+    invalid.intensity = std::numeric_limits<float>::quiet_NaN();
+    cloud->push_back(invalid);
+
+    FARUtil::RemoveNanInfPoints(cloud, true);
+    ASSERT_EQ(cloud->size(), 1u);
+    EXPECT_FLOAT_EQ(cloud->front().x, 1.0f);
+
+    cloud->push_back(invalid);
+    FARUtil::RemoveNanInfPoints(cloud, false);
+    ASSERT_EQ(cloud->size(), 2u);  // Scan intensity is optional.
+    EXPECT_FLOAT_EQ(cloud->back().x, 2.0f);
 }
 
 class FrameTransforms : public ::testing::Test
