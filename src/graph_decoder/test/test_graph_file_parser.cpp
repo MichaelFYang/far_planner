@@ -1,9 +1,20 @@
+// Copyright (c) 2026 Fan Yang and contributors
+// SPDX-License-Identifier: MIT
+
 #include <gtest/gtest.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <dirent.h>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "graph_decoder/atomic_file.h"
 #include "graph_decoder/graph_file_parser.h"
 
 namespace {
@@ -42,6 +53,52 @@ TEST(GraphFileParser, ReadsSavedExamples) {
     ASSERT_TRUE(boundary.good());
     EXPECT_EQ(graph_file::ParseGraph(indoor).size(), 756u);
     EXPECT_EQ(graph_file::ParseGraph(boundary).size(), 25u);
+}
+
+TEST(GraphFileWriter, ReplacesCompleteFilesAndPreservesOldFileOnFailure) {
+    char directory_template[] = "/tmp/far-graph-atomic-XXXXXX";
+    const char* directory = ::mkdtemp(directory_template);
+    ASSERT_NE(directory, nullptr);
+    const std::string path = std::string(directory) + "/saved.vgh";
+    {
+        std::ofstream initial(path);
+        initial << "old graph\n";
+    }
+    ASSERT_EQ(::chmod(path.c_str(), 0640), 0);
+
+    EXPECT_THROW(graph_file::AtomicWrite(path, [](std::FILE* output) {
+        std::fputs("partial graph", output);
+        throw std::runtime_error("injected write failure");
+    }), std::runtime_error);
+    {
+        std::ifstream unchanged(path);
+        std::string line;
+        std::getline(unchanged, line);
+        EXPECT_EQ(line, "old graph");
+    }
+
+    graph_file::AtomicWrite(path, [](std::FILE* output) {
+        std::fputs("complete graph\n", output);
+    });
+    {
+        std::ifstream replaced(path);
+        std::string line;
+        std::getline(replaced, line);
+        EXPECT_EQ(line, "complete graph");
+    }
+    struct stat saved_mode{};
+    ASSERT_EQ(::stat(path.c_str(), &saved_mode), 0);
+    EXPECT_EQ(saved_mode.st_mode & 0777, 0640);
+    DIR* entries = ::opendir(directory);
+    ASSERT_NE(entries, nullptr);
+    int files = 0;
+    while (const dirent* entry = ::readdir(entries)) {
+        if (entry->d_name[0] != '.') ++files;
+    }
+    ::closedir(entries);
+    EXPECT_EQ(files, 1);  // No temporary file remains after either path.
+    std::remove(path.c_str());
+    ::rmdir(directory);
 }
 
 #ifdef FAR_PLANNER_ROS1

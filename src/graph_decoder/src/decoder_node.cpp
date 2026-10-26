@@ -8,7 +8,10 @@
 
 
 #include "graph_decoder/decoder_node.h"
+#include "graph_decoder/atomic_file.h"
 #include <visibility_graph_msg/graph_validation.h>
+
+#include <limits>
 
 /***************************************************************************************/
 
@@ -289,43 +292,38 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::StringConstPtr& msg) {
 void GraphDecoder::SaveGraphCallBack(const std_msgs::StringConstPtr& msg) {
     if (received_graph_.empty()) return;
     const std::string file_path = msg->data;
-    if (file_path == "") return;
-    std::ofstream graph_file;
-    graph_file.open(file_path);
-    // Lambda function
-    auto OutputPoint3D = [&](const Point3D& p) {
-        graph_file << std::to_string(p.x) << " ";
-        graph_file << std::to_string(p.y) << " ";
-        graph_file << std::to_string(p.z) << " ";
-    };
-    for (const auto& node_ptr : received_graph_) {
-        graph_file << std::to_string(node_ptr->id) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->free_direct)) << " ";
-        OutputPoint3D(node_ptr->position);
-        OutputPoint3D(node_ptr->surf_dirs.first);
-        OutputPoint3D(node_ptr->surf_dirs.second);
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_covered))  << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_frontier)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_navpoint)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_boundary)) << " ";
-        for (const auto& cidx : node_ptr->connect_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->poly_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        } 
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->contour_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->traj_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "\n";
+    if (file_path.empty()) return;
+    try {
+        graph_file::AtomicWrite(file_path, [&](std::FILE* graph_file) {
+            constexpr int digits = std::numeric_limits<float>::max_digits10;
+            const auto output_point = [&](const Point3D& p) {
+                std::fprintf(graph_file, "%.*g %.*g %.*g ", digits, static_cast<double>(p.x),
+                             digits, static_cast<double>(p.y), digits, static_cast<double>(p.z));
+            };
+            const auto output_ids = [&](const std::vector<std::size_t>& ids) {
+                for (const auto id : ids) std::fprintf(graph_file, "%zu ", id);
+            };
+            for (const auto& node_ptr : received_graph_) {
+                std::fprintf(graph_file, "%zu %d ", node_ptr->id, static_cast<int>(node_ptr->free_direct));
+                output_point(node_ptr->position);
+                output_point(node_ptr->surf_dirs.first);
+                output_point(node_ptr->surf_dirs.second);
+                std::fprintf(graph_file, "%d %d %d %d ", static_cast<int>(node_ptr->is_covered),
+                             static_cast<int>(node_ptr->is_frontier), static_cast<int>(node_ptr->is_navpoint),
+                             static_cast<int>(node_ptr->is_boundary));
+                output_ids(node_ptr->connect_idxs);
+                std::fputs("| ", graph_file);
+                output_ids(node_ptr->poly_idxs);
+                std::fputs("| ", graph_file);
+                output_ids(node_ptr->contour_idxs);
+                std::fputs("| ", graph_file);
+                output_ids(node_ptr->traj_idxs);
+                std::fputc('\n', graph_file);
+            }
+        });
+    } catch (const std::exception& error) {
+        ROS_ERROR("Cannot save graph file %s: %s", file_path.c_str(), error.what());
     }
-    graph_file.close();
 }
 
 bool GraphDecoder::RequestGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res) {

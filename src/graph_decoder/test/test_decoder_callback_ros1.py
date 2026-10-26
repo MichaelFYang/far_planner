@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: MIT
 """Check graph rejection and replacement in the running ROS 1 decoder."""
 
+import os
+import struct
+import tempfile
 import time
 import unittest
 
 import rospy
 import rostest
 from geometry_msgs.msg import Point
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visibility_graph_msg.msg import Graph, Node
 from visualization_msgs.msg import MarkerArray
@@ -30,9 +34,11 @@ class DecoderCallbackTest(unittest.TestCase):
         rospy.Subscriber('/decoded_vgraph', Graph, published.append, queue_size=10)
         rospy.Subscriber('/graph_decoder_viz', MarkerArray, markers.append, queue_size=10)
         graphs = rospy.Publisher('/robot_vgraph', Graph, queue_size=10)
+        save_requests = rospy.Publisher('/save_file_dir', String, queue_size=10)
         rospy.wait_for_service('/request_graph_service', timeout=10)
         request = rospy.ServiceProxy('/request_graph_service', Trigger)
-        wait_for(lambda: graphs.get_num_connections() > 0)
+        wait_for(lambda: graphs.get_num_connections() > 0
+                 and save_requests.get_num_connections() > 0)
 
         def request_graph(expected_size, expected_robot):
             previous = len(published)
@@ -53,6 +59,7 @@ class DecoderCallbackTest(unittest.TestCase):
             node = Node()
             node.header.frame_id = 'map'
             node.id = identifier
+            node.position.x = 1.23456789 if identifier == 1 else 0.0
             node.surface_dirs = [
                 Point(x=0.5, y=0.0, z=z_values[0]),
                 Point(x=0.0, y=0.5, z=z_values[1]),
@@ -68,6 +75,22 @@ class DecoderCallbackTest(unittest.TestCase):
         for original, decoded in zip(valid.nodes, round_trip.nodes):
             self.assertEqual(decoded.FreeType, original.FreeType)
             self.assertEqual(decoded.surface_dirs, original.surface_dirs)
+
+        with tempfile.TemporaryDirectory(prefix='far-graph-save-') as directory:
+            save_path = os.path.join(directory, 'saved_graph.vgh')
+            save_requests.publish(String(data=save_path))
+
+            def save_complete():
+                if not os.path.exists(save_path):
+                    return False
+                with open(save_path, encoding='utf-8') as graph_file:
+                    return graph_file.read().endswith('\n')
+
+            wait_for(save_complete)
+            with open(save_path, encoding='utf-8') as graph_file:
+                saved_x = float(graph_file.readline().split()[2])
+            self.assertEqual(struct.pack('f', saved_x),
+                             struct.pack('f', valid.nodes[0].position.x))
 
         malformed = Graph()
         malformed.header.frame_id = 'map'
