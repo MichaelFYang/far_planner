@@ -167,6 +167,51 @@ TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
     planner.ResetPlannerInternalValues();
 }
 
+TEST(GraphGoal, AdjustsFirstGoalBeforeAnyGraphSearch)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "first_graph_goal_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("first_graph_goal_test");
+#endif
+    const GoalSnapGuard goal_guard;
+    struct RestoreGlobals {
+        Point3D odom = FARUtil::odom_pos;
+        float range = FARUtil::kSensorRange;
+        float height = FARUtil::kTolerZ;
+        ~RestoreGlobals() {
+            FARUtil::odom_pos = odom;
+            FARUtil::kSensorRange = range;
+            FARUtil::kTolerZ = height;
+        }
+    } restore;
+    FARUtil::odom_pos = Point3D(0.0f, 0.0f, 0.0f);
+    FARUtil::kSensorRange = 30.0f;
+    FARUtil::kTolerZ = 1.0f;
+
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+    const auto odom = Node(std::numeric_limits<std::size_t>::max(), 0.0f, 0.0f);
+    odom->is_odom = true;
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        planner.UpdaetVGraph({odom});
+        planner.UpdateGoal(Point3D(2.0f, 0.0f, 0.0f));
+        const auto goal = planner.GetGoalNodePtr();
+        ASSERT_NE(goal, nullptr);
+        // A goal can arrive before the first no-goal planning timer, including
+        // immediately after a graph reset. No traversal has cached odometry.
+        planner.ReEvaluateGoalPosition(goal, odom->position, false);
+        EXPECT_EQ(goal->position, Point3D(2.0f, 0.0f, 0.0f));
+        planner.ResetPlannerInternalValues();
+    }
+}
+
 TEST(GraphGoal, OnlyTheNearestSnappedNavpointIsMarkedAsGoal)
 {
 #ifdef FAR_PLANNER_ROS1
