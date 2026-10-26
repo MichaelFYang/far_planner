@@ -281,7 +281,7 @@ A native Jazzy Release run used the shipped default planner parameters and the u
 | (10, −15) | 18.20 | 0.049 |
 | (0, 0) | 13.40 | 0.041 |
 
-The recorded trajectory covered 72.6 m. Odometry bracketed 221 of 222 messages in each scan/terrain stream, with a maximum bracket gap of 11.32 ms. The last cloud had no later recorded odometry sample at shutdown. The nearest sampled wall point was 0.557 m from the vehicle center; this point-cloud comparison is not a contact-safety proof.
+The recorded trajectory covered 72.6 m. Odometry bracketed 221 of 222 messages in each scan/terrain stream, with a maximum bracket gap of 11.32 ms. The first cloud in each stream preceded the first recorded odometry sample by 5.9 ms and therefore had no earlier recorded pose for interpolation. The nearest sampled wall point was 0.557 m from the vehicle center; this point-cloud comparison is not a contact-safety proof.
 
 The 50.6-second input recording was replayed with ROS simulated time under AddressSanitizer and UndefinedBehaviorSanitizer, with leak detection enabled. The harness held the first operator goal until a graph was published; sensor and TF timestamps were unchanged. All three goals reported arrival, 113 graph snapshots passed frame/ID/connection checks, and 102 waypoints were finite and in `map`. The planner exited normally without sanitizer findings after the shutdown fix. The separate C++ sanitizer suite passed 101 tests. The build used `-fsanitize=address,undefined -fno-omit-frame-pointer -DEIGEN_MALLOC_ALREADY_ALIGNED=1` to match the system PCL/Eigen allocation alignment.
 
