@@ -180,9 +180,9 @@ void FARMaster::ResetEnvironmentAndGraph() {
   pending_scans_.Clear();
   pending_terrains_.Clear();
   pending_local_terrains_.Clear();
+  recent_scans_.Clear();
   last_scan_stamp_ = last_terrain_stamp_ = last_local_terrain_stamp_ = 0;
   is_odom_init_ = is_cloud_init_ = is_scan_init_ = false;
-  FARUtil::cur_scan_cloud_->clear();
   FARUtil::local_terrain_obs_->clear();
   FARUtil::local_terrain_free_->clear();
   local_terrain_ptr_->clear();
@@ -862,13 +862,14 @@ void FARMaster::ProcessPendingScans() {
         !tf_buffer_->canTransform(master_params_.world_frame, source,
                                   rclcpp::Time(scan.message->header.stamp))) break;
     Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
-    const auto result = this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, false, &sensor_origin);
+    PointCloudPtr cloud(new PointCloud);
+    const auto result = this->ProcessCloud(scan.message, cloud, false, &sensor_origin);
     if (result == CloudProcessResult::TF_UNAVAILABLE) break;
     if (result == CloudProcessResult::INVALID) {
       pending_scans_.PopReady();
       continue;
     }
-    scan_handler_.UpdateRobotPosition(sensor_origin);
+    recent_scans_.Add(scan.stamp, {std::move(cloud), sensor_origin});
     last_scan_stamp_ = scan.stamp;
     pending_scans_.PopReady();
   }
@@ -1039,9 +1040,11 @@ void FARMaster::ProcessTerrainCloud(const sensor_msgs::msg::PointCloud2::SharedP
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
   scan_handler_.ReInitGrids();
+  const auto* matching_scan = recent_scans_.Nearest(stamp, sensor_time_tolerance_ns_);
   if (!master_params_.is_static_env && !is_stop_update_ &&
-      far_planner::WithinSensorSkew(stamp, last_scan_stamp_, sensor_time_tolerance_ns_)) {
-    this->ExtractDynamicObsFromScan(FARUtil::cur_scan_cloud_, 
+      matching_scan != nullptr) {
+    scan_handler_.UpdateRobotPosition(matching_scan->value.origin);
+    this->ExtractDynamicObsFromScan(matching_scan->value.cloud,
                                     FARUtil::surround_obs_cloud_, 
                                     FARUtil::surround_free_cloud_, 
                                     FARUtil::cur_dyobs_cloud_);
@@ -1056,6 +1059,8 @@ void FARMaster::ProcessTerrainCloud(const sensor_msgs::msg::PointCloud2::SharedP
       FARUtil::FilterCloud(FARUtil::cur_new_cloud_, master_params_.voxel_dim);
     }
   }
+  recent_scans_.PruneBefore(stamp > sensor_time_tolerance_ns_
+      ? stamp - sensor_time_tolerance_ns_ : 0);
   if (!master_params_.is_static_env && !is_stop_update_) {
     // Decay exclusions even when no timestamp-compatible scan is available.
     FARUtil::StackCloudByTime(FARUtil::cur_dyobs_cloud_, FARUtil::stack_dyobs_cloud_, FARUtil::kObsDecayTime, nh_);
@@ -1133,7 +1138,6 @@ PointCloudPtr  FARUtil::stack_new_cloud_     = PointCloudPtr(new pcl::PointCloud
 PointCloudPtr  FARUtil::cur_new_cloud_       = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::cur_dyobs_cloud_     = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::stack_dyobs_cloud_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-PointCloudPtr  FARUtil::cur_scan_cloud_      = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::local_terrain_obs_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointCloudPtr  FARUtil::local_terrain_free_  = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
 PointKdTreePtr FARUtil::kdtree_new_cloud_    = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());

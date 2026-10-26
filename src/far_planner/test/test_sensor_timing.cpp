@@ -136,3 +136,46 @@ TEST(SensorTiming, PendingTerrainQueueRetainsOnlyTwoRecentClouds)
     EXPECT_EQ(terrain.PopReady().stamp, 20U);
     EXPECT_EQ(terrain.PopReady().message, 3);
 }
+
+TEST(SensorTiming, TerrainSelectsClosestProcessedScanAndItsOrigin)
+{
+    struct Scan {
+        int point;
+        int origin;
+    };
+    far_planner::RecentMeasurementHistory<Scan> scans;
+    ASSERT_TRUE(scans.Add(100, {1, 10}));
+    ASSERT_TRUE(scans.Add(120, {2, 20}));
+    const auto* exact = scans.Nearest(100, 25);
+    ASSERT_NE(exact, nullptr);
+    EXPECT_EQ(exact->value.point, 1);
+    EXPECT_EQ(exact->value.origin, 10);
+    const auto* nearby = scans.Nearest(117, 25);
+    ASSERT_NE(nearby, nullptr);
+    EXPECT_EQ(nearby->value.point, 2);
+    EXPECT_EQ(nearby->value.origin, 20);
+    const auto* tie = scans.Nearest(110, 10);
+    ASSERT_NE(tie, nullptr);
+    EXPECT_EQ(tie->stamp, 100U);
+    EXPECT_EQ(scans.Nearest(200, 25), nullptr);
+    scans.PruneBefore(110);
+    ASSERT_EQ(scans.Size(), 1U);
+    EXPECT_EQ(scans.Nearest(100, 25)->stamp, 120U);
+    scans.Clear();
+    EXPECT_EQ(scans.Nearest(120, 25), nullptr);
+}
+
+TEST(SensorTiming, ProcessedScanHistoryRejectsReorderingAndIsBounded)
+{
+    far_planner::RecentMeasurementHistory<int> scans(2);
+    EXPECT_FALSE(scans.Add(0, 0));
+    EXPECT_TRUE(scans.Add(100, 1));
+    EXPECT_FALSE(scans.Add(100, 2));
+    EXPECT_FALSE(scans.Add(99, 2));
+    EXPECT_TRUE(scans.Add(110, 3));
+    EXPECT_TRUE(scans.Add(120, 4));
+    EXPECT_EQ(scans.Size(), 2U);
+    EXPECT_EQ(scans.Nearest(100, 0), nullptr);
+    ASSERT_NE(scans.Nearest(110, 0), nullptr);
+    EXPECT_EQ(scans.Nearest(110, 0)->value, 3);
+}

@@ -325,6 +325,33 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 transforms.publish(TFMessage(transforms=[history_tf]))
                 spin_until(lambda: len(received) == 12)
                 assert x_values(received[-1]), 'Delayed TF discarded terrain with a valid historic pose'
+
+                # A terrain update at the older scan stamp must use that scan
+                # and its origin, even after a newer scan has been processed.
+                tick.clock.sec = 7
+                clock.publish(tick)
+                settle()
+                pose.header.stamp.sec = 6
+                pose.header.stamp.nanosec = 0
+                pose.pose.pose.position.x = 0.0
+                odom.publish(pose)
+                settle()
+                scans.publish(cloud('map', 6))
+                settle()
+                pose.header.stamp.nanosec = 100000000
+                pose.pose.pose.position.x = 5.0
+                odom.publish(pose)
+                settle()
+                newer_scan = cloud('map', 6, 100000000)
+                newer_scan.data = struct.pack('<ffff', 8.0, 0.0, 0.0, 1.0)
+                scans.publish(newer_scan)
+                settle()
+                before = len(received)
+                rays_before = len(rays)
+                clouds.publish(cloud('map', 6))
+                spin_until(lambda: len(received) == before + 1 and len(rays) == rays_before + 1)
+                assert x_values(rays[-1]) and max(x_values(rays[-1])) < 2.0, (
+                    'Terrain used the newer scan or scanner origin')
             except Exception:
                 log.flush()
                 log.seek(0)

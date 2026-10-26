@@ -115,6 +115,53 @@ private:
     std::deque<Entry> entries_;
 };
 
+// Keep processed measurements available for later, timestamped consumers.
+// The closest sample wins; an exact or earlier sample wins a tie.
+template <typename Value>
+class RecentMeasurementHistory {
+public:
+    explicit RecentMeasurementHistory(std::size_t capacity = 32)
+        : capacity_(std::max<std::size_t>(1, capacity)) {}
+
+    struct Entry {
+        std::uint64_t stamp;
+        Value value;
+    };
+
+    bool Add(std::uint64_t stamp, Value value) {
+        if (stamp == 0 || (!entries_.empty() && stamp <= entries_.back().stamp)) return false;
+        entries_.push_back({stamp, std::move(value)});
+        if (entries_.size() > capacity_) entries_.pop_front();
+        return true;
+    }
+
+    const Entry* Nearest(std::uint64_t stamp, std::uint64_t tolerance) const {
+        const auto after = std::lower_bound(entries_.begin(), entries_.end(), stamp,
+            [](const Entry& entry, std::uint64_t time) { return entry.stamp < time; });
+        const Entry* best = nullptr;
+        if (after != entries_.end() && after->stamp - stamp <= tolerance) best = &*after;
+        if (after != entries_.begin()) {
+            const auto before = std::prev(after);
+            if (stamp - before->stamp <= tolerance &&
+                (best == nullptr || stamp - before->stamp <= best->stamp - stamp)) {
+                best = &*before;
+            }
+        }
+        return best;
+    }
+
+    void PruneBefore(std::uint64_t min_stamp) {
+        while (!entries_.empty() && entries_.front().stamp < min_stamp) entries_.pop_front();
+    }
+
+    std::size_t Size() const { return entries_.size(); }
+    void Clear() { entries_.clear(); }
+
+private:
+    std::size_t capacity_;
+    std::deque<Entry> entries_;
+};
+
 inline std::uint64_t SteadyNowNs() {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count());

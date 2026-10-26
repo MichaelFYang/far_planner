@@ -82,6 +82,11 @@ private:
     far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_scans_;
     far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_terrains_{2};
     far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_local_terrains_{2};
+    struct ProcessedScan {
+        PointCloudPtr cloud;
+        Point3D origin;
+    };
+    far_planner::RecentMeasurementHistory<ProcessedScan> recent_scans_;
     far_planner::ClockEpoch clock_epoch_;
     std::uint64_t last_scan_stamp_ = 0, last_terrain_stamp_ = 0, last_local_terrain_stamp_ = 0;
     std::uint64_t local_terrain_revision_ = 0;
