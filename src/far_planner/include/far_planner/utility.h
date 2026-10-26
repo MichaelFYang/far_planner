@@ -51,7 +51,6 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/common/transforms.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/filters/extract_indices.h>
 
 /* PCL + ROS2 Library*/
 #include <pcl_conversions/pcl_conversions.h>
@@ -142,8 +141,6 @@ public:
 
     static void ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHigh);
 
-    static void ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut, const rclcpp::Node::SharedPtr nh);
-    
     static void CropPCLCloud(const PointCloudPtr& cloudIn,
                              const PointCloudPtr& cloudCropped,
                              const Point3D& centriod,
@@ -301,9 +298,6 @@ public:
     static void RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                    const PointCloudPtr& cloudRef,
                                    const bool& is_copy_cloud=false);
-
-    static void RemoveIndicesFromCloud(const pcl::PointIndices::Ptr& outliers,
-                                       const PointCloudPtr& cloudInOut);
 
     static float ApproxAtan2(const float& y, const float x);
 
