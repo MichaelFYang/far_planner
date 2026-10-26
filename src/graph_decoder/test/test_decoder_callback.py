@@ -9,6 +9,7 @@ import tempfile
 import time
 
 import rclpy
+from geometry_msgs.msg import Point
 from std_srvs.srv import Trigger
 from visibility_graph_msg.msg import Graph, Node
 from visualization_msgs.msg import MarkerArray
@@ -59,17 +60,26 @@ def test_decoder_keeps_last_valid_graph():
                 valid = Graph()
                 valid.header.frame_id = 'map'
                 valid.robot_id = 7
-                for identifier in (1, 2):
+                for identifier, z_values in ((1, (-1.0, -1.0)),
+                                             (2, (0.25, 0.75))):
                     graph_node = Node()
                     graph_node.header.frame_id = 'map'
                     graph_node.id = identifier
-                    graph_node.surface_dirs = [graph_node.position, graph_node.position]
+                    graph_node.surface_dirs = [
+                        Point(x=0.5, y=0.0, z=z_values[0]),
+                        Point(x=0.0, y=0.5, z=z_values[1]),
+                    ]
+                    graph_node.freetype = 3 if identifier == 1 else 1
                     valid.nodes.append(graph_node)
                 valid.nodes[0].connect_nodes = [2]
                 valid.size = 2
                 graphs.publish(valid)
                 spin_until(lambda: len(markers) > 0)
-                assert [n.id for n in request_graph(2, 7).nodes] == [1, 2]
+                round_trip = request_graph(2, 7)
+                assert [n.id for n in round_trip.nodes] == [1, 2]
+                for original, decoded in zip(valid.nodes, round_trip.nodes):
+                    assert decoded.freetype == original.freetype
+                    assert decoded.surface_dirs == original.surface_dirs
 
                 malformed = Graph()
                 malformed.header.frame_id = 'map'
