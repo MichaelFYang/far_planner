@@ -9,7 +9,6 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
-#include <boost/functional/hash.hpp>
 /*Internal Library*/
 #include "point_struct.h"
 #include "node_struct.h"

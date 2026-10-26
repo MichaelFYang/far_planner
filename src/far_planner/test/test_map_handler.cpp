@@ -23,6 +23,19 @@ public:
     }
 };
 
+TEST(Point3D, InequalityComplementsTolerantEquality) {
+    const Point3D origin(0.0f, 0.0f, 0.0f);
+    const Point3D nearby(EPSILON / 2.0f, 0.0f, 0.0f);
+    const Point3D boundary(EPSILON, 0.0f, 0.0f);
+    const Point3D invalid(std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f);
+    EXPECT_TRUE(origin == nearby);
+    EXPECT_FALSE(origin != nearby);
+    EXPECT_FALSE(origin == boundary);
+    EXPECT_TRUE(origin != boundary);
+    EXPECT_FALSE(origin == invalid);
+    EXPECT_TRUE(origin != invalid);
+}
+
 TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
     grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
     for (int index = 0; index < grid.GetCellNumber(); ++index) {
