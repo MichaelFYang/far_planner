@@ -94,6 +94,26 @@ std::size_t CellSize(MapHandler& map, float x, CloudType type) {
 
 }  // namespace
 
+TEST(ScanHandler, EmptyInputsClearPriorOutputs) {
+    ScanHandler scan;
+    PointCloudPtr empty(new PointCloud);
+    auto output = CloudAt(1.0f);
+    scan.ExtractDyObsCloud(empty, output);
+    EXPECT_TRUE(output->empty());
+    output->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, 0.0f)));
+    scan.GridVisualCloud(output, GridStatus::RAY);
+    EXPECT_TRUE(output->empty());
+
+    ScanHandlerParams params{};
+    params.terrain_range = 2.0f;
+    params.voxel_size = 1.0f;
+    params.ceil_height = 2.0f;
+    scan.Init(params);
+    output->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, 0.0f)));
+    scan.ExtractDyObsCloud(empty, output);
+    EXPECT_TRUE(output->empty());
+}
+
 TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
     RestoreMapParameters restore;
     FARUtil::kObsInflate = 0;
@@ -107,6 +127,8 @@ TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
     PointCloudPtr free_cloud(new PointCloud);
     auto near_cloud = CloudAt(1.0f);
     scan.SetCurrentScanCloud(near_cloud, free_cloud);
+    ASSERT_EQ(near_cloud->size(), 1U);
+    EXPECT_FLOAT_EQ(near_cloud->front().x, 1.0f);
     PointCloudPtr baseline(new PointCloud);
     scan.GridVisualCloud(baseline, GridStatus::SCAN);
     ASSERT_FALSE(baseline->empty());
