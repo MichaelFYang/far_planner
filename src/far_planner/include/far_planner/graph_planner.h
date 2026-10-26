@@ -208,9 +208,11 @@ void UpdateFreeTerrainGrid(const Point3D& center,
 /**
  * @brief Adjust goal position based on terrain and polygons
  * @param goal_ptr current goal node pointer
+ * @param odom_position current robot position, independent of previous searches
  * @param is_adjust_height whether or not adjust height of goal -> (False if multi layer planning)
  */
-void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height);
+void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const Point3D& odom_position,
+                            const bool& is_adjust_height);
 
 /**
  * @brief Reset internal values and containers
