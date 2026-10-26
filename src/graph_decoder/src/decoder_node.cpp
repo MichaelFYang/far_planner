@@ -117,9 +117,11 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::msg::Node& msg, Nav
         node_ptr->surf_dirs.first = node_ptr->surf_dirs.second = Point3D(0,0,-1);
     } else {
         node_ptr->surf_dirs.first  = Point3D(msg.surface_dirs[0].x,
-                                                msg.surface_dirs[0].y,0.0f);
+                                                msg.surface_dirs[0].y,
+                                                msg.surface_dirs[0].z);
         node_ptr->surf_dirs.second = Point3D(msg.surface_dirs[1].x,
-                                                msg.surface_dirs[1].y,0.0f);
+                                                msg.surface_dirs[1].y,
+                                                msg.surface_dirs[1].z);
     }
     node_ptr->is_covered  = msg.is_covered;
     node_ptr->is_frontier = msg.is_frontier;
