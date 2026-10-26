@@ -93,6 +93,8 @@ private:
     GraphDecoderParams gd_params_;
     NodePtrStack received_graph_;
     std::size_t robot_id_;
+    std::size_t graph_viz_subscriber_count_ = 0;
+    std::size_t graph_viz_refresh_ticks_ = 0;
 
     void LoadParams();
 
@@ -119,6 +121,7 @@ private:
     bool RequestGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res); 
 
     void VisualizeGraph(const NodePtrStack& graphIn);
+    void VisualizeForNewSubscribers();
 
     void CreateNavNode(const graph_file::NodeRecord& record, NavNodePtr& node_ptr);
 
