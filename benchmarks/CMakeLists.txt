@@ -25,3 +25,7 @@ target_include_directories(contour_vote_rank PRIVATE ../src/far_planner/include)
 add_executable(contour_vote_fill contour_vote_fill.cpp)
 
 add_executable(scan_grid_reset scan_grid_reset.cpp)
+
+add_executable(goal_grid_search goal_grid_search.cpp)
+target_include_directories(goal_grid_search PRIVATE ../src/far_planner/include)
+target_link_libraries(goal_grid_search PRIVATE Eigen3::Eigen)

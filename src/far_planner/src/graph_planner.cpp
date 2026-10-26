@@ -8,6 +8,7 @@
 
 
 #include "far_planner/graph_planner.h"
+#include "far_planner/goal_grid_search.h"
 #include "far_planner/parameter_validation.h"
 
 #include <functional>
@@ -372,31 +373,8 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
         goal_ptr->position = ori_pos_height;
     } else { // reproject to nearby free space
         if (!free_terrain_grid_->InRange(ori_sub)) return;
-        std::array<int, 4> dx = {-1, 0, 1, 0};
-        std::array<int, 4> dy = { 0, 1, 0,-1};
-        std::deque<int> q;
-        std::unordered_set<int> visited_set;
-        q.push_back(free_terrain_grid_->Sub2Ind(ori_sub));
-        visited_set.insert(free_terrain_grid_->Sub2Ind(ori_sub));
-        int valid_idx = -1;
-        while (!q.empty()) {
-            const int cur_id = q.front();
-            q.pop_front();
-            if (free_terrain_grid_->GetCell(cur_id) == FREE_BIT) {
-                valid_idx = cur_id;
-                break;
-            }
-            for (int i=0; i<4; i++) {
-                Eigen::Vector3i csub = free_terrain_grid_->Ind2Sub(cur_id);
-                csub.x() += dx[i], csub.y() += dy[i], csub.z() = 0;
-                if (!free_terrain_grid_->InRange(csub)) continue;
-                const int cidx = free_terrain_grid_->Sub2Ind(csub);
-                if (!visited_set.count(cidx)) {
-                    q.push_back(cidx);
-                    visited_set.insert(cidx);
-                }
-            }
-        }
+        const int valid_idx = goal_grid_search_.Find(
+            *free_terrain_grid_, free_terrain_grid_->Sub2Ind(ori_sub), FREE_BIT);
         if (valid_idx != -1 && free_terrain_grid_->InRange(valid_idx)) {
             Point3D new_p = Point3D(free_terrain_grid_->Ind2Pos(valid_idx));
             new_p.z = goal_ptr->position.z;
