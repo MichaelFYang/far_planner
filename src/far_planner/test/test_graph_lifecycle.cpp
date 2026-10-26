@@ -235,3 +235,36 @@ TEST(GraphLifecycle, PillarThresholdUsesClosedPolygonPerimeter)
     EXPECT_FLOAT_EQ(ContourGraph::contour_graph_.front()->poly_ptr->perimeter, 12.0f);
     graph.ResetCurrentContour();
 }
+
+TEST(GraphLifecycle, RechecksFreeOdomAfterEnclosingContourShrinks)
+{
+    struct RestoreGlobals {
+        float clearance = FARUtil::kNavClearDist;
+        float leaf = FARUtil::kLeafSize;
+        Point3D free_odom = FARUtil::free_odom_p;
+        ~RestoreGlobals() {
+            FARUtil::kNavClearDist = clearance;
+            FARUtil::kLeafSize = leaf;
+            FARUtil::free_odom_p = free_odom;
+        }
+    } restore;
+    FARUtil::kNavClearDist = 1.0f;
+    FARUtil::kLeafSize = 0.5f;
+
+    ContourGraph graph;
+    ContourGraphParams params{};
+    params.kPillarPerimeter = 1.0f;
+    graph.Init(nullptr, params);
+    auto odom = std::make_shared<NavNode>();
+    odom->position = Point3D(0.0f, 0.0f, 0.0f);
+    const PointStack enclosing{{-2.0f, -2.0f, 0.0f}, {2.0f, -2.0f, 0.0f},
+                               {2.0f, 2.0f, 0.0f}, {-2.0f, 2.0f, 0.0f}};
+    graph.UpdateContourGraph(odom, {enclosing});
+    EXPECT_TRUE(FARUtil::PointInsideAPoly(enclosing, FARUtil::free_odom_p));
+
+    const PointStack narrowed{{-0.25f, -0.25f, 0.0f}, {0.25f, -0.25f, 0.0f},
+                              {0.25f, 0.25f, 0.0f}, {-0.25f, 0.25f, 0.0f}};
+    graph.UpdateContourGraph(odom, {narrowed});
+    EXPECT_FALSE(FARUtil::PointInsideAPoly(narrowed, FARUtil::free_odom_p));
+    graph.ResetCurrentContour();
+}
