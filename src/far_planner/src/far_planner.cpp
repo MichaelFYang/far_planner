@@ -1074,12 +1074,14 @@ void FARMaster::ProcessTerrainCloud(const sensor_msgs::msg::PointCloud2::SharedP
   planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
   planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
   // visualize map grid
-  PointStack neighbor_centers, occupancy_centers;
-  map_handler_.GetNeighborCeilsCenters(neighbor_centers);
-  map_handler_.GetOccupancyCeilsCenters(occupancy_centers);
-  planner_viz_.VizMapGrids(neighbor_centers, occupancy_centers, map_params_.cell_length, map_params_.cell_height);
+  if (planner_viz_.HasMapGridSubscribers()) {
+    PointStack neighbor_centers, occupancy_centers;
+    map_handler_.GetNeighborCeilsCenters(neighbor_centers);
+    map_handler_.GetOccupancyCeilsCenters(occupancy_centers);
+    planner_viz_.VizMapGrids(neighbor_centers, occupancy_centers, map_params_.cell_length, map_params_.cell_height);
+  }
   // DBBUG visual raycast grids
-  if (!master_params_.is_static_env) {
+  if (!master_params_.is_static_env && scan_grid_debug_->get_subscription_count() > 0) {
     scan_handler_.GridVisualCloud(scan_grid_ptr_, GridStatus::RAY);
     planner_viz_.VizPointCloud(scan_grid_debug_, scan_grid_ptr_);
   }
