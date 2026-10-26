@@ -98,11 +98,32 @@ TEST(CloudValues, TerrainDropsNonfiniteIntensity)
     FARUtil::RemoveNanInfPoints(cloud, true);
     ASSERT_EQ(cloud->size(), 1u);
     EXPECT_FLOAT_EQ(cloud->front().x, 1.0f);
+    EXPECT_EQ(cloud->width, cloud->size());
+    EXPECT_EQ(cloud->height, 1u);
 
     cloud->push_back(invalid);
     FARUtil::RemoveNanInfPoints(cloud, false);
     ASSERT_EQ(cloud->size(), 2u);  // Scan intensity is optional.
     EXPECT_FLOAT_EQ(cloud->back().x, 2.0f);
+    EXPECT_EQ(cloud->width, cloud->size());
+    EXPECT_EQ(cloud->height, 1u);
+}
+
+TEST(CloudValues, HeightCropUpdatesCloudDimensions)
+{
+    PointCloudPtr cloud(new PointCloud);
+    PCLPoint near{};
+    near.z = FARUtil::robot_pos.z;
+    cloud->push_back(near);
+    PCLPoint far = near;
+    far.z += 10.0f;
+    cloud->push_back(far);
+
+    FARUtil::CropCloudWithinHeight(cloud, 1.0f);
+    ASSERT_EQ(cloud->size(), 1u);
+    EXPECT_FLOAT_EQ(cloud->front().z, near.z);
+    EXPECT_EQ(cloud->width, cloud->size());
+    EXPECT_EQ(cloud->height, 1u);
 }
 
 class FrameTransforms : public ::testing::Test
