@@ -29,7 +29,6 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(tf2_sensor_msgs REQUIRED)
 find_package(visibility_graph_msg REQUIRED)
 
 # Build
@@ -54,7 +53,7 @@ target_include_directories(far_planner_core PUBLIC
 )
 target_compile_options(far_planner_core PUBLIC ${PCL_DEFINITIONS})
 
-ament_target_dependencies(far_planner_core rclcpp std_msgs std_srvs sensor_msgs geometry_msgs nav_msgs visualization_msgs pcl_conversions visibility_graph_msg tf2 tf2_ros tf2_geometry_msgs tf2_sensor_msgs)
+ament_target_dependencies(far_planner_core rclcpp std_msgs std_srvs sensor_msgs geometry_msgs nav_msgs visualization_msgs pcl_conversions visibility_graph_msg tf2 tf2_ros tf2_geometry_msgs)
 
 target_link_libraries(far_planner_core Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBS})
 

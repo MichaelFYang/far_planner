@@ -150,20 +150,26 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
         return;
     }
 
-    // Use the original ROS timestamp, before PCL's microsecond conversion.
+    // Look up TF at the original ROS timestamp before PCL rounds it to microseconds.
     const auto transform = tf_buffer->lookupTransform(target, source, stamp);
-    sensor_msgs::msg::PointCloud2 input, output;
-    pcl::toROSMsg(*cloudInOut, input);
-    input.header.frame_id = source;
-    input.header.stamp = stamp;
-    tf2::doTransform(input, output, transform);
+    tf2::Transform tf_transform;
+    tf2::fromMsg(transform.transform, tf_transform);
+    Eigen::Matrix4d matrix = Eigen::Matrix4d::Identity();
+    const auto& basis = tf_transform.getBasis();
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) matrix(row, col) = basis[row][col];
+    }
+    const auto& translation = tf_transform.getOrigin();
+    matrix(0, 3) = translation.x();
+    matrix(1, 3) = translation.y();
+    matrix(2, 3) = translation.z();
     PointCloud transformed;
-    pcl::fromROSMsg(output, transformed);
+    pcl::transformPointCloud(*cloudInOut, transformed, matrix);
+    transformed.header.frame_id = target;
     transformed.header.stamp = static_cast<std::uint64_t>(stamp.nanoseconds()) / 1000ULL;
     cloudInOut->swap(transformed);
     if (sensor_origin) {
-        const auto& translation = transform.transform.translation;
-        *sensor_origin = Point3D(translation.x, translation.y, translation.z);
+        *sensor_origin = Point3D(translation.x(), translation.y(), translation.z());
     }
 }
 
