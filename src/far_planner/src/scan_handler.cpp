@@ -80,6 +80,8 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
         }
     }
     for (const auto& point : scanCloudIn->points) {
+        const float r = pcl::euclideanDistance(point, center_p_);
+        if (!std::isfinite(r) || static_cast<double>(r) > max_distance) continue;
         Eigen::Vector3i sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         this->SetRayCloud(sub);
     }
