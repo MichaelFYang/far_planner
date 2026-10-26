@@ -352,6 +352,30 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 spin_until(lambda: len(received) == before + 1 and len(rays) == rays_before + 1)
                 assert x_values(rays[-1]) and max(x_values(rays[-1])) < 2.0, (
                     'Terrain used the newer scan or scanner origin')
+
+                # Terrain should briefly wait when a compatible scan has
+                # arrived but is still waiting for its measurement-time TF.
+                pose.header.stamp.sec = 6
+                pose.header.stamp.nanosec = 200000000
+                pose.pose.pose.position.x = 0.0
+                odom.publish(pose)
+                settle()
+                scans.publish(cloud('paired_sensor', 6, 200000000))
+                settle(0.05)
+                before = len(received)
+                rays_before = len(rays)
+                clouds.publish(cloud('map', 6, 200000000))
+                settle(0.1)
+                assert len(received) == before, 'Terrain ran while its queued scan awaited TF'
+                paired_tf = TransformStamped()
+                paired_tf.header.frame_id = 'map'
+                paired_tf.child_frame_id = 'paired_sensor'
+                paired_tf.header.stamp.sec = 6
+                paired_tf.header.stamp.nanosec = 200000000
+                paired_tf.transform.rotation.w = 1.0
+                transforms.publish(TFMessage(transforms=[paired_tf]))
+                spin_until(lambda: len(received) == before + 1 and len(rays) == rays_before + 1)
+                assert x_values(rays[-1]), 'Late scan TF was not used by the terrain update'
             except Exception:
                 log.flush()
                 log.seek(0)
