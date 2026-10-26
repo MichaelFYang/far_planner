@@ -1,6 +1,6 @@
 <launch>
     <arg name="use_rviz" default="true"/>
-    <arg name="folder_path" default="$(find far_planner)/data/"/>
+    <arg name="folder_path" default="$(find far_planner)/data"/>
     <arg name="boundary_file" default="boundary.ply"/>
     <arg name="traj_file" default="trajectory.txt"/>
     <arg name="graph_file" default="boundary_graph.vgh"/>

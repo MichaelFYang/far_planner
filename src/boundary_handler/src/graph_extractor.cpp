@@ -10,8 +10,10 @@
 #include "boundary_handler/graph_extractor.h"
 #include "boundary_handler/intersection.h"
 #include "boundary_handler/input_parser.h"
+#include "boundary_handler/parameter_validation.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 
+#include <iostream>
 #include <stdexcept>
 #include <utility>
 
@@ -39,9 +41,11 @@ void GraphExtractor::LoadParams() {
     nh.param<std::string>(prefix + "graph_file", ge_params_.vgraph_path, "boundary_graph.vgh");
     nh.param<float>(prefix + "visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0);
     nh.param<float>(prefix + "height_tolz", ge_params_.height_tolz, 1.0);
-    ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
-    ge_params_.bd_file_path   = folder_path + ge_params_.bd_file_path;
-    ge_params_.traj_file_path = folder_path + ge_params_.traj_file_path;
+    ge_params_.frame_id = boundary_handler::NormalizeWorldFrame(ge_params_.frame_id);
+    boundary_handler::ValidateGeometryParameters(ge_params_.viz_scale_ratio, ge_params_.height_tolz);
+    ge_params_.vgraph_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.vgraph_path);
+    ge_params_.bd_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.bd_file_path);
+    ge_params_.traj_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.traj_file_path);
     
 }
 
@@ -497,7 +501,8 @@ int main(int argc, char** argv){
     ge_node.Init();
     ge_node.Run();
   } catch (const std::exception& ex) {
-    ROS_ERROR("Boundary input error: %s", ex.what());
+    std::cerr << "Boundary setup error: " << ex.what() << '\n';
+    ROS_ERROR("Boundary setup error: %s", ex.what());
     return 1;
   }
   ros::Rate loop_rate(1.0);
