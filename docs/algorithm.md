@@ -67,6 +67,7 @@ The timestamped-transform stage fixes the following confirmed defects:
 - Cloud and odometry lookups use the original ROS measurement timestamp, including nanoseconds before PCL rounds timestamps to microseconds. Identity-frame clouds also receive that timestamp in PCL metadata, so both transform paths report the same measurement time. Stamped measurements never request the latest pose.
 - `ProcessCloud` builds a candidate and commits it only after a successful transform. Its callers return on failure before changing map state. Goal transform failures also propagate and prevent goal replacement.
 - Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
+- RViz goal clicks use the current fixed frame for their XY coordinates. The tool transforms its latest stamped odometry pose into that frame before copying the robot height; if the transform is unavailable, it does not publish the goal. Before any odometry arrives, the goal height defaults to zero.
 - TF queries do not block the planner executor. Bounded odometry, scan, local-terrain, and terrain queues wait for their stamped TF and, where needed, matching odometry without silently using the latest transform.
 
 The cross-stream timing stage adds the following policies:

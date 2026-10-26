@@ -11,6 +11,7 @@
 #include <QObject>
 
 #include <sstream>
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/qos.hpp>
 
@@ -54,7 +55,8 @@ private Q_SLOTS:
   void updateTopic();
 
 private:
-  float vehicle_z;
+  std::mutex odom_mutex_;
+  nav_msgs::msg::Odometry::ConstSharedPtr latest_odom_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_;
   rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr pub_;
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr pub_joy_;
