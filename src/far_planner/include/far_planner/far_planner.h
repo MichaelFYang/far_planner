@@ -53,7 +53,8 @@ private:
     ros::Publisher  scan_grid_debug_, new_PCL_pub_, terrain_height_pub_;
     ros::Publisher  runtime_pub_, planning_time_pub_, traverse_time_pub_, reach_goal_pub_;
 
-    ros::Timer planning_event_;
+    ros::Timer main_event_, planning_event_;
+    ros::WallTimer sensor_retry_event_;
     std_msgs::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
@@ -134,6 +135,8 @@ private:
     void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
 
     void PlanningCallBack(const ros::TimerEvent& event);
+    void MainRunCallBack(const ros::TimerEvent&);
+    void SensorRetryCallBack(const ros::WallTimerEvent&);
     
     enum class CloudProcessResult { ACCEPTED, INVALID, TF_UNAVAILABLE };
     CloudProcessResult ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,

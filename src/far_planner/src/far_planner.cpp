@@ -32,7 +32,7 @@ FARMaster::~FARMaster() {
 void FARMaster::Init() {
   /* initialize subscriber and publisher */
   reset_graph_sub_    = nh.subscribe("/reset_visibility_graph", 5, &FARMaster::ResetGraphCallBack, this);
-  odom_sub_           = nh.subscribe("/odom_world", 5, &FARMaster::OdomCallBack, this);
+  odom_sub_           = nh.subscribe("/odom_world", 200, &FARMaster::OdomCallBack, this);
   terrain_sub_        = nh.subscribe("/terrain_cloud", 1, &FARMaster::TerrainCallBack, this);
   scan_sub_           = nh.subscribe("/scan_cloud", 5, &FARMaster::ScanCallBack, this);
   waypoint_sub_       = nh.subscribe("/goal_point", 1, &FARMaster::WaypointCallBack, this);
@@ -60,9 +60,11 @@ void FARMaster::Init() {
 
   this->LoadROSParams();
 
-  /*init path generation thred callback*/
+  // Keep callbacks serialized, but service sensors between graph/planning ticks.
   const double duration_time = far_planner::CheckedTimerPeriodNs(master_params_.main_run_freq) / 1e9;
+  main_event_ = nh.createTimer(ros::Duration(duration_time), &FARMaster::MainRunCallBack, this);
   planning_event_ = nh.createTimer(ros::Duration(duration_time), &FARMaster::PlanningCallBack, this);
+  sensor_retry_event_ = nh.createWallTimer(ros::WallDuration(0.05), &FARMaster::SensorRetryCallBack, this);
 
   /* init Dynamic Planner Processing Objects */
   contour_detector_.Init(cdetect_params_);
@@ -184,33 +186,32 @@ void FARMaster::ResetEnvironmentAndGraph() {
 }
 
 void FARMaster::Loop() {
-  ros::Rate loop_rate(master_params_.main_run_freq);
-  while (ros::ok()) {
+  ros::spin();
+}
+
+void FARMaster::SensorRetryCallBack(const ros::WallTimerEvent&) {
+  this->CheckClockEpoch();
+  if (pending_odometry_.Size() != 0) this->ProcessPendingOdometry();
+  if (pending_scans_.Size() != 0) this->ProcessPendingScans();
+  if (pending_local_terrains_.Size() != 0) this->ProcessPendingLocalTerrain();
+  if (pending_terrains_.Size() != 0) this->ProcessPendingTerrain();
+}
+
+void FARMaster::MainRunCallBack(const ros::TimerEvent&) {
+    this->CheckClockEpoch();
     if (is_reset_env_) {
       this->ResetEnvironmentAndGraph(); 
       is_reset_env_ = false;
       if (FARUtil::IsDebug) ROS_WARN("****************** Graph and Env Reset ******************");
-      loop_rate.sleep(); // skip this iteration
-      continue;
+      return;
     }
-    /* Process callback functions */
-    ros::spinOnce();
-    this->CheckClockEpoch();
-    if (pending_odometry_.Size() != 0) this->ProcessPendingOdometry();
-    if (pending_scans_.Size() != 0) this->ProcessPendingScans();
-    if (pending_local_terrains_.Size() != 0) this->ProcessPendingLocalTerrain();
-    if (pending_terrains_.Size() != 0) this->ProcessPendingTerrain();
-    if (!this->PreconditionCheck()) {
-      loop_rate.sleep();
-      continue;
-    }
+    if (!this->PreconditionCheck()) return;
     /* add main process after this line */
     graph_manager_.UpdateRobotPosition(robot_pos_, local_terrain_revision_);
     odom_node_ptr_ = graph_manager_.GetOdomNode();
     if (odom_node_ptr_ == NULL) {
       ROS_WARN("FAR: Waiting for Odometry...");
-      loop_rate.sleep();
-      continue;
+      return;
     }
     /* Extract Vertices and new nodes */
     FARUtil::Timer.start_time("Total V-Graph Update");
@@ -287,8 +288,6 @@ void FARMaster::Loop() {
       printf("\033[A"), printf("\033[A"), printf("\033[2K");
       std::cout<< "\033[1;32m V-Graph Initialized \033[0m\n" << std::endl;
     }
-    loop_rate.sleep();
-  }
 }
 
 void FARMaster::PlanningCallBack(const ros::TimerEvent& event) {

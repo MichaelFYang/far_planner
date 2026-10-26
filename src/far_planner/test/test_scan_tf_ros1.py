@@ -96,7 +96,7 @@ class ScanTfRetryTest(unittest.TestCase):
         odometry.publish(deferred_pose)
         wait_for(lambda: len(terrain_updates) > before)
 
-        # A terrain cloud with missing stamped TF is retried by the main loop.
+        # Missing stamped TF is retried by the wall timer without another input.
         missing_tf_stamp = rospy.Time.now()
         missing_tf_pose = Odometry()
         missing_tf_pose.header = Header(stamp=missing_tf_stamp, frame_id='map')
