@@ -3,6 +3,7 @@
 
 #include "utility.h"
 #include "contour_graph.h"
+#include <boost/functional/hash.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
