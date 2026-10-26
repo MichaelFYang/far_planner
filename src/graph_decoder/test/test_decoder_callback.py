@@ -79,6 +79,9 @@ def test_decoder_keeps_last_valid_graph():
                     graph_node.freetype = 3 if identifier == 1 else 1
                     valid.nodes.append(graph_node)
                 valid.nodes[0].connect_nodes = [2]
+                valid.nodes[0].poly_connects = [2]
+                valid.nodes[0].contour_connects = [2]
+                valid.nodes[0].trajectory_connects = [2]
                 valid.size = 2
                 graphs.publish(valid)
                 spin_until(lambda: len(markers) > 0)
@@ -87,6 +90,9 @@ def test_decoder_keeps_last_valid_graph():
                 for original, decoded in zip(valid.nodes, round_trip.nodes):
                     assert decoded.freetype == original.freetype
                     assert decoded.surface_dirs == original.surface_dirs
+                    for field in ('connect_nodes', 'poly_connects',
+                                  'contour_connects', 'trajectory_connects'):
+                        assert getattr(decoded, field) == getattr(original, field)
 
                 save_path = os.path.join(directory, 'saved_graph.vgh')
                 save_requests.publish(String(data=save_path))
@@ -108,6 +114,9 @@ def test_decoder_keeps_last_valid_graph():
                 loaded = published[-1]
                 assert [n.id for n in loaded.nodes] == [1, 2]
                 assert struct.pack('f', loaded.nodes[0].position.x) == struct.pack('f', valid.nodes[0].position.x)
+                for field in ('connect_nodes', 'poly_connects',
+                              'contour_connects', 'trajectory_connects'):
+                    assert list(getattr(loaded.nodes[0], field)) == [2]
 
                 malformed = Graph()
                 malformed.header.frame_id = 'map'
