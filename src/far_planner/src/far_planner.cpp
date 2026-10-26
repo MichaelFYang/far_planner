@@ -33,6 +33,13 @@ FARMaster::FARMaster()
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner Node Initiated");
 }
 
+FARMaster::~FARMaster() {
+  // Break graph ownership cycles on normal shutdown as well as explicit reset.
+  graph_planner_.ResetPlannerInternalValues();
+  graph_manager_.ResetCurrentGraph();
+  contour_graph_.ResetCurrentContour();
+}
+
 void FARMaster::Init() {
   /* initialize subscriber and publisher */
   reset_graph_sub_    = nh_->create_subscription<std_msgs::msg::Empty>("/reset_visibility_graph", 5, std::bind(&FARMaster::ResetGraphCallBack, this, std::placeholders::_1));

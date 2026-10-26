@@ -118,6 +118,8 @@ Merged-node and temporary-goal deletion also clear both sides of terrain-feasibi
 
 Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
+Planner destruction also resets its goal, navigation graph, and contour graph, breaking their ownership cycles without publishing a reset waypoint. A live indoor replay previously left about 0.96 MB in linked graph allocations at shutdown. The lifecycle regression checks that destruction releases linked navigation and contour nodes even without an explicit reset or full initialization.
+
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
 Default planner `Point3D` values initialize XYZ and intensity to zero. Polygon, contour-node, and navigation-node scalar fields also have explicit neutral defaults; their factories no longer clear newly empty containers or restate neutral flags. The boundary extractor and graph decoder use coordinate-only points with zero-initialized XYZ. Contour pixels construct a complete point directly, so their intensity is defined before PCL conversion. `Point3D::operator!=` is the complement of its tolerant equality, including at the tolerance boundary and for nonfinite coordinates. The unused `point_hash` and `point_comp` helpers were removed because exact float hashing was inconsistent with tolerant equality; remaining Boost hash users include their header directly.
@@ -267,6 +269,22 @@ An isolated retention-stage benchmark is reproducible with `cmake -S benchmarks 
 The optional `grid_position` target in the same benchmark build compares five million in-range conversions with the previous unchecked formula: `cmake --build /tmp/far-cloud-decay-build --target grid_position` and `/tmp/far-cloud-decay-build/grid_position`. A local Release run measured about 6.6 ms for the old formula and 11.4 ms for the checked conversion. This synthetic check excludes TF, PCL, and map updates; it measures the cost of the new safety checks, not planner throughput.
 
 The benchmark measures only retention, excluding cloud copies used to prepare the input, ROS callbacks, and planning. Representative planner stage latency remains unmeasured.
+
+## Indoor navigation and replay validation
+
+A native Jazzy Release run used the shipped default planner parameters and the upstream [Jazzy simulator snapshot](https://github.com/HongbiaoZ/autonomous_exploration_development_environment/tree/8313dfed10533787582be8a6044483fe3299622f), its supplied indoor environment, terrain analysis, local planner, and vehicle simulator. Gazebo ran with headless rendering; RViz and joystick nodes were omitted. Sequential goals in `map` were sent after graph initialization, with a one-second dwell after each reported arrival:
+
+| Goal XY (m) | Travel time (s) | Final XY error (m) |
+| --- | ---: | ---: |
+| (4, 14) | 9.19 | 0.029 |
+| (10, −15) | 18.20 | 0.049 |
+| (0, 0) | 13.40 | 0.041 |
+
+The recorded trajectory covered 72.6 m. Odometry bracketed 221 of 222 messages in each scan/terrain stream, with a maximum bracket gap of 11.32 ms. The last cloud had no later recorded odometry sample at shutdown. The nearest sampled wall point was 0.557 m from the vehicle center; this point-cloud comparison is not a contact-safety proof.
+
+The 50.6-second input recording was replayed with ROS simulated time under AddressSanitizer and UndefinedBehaviorSanitizer, with leak detection enabled. The harness held the first operator goal until a graph was published; sensor and TF timestamps were unchanged. All three goals reported arrival, 113 graph snapshots passed frame/ID/connection checks, and 102 waypoints were finite and in `map`. The planner exited normally without sanitizer findings after the shutdown fix. The separate C++ sanitizer suite passed 101 tests. The build used `-fsanitize=address,undefined -fno-omit-frame-pointer -DEIGEN_MALLOC_ALREADY_ALIGNED=1` to match the system PCL/Eigen allocation alignment.
+
+This is one indoor scenario on Jazzy, not comprehensive navigation or long-duration memory validation. Dynamic obstacles, multi-layer navigation, interactive RViz behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
 
 ## Branch validation baseline
 
