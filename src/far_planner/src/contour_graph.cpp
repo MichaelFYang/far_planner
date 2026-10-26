@@ -16,7 +16,6 @@ void ContourGraph::Init(const ContourGraphParams& params) {
     ctgraph_params_ = params;
     this->ClearContourGraph();
     ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign / 2.0f);
-    is_robot_inside_poly_ = false;
     ContourGraph::global_contour_set_.clear();
     ContourGraph::boundary_contour_set_.clear();
 }
@@ -657,35 +656,31 @@ bool ContourGraph::IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr
 }
 
 void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& global_free_p) {
-    Point3D free_p = odom_ptr->position;
-    bool is_free_p = true;
-    PointStack free_sample_points;
+    global_free_p = odom_ptr->position;
+    bool robot_inside_poly = false;
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
         if (!poly_ptr->is_pillar && poly_ptr->is_robot_inside) {
-            is_free_p = false;
-            FARUtil::CreatePointsAroundCenter(free_p, FARUtil::kNavClearDist, FARUtil::kLeafSize, free_sample_points);
+            robot_inside_poly = true;
             break;
         }
     }
-    if (is_free_p) is_robot_inside_poly_ = false;
-    global_free_p = free_p;
-    if (!is_free_p && !is_robot_inside_poly_) {
-        bool is_free_pos_found = false;
-        for (const auto& p : free_sample_points) {
-            bool is_sample_free = true;
-            for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
-                if (!poly_ptr->is_pillar && FARUtil::PointInsideAPoly(poly_ptr->vertices, p)) {
-                    is_sample_free = false;
-                    break;
-                }
-            }
-            if (is_sample_free) {
-                global_free_p = p;
-                is_free_pos_found = true;
+    if (!robot_inside_poly) return;
+
+    PointStack free_sample_points;
+    FARUtil::CreatePointsAroundCenter(global_free_p, FARUtil::kNavClearDist,
+                                      FARUtil::kLeafSize, free_sample_points);
+    for (const auto& p : free_sample_points) {
+        bool is_sample_free = true;
+        for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
+            if (!poly_ptr->is_pillar && FARUtil::PointInsideAPoly(poly_ptr->vertices, p)) {
+                is_sample_free = false;
                 break;
             }
         }
-        if (!is_free_pos_found) is_robot_inside_poly_ = true;
+        if (is_sample_free) {
+            global_free_p = p;
+            return;
+        }
     }
 }
 
@@ -728,7 +723,6 @@ void ContourGraph::ResetCurrentContour() {
     ContourGraph::boundary_contour_set_.clear();
 
     odom_node_ptr_ = NULL;
-    is_robot_inside_poly_ = false;
 }   
 
 
