@@ -41,10 +41,19 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   ament_add_gtest(test_graph_file_parser test/test_graph_file_parser.cpp)
   target_include_directories(test_graph_file_parser PRIVATE include)
   target_compile_definitions(test_graph_file_parser PRIVATE
     FAR_GRAPH_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../far_planner/data")
+
+  ament_add_gtest(test_graph_message_validation test/test_graph_message_validation.cpp)
+  target_link_libraries(test_graph_message_validation visibility_graph_msg::visibility_graph_msg)
+
+  ament_add_pytest_test(test_decoder_callback test/test_decoder_callback.py
+    TIMEOUT 35
+    ENV GRAPH_DECODER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
+  )
 endif()
 
 ament_package()

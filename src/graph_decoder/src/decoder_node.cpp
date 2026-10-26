@@ -8,6 +8,7 @@
 
 
 #include "graph_decoder/decoder_node.h"
+#include <visibility_graph_msg/graph_validation.h>
 
 /***************************************************************************************/
 GraphDecoder::GraphDecoder() {
@@ -57,15 +58,21 @@ void GraphDecoder::Init() {
 
 
 void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg) {
+    std::string error;
+    if (!graph_message_validation::ValidateGraph(
+            *msg, gd_params_.frame_id,
+            [](const auto& node) { return node.freetype; }, error)) {
+        RCLCPP_WARN(nh_->get_logger(), "Ignoring malformed graph: %s", error.c_str());
+        return;
+    }
     NodePtrStack next_graph;
+    next_graph.reserve(msg->nodes.size());
     std::unordered_map<std::size_t, std::size_t> nodeIdx_idx_map;
+    nodeIdx_idx_map.reserve(msg->nodes.size());
     for (const auto& node : msg->nodes) {
         NavNodePtr temp_node_ptr;
         CreateNavNode(node, temp_node_ptr);
-        if (!nodeIdx_idx_map.emplace(node.id, next_graph.size()).second) {
-            RCLCPP_ERROR(nh_->get_logger(), "Ignoring graph with duplicate node ID %u", node.id);
-            return;
-        }
+        nodeIdx_idx_map.emplace(node.id, next_graph.size());
         next_graph.push_back(temp_node_ptr);
     }
     for (const auto& node_ptr : next_graph) {
@@ -79,7 +86,6 @@ void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedP
     robot_id_ = msg->robot_id;
     this->VisualizeGraph(received_graph_);
 }
-
 
 void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std::size_t>& idxs_map,
                                       const NodePtrStack& graph,
