@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise delayed scan TF delivery through the running ROS 1 planner."""
+"""Exercise delayed scan and terrain inputs through the running ROS 1 planner."""
 
 import struct
 import time
@@ -43,7 +43,10 @@ class ScanTfRetryTest(unittest.TestCase):
         terrain = rospy.Publisher('/terrain_cloud', PointCloud2, queue_size=10)
         transforms = rospy.Publisher('/tf', TFMessage, queue_size=10)
         rays = []
+        terrain_updates = []
         rospy.Subscriber('/FAR_scanGrid_debug', PointCloud2, rays.append, queue_size=10)
+        rospy.Subscriber('/FAR_obs_debug', PointCloud2, terrain_updates.append,
+                         queue_size=10)
         wait_for(lambda: all(p.get_num_connections() > 0 for p in
                              (odometry, scans, terrain, transforms)))
 
@@ -63,10 +66,47 @@ class ScanTfRetryTest(unittest.TestCase):
         transform.transform.rotation.w = 1.0
         transforms.publish(TFMessage(transforms=[transform]))
         time.sleep(0.25)
-        terrain.publish(cloud('map', stamp + rospy.Duration.from_sec(0.1)))
+        terrain_stamp = stamp + rospy.Duration.from_sec(0.1)
+        later_pose = Odometry()
+        later_pose.header = Header(stamp=terrain_stamp, frame_id='map')
+        later_pose.pose.pose.orientation.w = 1.0
+        odometry.publish(later_pose)
+        time.sleep(0.15)
+        terrain.publish(cloud('map', terrain_stamp))
         wait_for(lambda: len(rays) > 0)
         self.assertGreater(rays[-1].width, 0,
                            'Scan was not ray traced after its delayed TF arrived')
+        wait_for(lambda: len(terrain_updates) > 0)
+
+        # A terrain cloud newer than odometry waits for the matching sample.
+        deferred_stamp = rospy.Time.now()
+        before = len(terrain_updates)
+        terrain.publish(cloud('map', deferred_stamp))
+        time.sleep(0.2)
+        self.assertEqual(len(terrain_updates), before)
+        deferred_pose = Odometry()
+        deferred_pose.header = Header(stamp=deferred_stamp, frame_id='map')
+        deferred_pose.pose.pose.orientation.w = 1.0
+        odometry.publish(deferred_pose)
+        wait_for(lambda: len(terrain_updates) > before)
+
+        # A terrain cloud with missing stamped TF is retried by the main loop.
+        missing_tf_stamp = rospy.Time.now()
+        missing_tf_pose = Odometry()
+        missing_tf_pose.header = Header(stamp=missing_tf_stamp, frame_id='map')
+        missing_tf_pose.pose.pose.orientation.w = 1.0
+        odometry.publish(missing_tf_pose)
+        time.sleep(0.15)
+        before = len(terrain_updates)
+        terrain.publish(cloud('late_terrain', missing_tf_stamp))
+        time.sleep(0.2)
+        self.assertEqual(len(terrain_updates), before)
+        terrain_tf = TransformStamped()
+        terrain_tf.header = Header(stamp=missing_tf_stamp, frame_id='map')
+        terrain_tf.child_frame_id = 'late_terrain'
+        terrain_tf.transform.rotation.w = 1.0
+        transforms.publish(TFMessage(transforms=[terrain_tf]))
+        wait_for(lambda: len(terrain_updates) > before)
 
 
 if __name__ == '__main__':

@@ -141,6 +141,7 @@ void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
 
 void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
     if (!is_init_) this->SetMapOrigin(odom_pos);
+    terrain_robot_pos_ = odom_pos;
     robot_cell_sub_ = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(odom_pos.x, odom_pos.y, odom_pos.z));
     // Get neighbor indices
     neighbor_free_indices_.clear(), neighbor_obs_indices_.clear();
@@ -431,8 +432,8 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
 }
 
 void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
-    const Eigen::Vector3i robot_sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(FARUtil::robot_pos.x, 
-                                                                                    FARUtil::robot_pos.y, 0.0f));
+    const Eigen::Vector3i robot_sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(terrain_robot_pos_.x,
+                                                                                    terrain_robot_pos_.y, 0.0f));
     terrainHeightOut->clear();
     if (!terrain_height_grid_->InRange(robot_sub)) {
         ROS_ERROR("MH: terrain height analysis error: robot position is not in range");
@@ -481,7 +482,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
                 float avg_h = 0.0f;
                 int counter = 0;
                 for (const auto& e : terrain_height_grid_->GetCell(cur_id)) {
-                    if (abs(e - FARUtil::robot_pos.z + FARUtil::vehicle_height) > H_THRED) continue;
+                    if (abs(e - terrain_robot_pos_.z + FARUtil::vehicle_height) > H_THRED) continue;
                     avg_h += e, counter ++;
                 }
                 if (counter > 0) {

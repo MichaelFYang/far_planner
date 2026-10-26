@@ -133,6 +133,7 @@ private:
     MapHandlerParams map_params_;
     int neighbor_Lnum_, neighbor_Hnum_;
     Eigen::Vector3i robot_cell_sub_;
+    Point3D terrain_robot_pos_;
     int INFLATE_N;
     bool is_init_ = false;
     PointCloudPtr flat_terrain_cloud_;

@@ -133,6 +133,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   this->ResetInternalValues();
   odometry_history_.Clear();
   pending_scans_.Clear();
+  pending_terrains_.Clear();
   last_scan_stamp_ = last_terrain_stamp_ = last_local_terrain_stamp_ = 0;
   is_odom_init_ = is_cloud_init_ = is_scan_init_ = false;
   FARUtil::cur_scan_cloud_->clear();
@@ -176,6 +177,7 @@ void FARMaster::Loop() {
     ros::spinOnce();
     this->CheckClockEpoch();
     if (pending_scans_.Size() != 0) this->ProcessPendingScans();
+    if (pending_terrains_.Size() != 0) this->ProcessPendingTerrain();
     if (!this->PreconditionCheck()) {
       loop_rate.sleep();
       continue;
@@ -632,6 +634,7 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
 
   is_odom_init_ = true;
   this->ProcessPendingScans();
+  this->ProcessPendingTerrain();
 }
 
 FARMaster::CloudProcessResult FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
@@ -715,15 +718,61 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
 
 void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   this->CheckClockEpoch();
-  if (!is_odom_init_) return;
   const auto stamp = MeasurementStamp(pc->header.stamp);
-  if (!this->ValidMeasurementTime(stamp) || stamp <= last_terrain_stamp_) return;
-  if (!is_stop_update_ && this->ProcessCloud(pc, temp_cloud_ptr_) != CloudProcessResult::ACCEPTED) return;
-  last_terrain_stamp_ = stamp;
-  // update map grid robot center
-  map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
+  if (!this->ValidMeasurementTime(stamp) ||
+      !pending_terrains_.Push(stamp, pc, last_terrain_stamp_, far_planner::SteadyNowNs())) {
+    ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order terrain");
+    return;
+  }
+  this->ProcessPendingTerrain();
+}
+
+void FARMaster::ProcessPendingTerrain() {
+  const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
+  const auto expired = pending_terrains_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  if (expired != 0) ROS_WARN_THROTTLE(1.0, "Expired %zu terrain clouds waiting for odometry or TF", expired);
+  const auto latest_odometry = odometry_history_.LatestStamp();
+  while (pending_terrains_.HasReady(latest_odometry)) {
+    const auto& terrain = pending_terrains_.Front();
+    far_planner::OdometryHistory::Position position;
+    if (terrain.stamp <= last_terrain_stamp_ ||
+        !far_planner::WithinSensorSkew(terrain.stamp, latest_odometry, sensor_time_tolerance_ns_) ||
+        !odometry_history_.PositionAt(terrain.stamp, sensor_time_tolerance_ns_, position)) {
+      ROS_WARN_THROTTLE(1.0, "Dropping terrain without nearby measurement-time odometry");
+      pending_terrains_.PopReady();
+      continue;
+    }
+    const auto pc = terrain.message;
+    if (!is_stop_update_) {
+      const std::string source = FARUtil::NormalizeFrameID(pc->header.frame_id);
+      if (source.empty()) {
+        pending_terrains_.PopReady();
+        continue;
+      }
+      if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
+          !tf_listener_->canTransform(master_params_.world_frame, source,
+                                      pc->header.stamp)) break;
+      const auto result = this->ProcessCloud(pc, temp_cloud_ptr_);
+      if (result == CloudProcessResult::TF_UNAVAILABLE) break;
+      if (result == CloudProcessResult::INVALID) {
+        pending_terrains_.PopReady();
+        continue;
+      }
+    }
+    const auto stamp = terrain.stamp;
+    const Point3D terrain_robot_pos(position[0], position[1], position[2]);
+    last_terrain_stamp_ = stamp;
+    pending_terrains_.PopReady();
+    this->ProcessTerrainCloud(pc, terrain_robot_pos);
+  }
+}
+
+void FARMaster::ProcessTerrainCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
+                                    const Point3D& terrain_robot_pos) {
+  const auto stamp = MeasurementStamp(pc->header.stamp);
+  map_handler_.UpdateRobotPosition(terrain_robot_pos);
   if (!is_stop_update_) {
-    FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
+    FARUtil::CropBoxCloud(temp_cloud_ptr_, terrain_robot_pos, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
     FARUtil::ExtractFreeAndObsCloud(temp_cloud_ptr_, temp_free_ptr_, temp_obs_ptr_);
