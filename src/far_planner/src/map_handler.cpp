@@ -214,8 +214,7 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
 
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
-    std::vector<int> modified_indices;
-    std::unordered_set<int> modified_set;
+    std::unordered_set<int> modified_indices;
     PointCloud obs_valid;
     for (const auto& point : obsCloudInOut->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
@@ -224,9 +223,7 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
             EnsureCloud(*world_obs_cloud_grid_, ind)->push_back(point);
             obs_valid.push_back(point);
-            if (modified_set.insert(ind).second) {
-                modified_indices.push_back(ind);
-            }
+            modified_indices.insert(ind);
             visited_cell_indices_.insert(ind);
         }
     }
@@ -238,16 +235,13 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
 
 void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     if (!is_init_ || freeCloudIn->empty()) return;
-    std::vector<int> modified_indices;
-    std::unordered_set<int> modified_set;
+    std::unordered_set<int> modified_indices;
     for (const auto& point : freeCloudIn->points) {
         Eigen::Vector3i sub = world_free_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
         EnsureCloud(*world_free_cloud_grid_, ind)->push_back(point);
-        if (modified_set.insert(ind).second) {
-            modified_indices.push_back(ind);
-        }
+        modified_indices.insert(ind);
         visited_cell_indices_.insert(ind);
     }
     for (const int ind : modified_indices) {
@@ -560,15 +554,12 @@ void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
 }
 
 void MapHandler::RemoveObsCloudFromGrid(const PointCloudPtr& obsCloud) {
-    std::vector<int> marked_indices;
-    std::unordered_set<int> marked_set;
+    std::unordered_set<int> marked_indices;
     for (const auto& point : obsCloud->points) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_free_cloud_grid_->InRange(sub)) continue;
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
-        if (marked_set.insert(ind).second) {
-            marked_indices.push_back(ind);
-        }
+        marked_indices.insert(ind);
     }
     for (const int ind : marked_indices) {
         if (neighbor_obs_indices_.count(ind) != 0 && visited_cell_indices_.count(ind) != 0) {
