@@ -120,11 +120,13 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::GraphConstPtr& msg) {
     for (std::size_t i=0; i<msg->nodes.size(); i++) {
         const auto& node = msg->nodes[i];
         const Point3D node_p = Point3D(node.position.x, node.position.y, node.position.z);
-        NavNodePtr nearest_node_ptr = node_index.Nearest(node_p, gm_params_.dist_margin);
-        if (nearest_node_ptr && DynamicGraph::MappedNavNodeFromId(nearest_node_ptr->id) != nearest_node_ptr) {
-            nearest_node_ptr.reset();
-        }
-        if (nearest_node_ptr == NULL || IsMismatchFreeNode(nearest_node_ptr, node)) {
+        NavNodePtr nearest_node_ptr = node_index.Nearest(node_p, gm_params_.dist_margin,
+            [&node](const NavNodePtr& candidate) {
+                return candidate->is_navpoint == static_cast<bool>(node.is_navpoint) &&
+                       candidate->is_boundary == static_cast<bool>(node.is_boundary) &&
+                       DynamicGraph::MappedNavNodeFromId(candidate->id) == candidate;
+            });
+        if (nearest_node_ptr == NULL) {
             CreateDecodedNavNode(node, nearest_node_ptr);
             DynamicGraph::AddNodeToGraph(nearest_node_ptr);
         }

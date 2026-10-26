@@ -318,3 +318,68 @@ TEST_F(GraphImport, PublicationDoesNotRetainNodesAfterGraphReset) {
     graph_->ResetCurrentGraph();
     EXPECT_TRUE(imported.expired());
 }
+
+TEST_F(GraphImport, CloserIncompatibleNodeDoesNotHideACompatibleMatch) {
+    GraphMsger messenger;
+    GraphEncodingTestAccess::PrepareImport(messenger);
+    for (unsigned int type = 0; type < 4; ++type) {
+        for (unsigned int changed_flag : {1U, 2U}) {
+            SCOPED_TRACE(type);
+            SCOPED_TRACE(changed_flag);
+            graph_->ResetCurrentGraph();
+            const auto wrong_type = type ^ changed_flag;
+            NavNodePtr closer, compatible, anchor;
+            DynamicGraph::CreateNavNodeFromPoint(Point3D(1.0f, 0.0f, 0.0f), closer,
+                false, (wrong_type & 1U) != 0, false, (wrong_type & 2U) != 0);
+            DynamicGraph::CreateNavNodeFromPoint(Point3D(1.2f, 0.0f, 0.0f), compatible,
+                false, (type & 1U) != 0, false, (type & 2U) != 0);
+            DynamicGraph::AddNodeToGraph(closer);
+            DynamicGraph::AddNodeToGraph(compatible);
+            DynamicGraph::CreateNavNodeFromPoint(Point3D(3.0f, 0.0f, 0.0f), anchor, false);
+            anchor->is_active = false;
+            DynamicGraph::AddNodeToGraph(anchor);
+            auto message = ValidGraph();
+            message.nodes[0].position.x = 1.05;
+            message.nodes[0].is_navpoint = (type & 1U) != 0;
+            message.nodes[0].is_boundary = (type & 2U) != 0;
+            auto anchor_message = ValidGraph().nodes.front();
+            anchor_message.id = 8;
+            anchor_message.position.x = 3.0;
+            anchor_message.connect_nodes = {message.nodes[0].id};
+            message.nodes[0].connect_nodes = {anchor_message.id};
+            message.nodes.push_back(anchor_message);
+            message.size = 2;
+            GraphEncodingTestAccess::Import(messenger, message);
+            GraphEncodingTestAccess::Import(messenger, message);
+            EXPECT_EQ(graph_->GetNavGraph().size(), 3U);
+            EXPECT_EQ(compatible->connect_nodes, (NodePtrStack{anchor}));
+            EXPECT_EQ(anchor->connect_nodes, (NodePtrStack{compatible}));
+            EXPECT_TRUE(closer->connect_nodes.empty());
+        }
+    }
+}
+
+TEST_F(GraphImport, CoincidentNodeTypesRemainDistinctAcrossRepeatedImports) {
+    GraphMsger messenger;
+    GraphEncodingTestAccess::PrepareImport(messenger);
+    auto message = ValidGraph();
+    const auto base_node = message.nodes.front();
+    message.nodes.clear();
+    for (unsigned int type = 0; type < 4; ++type) {
+        auto node = base_node;
+        node.id += type;
+        node.is_navpoint = (type & 1U) != 0;
+        node.is_boundary = (type & 2U) != 0;
+        message.nodes.push_back(node);
+    }
+    message.size = 4;
+    GraphEncodingTestAccess::Import(messenger, message);
+    const auto original = graph_->GetNavGraph();
+    ASSERT_EQ(original.size(), 4U);
+    GraphEncodingTestAccess::Import(messenger, message);
+    GraphEncodingTestAccess::Import(messenger, message);
+    ASSERT_EQ(graph_->GetNavGraph().size(), original.size());
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        EXPECT_EQ(graph_->GetNavGraph()[i], original[i]);
+    }
+}
