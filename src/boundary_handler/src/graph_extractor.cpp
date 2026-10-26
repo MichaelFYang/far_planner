@@ -167,7 +167,6 @@ void GraphExtractor::ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& 
     for (const auto& poly_ptr : polysIn) {
         NavNodePtr temp_node_ptr = NULL;
         NodePtrStack node_stack;
-        node_stack.clear();
         const int N = poly_ptr->vertices.size();
         for (std::size_t idx=0; idx<N; idx++) {
             this->CreateNavNode(poly_ptr->vertices[idx], temp_node_ptr);

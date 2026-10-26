@@ -645,7 +645,6 @@ Point3D FARUtil::RANSACPoisiton(const std::deque<Point3D>& pos_filter_stack, con
   for (const auto& p : pos_filter_stack) {
     std::size_t temp_inlier_size = 0;
     PointStack temp_inlier_stack;
-    temp_inlier_stack.clear();
     for (const auto& cp : pos_filter_stack) {
       if ((p - cp).norm_flat() < margin) {
         temp_inlier_stack.push_back(cp);

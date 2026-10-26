@@ -33,13 +33,10 @@ class Grid
 public:
   explicit Grid(const Eigen::Vector3i& size, _T init_value, const Eigen::Vector3d& origin = Eigen::Vector3d(0, 0, 0),
                 const Eigen::Vector3d& resolution = Eigen::Vector3d(1, 1, 1), int dimension = 3)
-    : init_value_(std::move(init_value))
+    : origin_(origin), size_(size), resolution_(resolution),
+      init_value_(std::move(init_value)), dimension_(dimension)
   {
-    origin_ = origin;
-    size_ = size;
-    resolution_ = resolution;
     resolution_inv_.setZero();
-    dimension_ = dimension;
 
     if (dimension_ < 1 || dimension_ > 3) {
       throw std::invalid_argument("Grid dimension must be between 1 and 3");
@@ -281,13 +278,13 @@ public:
     return Sparse ? sparse_cells_.size() : cells_.size();
   }
 
-  void SetCellValue(int x, int y, int z, _T value)
+  void SetCellValue(int x, int y, int z, const _T& value)
   {
     int index = Sub2Ind(x, y, z);
     GetCell(index) = value;
   }
 
-  void SetCellValue(const Eigen::Vector3i& sub, _T value)
+  void SetCellValue(const Eigen::Vector3i& sub, const _T& value)
   {
     // MY_ASSERT(InRange(sub));
     SetCellValue(sub.x(), sub.y(), sub.z(), value);
