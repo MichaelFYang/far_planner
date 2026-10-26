@@ -19,6 +19,7 @@ struct GraphMsgerParams {
 
 
 class GraphMsger {
+    friend class GraphEncodingTestAccess;
 public:
     GraphMsger() = default;
     ~GraphMsger() = default;
@@ -41,7 +42,7 @@ private:
     
     void CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr);
 
-    inline bool IsEncodeType(const NavNodePtr& node_ptr) {
+    static inline bool IsEncodeType(const NavNodePtr& node_ptr) {
         if (node_ptr->is_odom || !node_ptr->is_finalized || FARUtil::IsOutsideGoal(node_ptr)) {
             return false;
         }
@@ -70,7 +71,7 @@ private:
 
     NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
 
-    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
+    static void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
     void GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg);
 
