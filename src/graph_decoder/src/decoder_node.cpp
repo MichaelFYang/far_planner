@@ -338,7 +338,9 @@ bool GraphDecoder::RequestGraphService(const std::shared_ptr<std_srvs::srv::Trig
 }
 
 void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
+    if (graph_viz_pub_->get_subscription_count() == 0) return;
     MarkerArray graph_marker_array;
+    graph_marker_array.markers.reserve(12);
     Marker nav_node_marker, covered_node_marker, frontier_node_marker, internav_node_marker, edge_marker, poly_edge_marker, 
            contour_edge_marker, free_edge_marker, traj_edge_marker, boundary_edge_marker, corner_surf_marker, corner_helper_marker;
     nav_node_marker.type       = Marker::SPHERE_LIST;
@@ -442,18 +444,18 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
         idx ++;    
     } 
     nav_node_marker.points.resize(idx);
-    graph_marker_array.markers.push_back(nav_node_marker);
-    graph_marker_array.markers.push_back(covered_node_marker);
-    graph_marker_array.markers.push_back(internav_node_marker);
-    graph_marker_array.markers.push_back(frontier_node_marker);
-    graph_marker_array.markers.push_back(edge_marker);
-    graph_marker_array.markers.push_back(poly_edge_marker);
-    graph_marker_array.markers.push_back(boundary_edge_marker);
-    graph_marker_array.markers.push_back(free_edge_marker);
-    graph_marker_array.markers.push_back(contour_edge_marker);
-    graph_marker_array.markers.push_back(traj_edge_marker);
-    graph_marker_array.markers.push_back(corner_surf_marker);
-    graph_marker_array.markers.push_back(corner_helper_marker);
+    graph_marker_array.markers.push_back(std::move(nav_node_marker));
+    graph_marker_array.markers.push_back(std::move(covered_node_marker));
+    graph_marker_array.markers.push_back(std::move(internav_node_marker));
+    graph_marker_array.markers.push_back(std::move(frontier_node_marker));
+    graph_marker_array.markers.push_back(std::move(edge_marker));
+    graph_marker_array.markers.push_back(std::move(poly_edge_marker));
+    graph_marker_array.markers.push_back(std::move(boundary_edge_marker));
+    graph_marker_array.markers.push_back(std::move(free_edge_marker));
+    graph_marker_array.markers.push_back(std::move(contour_edge_marker));
+    graph_marker_array.markers.push_back(std::move(traj_edge_marker));
+    graph_marker_array.markers.push_back(std::move(corner_surf_marker));
+    graph_marker_array.markers.push_back(std::move(corner_helper_marker));
     graph_viz_pub_->publish(graph_marker_array);
 }
 
