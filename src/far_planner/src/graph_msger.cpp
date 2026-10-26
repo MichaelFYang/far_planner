@@ -31,7 +31,9 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
     std::unordered_set<const NavNode*> encoded_nodes;
     encoded_nodes.reserve(graphIn.size());
     for (const auto& node_ptr : graphIn) {
-        if (node_ptr && !node_ptr->connect_nodes.empty() && IsEncodeType(node_ptr)) {
+        if (!node_ptr || !IsEncodeType(node_ptr)) continue;
+        if (!node_ptr->connect_nodes.empty() || !node_ptr->poly_connects.empty() ||
+            !node_ptr->contour_connects.empty() || !node_ptr->trajectory_connects.empty()) {
             encoded_nodes.insert(node_ptr.get());
         }
     }

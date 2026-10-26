@@ -140,7 +140,7 @@ Graph serialization moves each completed node into the outgoing message instead 
 
 The graph decoder preserves all three coordinates of both surface directions when receiving and republishing a graph. The Z coordinate carries the `-1` pillar sentinel and may also contain a nonzero direction component. A live message round-trip test checks both cases.
 
-Before encoding a graph snapshot, the planner selects the nodes it will publish. It emits connections only when their target is in that selection. This keeps all four edge lists consistent with the message's node set, even when a neighbor lacks regular edges, is unfinished, is excluded by type, or is absent from the supplied graph. A graph-message regression checks that the receiver accepts the result.
+Before encoding a graph snapshot, the planner selects eligible nodes with at least one visibility, polygon, contour, or trajectory edge. It then emits connections only when their target is in that selection. This preserves nodes connected only by non-visibility edges and keeps every edge list consistent when a neighbor is isolated, unfinished, excluded by type, or absent from the supplied graph. Graph-message regressions check both cases and receiver validation.
 
 ## Scan sensor origin stage
 
