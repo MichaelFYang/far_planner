@@ -23,7 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
 )
 find_package(PCL REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui imgcodecs)
 find_package(Eigen3 REQUIRED)
 
 catkin_package(CATKIN_DEPENDS
@@ -61,7 +61,7 @@ target_include_directories(far_planner_core PUBLIC
   ${OpenCV_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
 )
-add_definitions(${PCL_DEFINITIONS})
+target_compile_options(far_planner_core PUBLIC ${PCL_DEFINITIONS})
 target_link_libraries(far_planner_core ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(${PROJECT_NAME} src/main.cpp)
