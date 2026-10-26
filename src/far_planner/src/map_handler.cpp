@@ -416,11 +416,15 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
         this->ClearTerrainHeightData();
         return;
     }
-    PointCloudPtr copy_free_ptr(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*freeCloudIn, *copy_free_ptr);
-    FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution());
+    // VoxelGrid reads its input and writes a separate cloud; no full input copy is needed.
+    PointCloud filtered_free;
+    pcl::VoxelGrid<PCLPoint> voxel_filter;
+    voxel_filter.setInputCloud(freeCloudIn);
+    const auto resolution = terrain_height_grid_->GetResolution();
+    voxel_filter.setLeafSize(resolution.x(), resolution.y(), resolution.z());
+    voxel_filter.filter(filtered_free);
     std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0);
-    for (const auto& point : copy_free_ptr->points) {
+    for (const auto& point : filtered_free.points) {
         const Eigen::Vector3i center = terrain_height_grid_->Pos2Sub(
             Eigen::Vector3d(point.x, point.y, 0.0f));
         for (int ix = -INFLATE_N; ix <= INFLATE_N; ++ix) {
