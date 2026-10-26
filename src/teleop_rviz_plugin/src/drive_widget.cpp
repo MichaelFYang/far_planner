@@ -90,6 +90,10 @@ void DriveWidget::mouseReleaseEvent(QMouseEvent * event)
 void DriveWidget::sendVelocitiesFromMouse(int x, int y, int width, int height)
 {
   int size = (( width > height ) ? height : width );
+  if (size < 2) {
+    stop();
+    return;
+  }
   int hpad = ( width - size ) / 2;
   int vpad = ( height - size ) / 2;
 
