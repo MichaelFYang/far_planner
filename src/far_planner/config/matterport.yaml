@@ -54,6 +54,5 @@ far_planner:
     # Graph Planner Params
     g_planner/converge_distance: 0.25  # Unit: meter
     g_planner/goal_adjust_radius: 1.0  # Unit: meter
-    g_planner/free_counter_thred: 7
     g_planner/reach_goal_vote_size: 3
     g_planner/path_momentum_thred: 3

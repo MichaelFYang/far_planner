@@ -16,7 +16,6 @@ struct GraphPlannerParams {
     float adjust_radius;
     float momentum_dist;
     bool  is_autoswitch;
-    int   free_thred;
     int   votes_size;
     int   momentum_thred;
 };
