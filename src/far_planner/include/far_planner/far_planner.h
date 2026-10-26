@@ -44,6 +44,7 @@ public:
 
 private:
     friend class LocalTerrainCallbackTestAccess;
+    friend class ViewpointExtensionTestAccess;
     rclcpp::Node::SharedPtr nh_;
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reset_graph_sub_;
