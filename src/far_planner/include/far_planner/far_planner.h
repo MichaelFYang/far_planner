@@ -43,6 +43,7 @@ public:
     rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
 
 private:
+    friend class LocalTerrainCallbackTestAccess;
     rclcpp::Node::SharedPtr nh_;
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reset_graph_sub_;
