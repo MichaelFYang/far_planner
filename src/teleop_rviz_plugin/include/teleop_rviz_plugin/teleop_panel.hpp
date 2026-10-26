@@ -40,6 +40,7 @@ class TeleopPanel : public rviz_common::Panel
 
 public:
   explicit TeleopPanel(QWidget * parent = nullptr);
+  void onInitialize() override;
   void load(const rviz_common::Config & config) override;
   void save(rviz_common::Config config) const override;
 
@@ -69,6 +70,7 @@ protected:
 
   // Use shared pointer for the node
   rclcpp::Node::SharedPtr node_;
+  rclcpp::Clock::SharedPtr clock_;
 
   QPushButton *push_button_1_;
   QPushButton *push_button_2_;

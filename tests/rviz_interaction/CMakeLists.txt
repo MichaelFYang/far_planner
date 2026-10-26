@@ -19,7 +19,7 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
 else()
   find_package(ament_cmake REQUIRED)
   set(ros_dependencies rclcpp pluginlib rviz_common rviz_rendering
-    rviz_default_plugins tf2_ros nav_msgs sensor_msgs std_msgs geometry_msgs)
+    rviz_default_plugins tf2_ros nav_msgs sensor_msgs std_msgs geometry_msgs rosgraph_msgs)
   foreach(dependency IN LISTS ros_dependencies)
     find_package(${dependency} REQUIRED)
   endforeach()

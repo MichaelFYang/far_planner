@@ -41,6 +41,8 @@ Checks cover:
   transformed height, missing-TF rejection/recovery, and invalid-topic recovery.
 - A moving transform whose height is 1 m at odometry time and 5 m at the latest
   sample. Odometry at 1.25 m must produce a 2.25 m goal, not 6.25 m.
+- On ROS 2, a switch to paused RViz simulation time at 200 seconds updates goal,
+  resume, and manual joystick command timestamps.
 - Planning/update toggles, graph reset, navigation resume, and read/save dialog
   paths, cancellation, and `.vgh` suffix handling.
 - Joystick motion, release-to-stop, idle publication, undersized-widget stopping,
