@@ -660,9 +660,9 @@ void DynamicGraph::FillContourConnect(const NavNodePtr& node_ptr1,
     if (node_ptr1 == node_ptr2) return;
     const auto it1 = node_ptr1->contour_votes.find(node_ptr2->id);
     const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
-    std::deque<int> vote_queue1(queue_size, 1);
-    std::deque<int> vote_queue2(queue_size, 1);
     if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) {
+        std::deque<int> vote_queue1(queue_size, 1);
+        std::deque<int> vote_queue2(queue_size, 1);
         // init polygon edge votes
         node_ptr1->contour_votes.insert({node_ptr2->id, vote_queue1});
         node_ptr2->contour_votes.insert({node_ptr1->id, vote_queue2});

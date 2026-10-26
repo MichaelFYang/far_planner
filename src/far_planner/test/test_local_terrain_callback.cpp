@@ -58,6 +58,24 @@ public:
         EXPECT_TRUE(planner.local_terrain_ptr_->empty());
         EXPECT_EQ(planner.last_local_terrain_stamp_, 11000000000ULL);
         EXPECT_EQ(planner.local_terrain_revision_, 1U);
+
+        // A newer odometry sample must not invalidate a still-queued cloud
+        // whose measurement-time pose is retained in history.
+        ASSERT_TRUE(planner.odometry_history_.Add(12000000000ULL, {{0.0, 0.0, 0.0}}));
+        planner.local_terrain_ptr_->push_back(point);
+        ASSERT_TRUE(queue_clear(12000000000ULL));
+        ASSERT_TRUE(planner.odometry_history_.Add(13000000000ULL, {{0.0, 0.0, 0.0}}));
+        planner.ProcessPendingLocalTerrain();
+        EXPECT_EQ(planner.pending_local_terrains_.Size(), 0U);
+        EXPECT_TRUE(planner.local_terrain_ptr_->empty());
+        EXPECT_EQ(planner.last_local_terrain_stamp_, 12000000000ULL);
+        EXPECT_EQ(planner.local_terrain_revision_, 2U);
+
+        // A bracketing pose too far from the cloud is still rejected.
+        ASSERT_TRUE(queue_clear(12500000000ULL));
+        planner.ProcessPendingLocalTerrain();
+        EXPECT_EQ(planner.last_local_terrain_stamp_, 12000000000ULL);
+        EXPECT_EQ(planner.local_terrain_revision_, 2U);
     }
 };
 

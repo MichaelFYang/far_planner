@@ -780,6 +780,8 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
   const auto stamp = MeasurementStamp(pc->header.stamp);
   const bool explicit_empty = pc->width == 0 && pc->row_step == 0 && pc->data.empty();
   if (!this->ValidMeasurementTime(stamp) ||
+      !far_planner::SensorStampFreshOnArrival(stamp, odometry_history_.LatestStamp(),
+                                              sensor_time_tolerance_ns_) ||
       (!explicit_empty && !far_planner::ValidPointCloudLayout(*pc, true)) ||
       !pending_local_terrains_.Push(stamp, pc, last_local_terrain_stamp_,
                                     far_planner::SteadyNowNs())) {
@@ -798,8 +800,9 @@ void FARMaster::ProcessPendingLocalTerrain() {
   const auto latest_odometry = odometry_history_.LatestStamp();
   while (pending_local_terrains_.HasReady(latest_odometry)) {
     const auto& entry = pending_local_terrains_.Front();
+    far_planner::OdometryHistory::Position position;
     if (entry.stamp <= last_local_terrain_stamp_ ||
-        !far_planner::WithinSensorSkew(entry.stamp, latest_odometry, sensor_time_tolerance_ns_)) {
+        !odometry_history_.PositionAt(entry.stamp, sensor_time_tolerance_ns_, position)) {
       ROS_WARN_THROTTLE(1.0, "Dropping local terrain without nearby odometry");
       pending_local_terrains_.PopReady();
       continue;
@@ -836,6 +839,8 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   this->CheckClockEpoch();
   const auto stamp = MeasurementStamp(pc->header.stamp);
   if (!this->ValidMeasurementTime(stamp) ||
+      !far_planner::SensorStampFreshOnArrival(stamp, odometry_history_.LatestStamp(),
+                                              sensor_time_tolerance_ns_) ||
       !far_planner::ValidPointCloudLayout(*pc, true) ||
       !pending_terrains_.Push(stamp, pc, last_terrain_stamp_, far_planner::SteadyNowNs())) {
     ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order terrain");
@@ -853,7 +858,6 @@ void FARMaster::ProcessPendingTerrain() {
     const auto& terrain = pending_terrains_.Front();
     far_planner::OdometryHistory::Position position;
     if (terrain.stamp <= last_terrain_stamp_ ||
-        !far_planner::WithinSensorSkew(terrain.stamp, latest_odometry, sensor_time_tolerance_ns_) ||
         !odometry_history_.PositionAt(terrain.stamp, sensor_time_tolerance_ns_, position)) {
       ROS_WARN_THROTTLE(1.0, "Dropping terrain without nearby measurement-time odometry");
       pending_terrains_.PopReady();

@@ -140,5 +140,13 @@ inline bool WithinSensorSkew(std::uint64_t first, std::uint64_t second,
     return (first > second ? first - second : second - first) <= tolerance;
 }
 
+// Reject a cloud already old when it arrives. Once queued, later odometry
+// must not invalidate its measurement-time pose while stamped TF is pending.
+inline bool SensorStampFreshOnArrival(std::uint64_t stamp, std::uint64_t latest_odometry,
+                                     std::uint64_t tolerance) {
+    return stamp != 0 && (latest_odometry == 0 || stamp >= latest_odometry ||
+                          WithinSensorSkew(stamp, latest_odometry, tolerance));
+}
+
 }  // namespace far_planner
 #endif

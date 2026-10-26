@@ -65,6 +65,17 @@ TEST(SensorTiming, SkewIsSymmetricAndRequiresBothMeasurements)
     EXPECT_FALSE(WithinSensorSkew(1, 0, 20));
 }
 
+TEST(SensorTiming, ArrivalFreshnessDoesNotChangeWhileWaitingForTf)
+{
+    using far_planner::SensorStampFreshOnArrival;
+    EXPECT_FALSE(SensorStampFreshOnArrival(0, 0, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 0, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 1000, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 1200, 200));
+    EXPECT_FALSE(SensorStampFreshOnArrival(1000, 1201, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1300, 1200, 200));
+}
+
 TEST(SensorTiming, DetectsClockRewindIncludingZeroWithoutTreatingPauseAsReset)
 {
     far_planner::ClockEpoch epoch;
