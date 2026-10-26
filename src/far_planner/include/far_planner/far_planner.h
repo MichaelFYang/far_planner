@@ -37,7 +37,7 @@ class FARMaster
 {
 public:
     FARMaster();
-    ~FARMaster() = default;
+    ~FARMaster();
     
     void Init(); // ROS initialization
     rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
