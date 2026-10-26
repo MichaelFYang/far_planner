@@ -186,6 +186,13 @@ void FARMaster::ResetEnvironmentAndGraph() {
   FARUtil::cur_scan_cloud_->clear();
   FARUtil::local_terrain_obs_->clear();
   FARUtil::local_terrain_free_->clear();
+  local_terrain_ptr_->clear();
+  terrain_height_ptr_->clear();
+  temp_cloud_ptr_->clear();
+  temp_obs_ptr_->clear();
+  temp_free_ptr_->clear();
+  scan_grid_ptr_->clear();
+  FARUtil::ClearKdTree(viewpoint_around_ptr_, kdtree_viewpoint_obs_cloud_);
   ++local_terrain_revision_;
   scan_handler_.ReInitGrids();
   if (!FARUtil::IsDebug) { // Terminal Output

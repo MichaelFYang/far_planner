@@ -220,6 +220,55 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     EXPECT_FALSE(matched);
 }
 
+TEST(MapHandler, EmptyTerrainAndResetDiscardOldHeightSamples) {
+    RestoreMapParameters restore;
+    FARUtil::kLeafSize = 0.2f;
+    FARUtil::robot_dim = 0.8f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams params{};
+    params.sensor_range = 6.0f;
+    params.floor_height = 2.5f;
+    params.cell_length = 2.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 20.0f;
+    params.grid_max_height = 6.0f;
+    params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+
+    auto ground = CloudAt(0.0f);
+    ground->points.front().z = -FARUtil::vehicle_height;
+    PointCloudPtr terrain_height(new PointCloud);
+    map.UpdateTerrainHeightGrid(ground, terrain_height);
+    ASSERT_FALSE(terrain_height->empty());
+    const Point3D query(terrain_height->front().x, terrain_height->front().y, 4.0f);
+    float min_height = 0.0f, max_height = 0.0f;
+    bool matched = false;
+    MapHandler::NearestHeightOfRadius(query, 0.1f, min_height, max_height, matched);
+    ASSERT_TRUE(matched);
+
+    PointCloudPtr empty(new PointCloud);
+    map.UpdateTerrainHeightGrid(empty, terrain_height);
+    EXPECT_TRUE(terrain_height->empty());
+    EXPECT_FLOAT_EQ(MapHandler::NearestHeightOfRadius(query, 0.1f,
+                                                     min_height, max_height, matched), query.z);
+    EXPECT_FALSE(matched);
+    EXPECT_FLOAT_EQ(map.TerrainHeightOfPoint(query, matched, true), query.z);
+    EXPECT_FALSE(matched);
+
+    map.UpdateTerrainHeightGrid(ground, terrain_height);
+    ASSERT_FALSE(terrain_height->empty());
+    MapHandler::NearestHeightOfRadius(query, 0.1f, min_height, max_height, matched);
+    ASSERT_TRUE(matched);
+    map.ResetGripMapCloud();
+    EXPECT_FLOAT_EQ(MapHandler::NearestHeightOfRadius(query, 0.1f,
+                                                     min_height, max_height, matched), query.z);
+    EXPECT_FALSE(matched);
+    EXPECT_FLOAT_EQ(map.TerrainHeightOfPoint(query, matched, true), query.z);
+    EXPECT_FALSE(matched);
+}
+
 TEST(CloudUtilities, ConversionSkipsNonfiniteGeometryWithoutPadding) {
     PointStack points = {Point3D(1.0f, 2.0f, 3.0f, 4.0f),
                          Point3D(9.0f, 9.0f, std::numeric_limits<float>::quiet_NaN()),

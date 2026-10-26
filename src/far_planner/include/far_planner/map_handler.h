@@ -140,6 +140,7 @@ private:
     bool is_init_ = false;
     PointCloudPtr flat_terrain_cloud_;
     static PointKdTreePtr kdtree_terrain_clould_;
+    void ClearTerrainHeightData();
 
     template <typename Position>
     static inline float NearestHeightOfPoint(const Position& p, float& dist_square) {
