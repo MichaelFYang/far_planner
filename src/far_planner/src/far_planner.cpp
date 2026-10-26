@@ -852,7 +852,8 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
 
 void FARMaster::ProcessPendingTerrain() {
   const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
-  const auto expired = pending_terrains_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  const auto now_steady = far_planner::SteadyNowNs();
+  const auto expired = pending_terrains_.DiscardExpired(now_steady, max_age);
   if (expired != 0) ROS_WARN_THROTTLE(1.0, "Expired %zu terrain clouds waiting for odometry or TF", expired);
   const auto latest_odometry = odometry_history_.LatestStamp();
   while (pending_terrains_.HasReady(latest_odometry)) {
@@ -874,6 +875,12 @@ void FARMaster::ProcessPendingTerrain() {
       if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
           !tf_listener_->canTransform(master_params_.world_frame, source,
                                       pc->header.stamp)) break;
+      // Give an already queued, timestamp-compatible scan a short chance to
+      // obtain its TF before this terrain update chooses its scan.
+      if (!master_params_.is_static_env &&
+          pending_scans_.HasStampWithin(terrain.stamp, sensor_time_tolerance_ns_) &&
+          now_steady >= terrain.arrived_ns &&
+          now_steady - terrain.arrived_ns < 250000000ULL) break;
       const auto result = this->ProcessCloud(pc, temp_cloud_ptr_, true);
       if (result == CloudProcessResult::TF_UNAVAILABLE) break;
       if (result == CloudProcessResult::INVALID) {

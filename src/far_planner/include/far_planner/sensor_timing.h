@@ -99,6 +99,12 @@ public:
         return !entries_.empty() && entries_.front().stamp <= latest_odometry;
     }
 
+    bool HasStampWithin(std::uint64_t stamp, std::uint64_t tolerance) const {
+        return std::any_of(entries_.begin(), entries_.end(), [stamp, tolerance](const Entry& entry) {
+            return (entry.stamp > stamp ? entry.stamp - stamp : stamp - entry.stamp) <= tolerance;
+        });
+    }
+
     const Entry& Front() const { return entries_.front(); }
 
     Entry PopReady() {

@@ -127,6 +127,31 @@ class ScanTfRetryTest(unittest.TestCase):
         wait_for(lambda: len(terrain_updates) > before)
         self.assertGreater(terrain_updates[-1].width, 0)
 
+        # A scan already waiting for stamped TF gets a short chance to pair
+        # with terrain at the same measurement time.
+        paired_stamp = rospy.Time.now()
+        paired_pose = Odometry()
+        paired_pose.header = Header(stamp=paired_stamp, frame_id='map')
+        paired_pose.pose.pose.orientation.w = 1.0
+        odometry.publish(paired_pose)
+        time.sleep(0.15)
+        scans.publish(cloud('paired_sensor', paired_stamp))
+        time.sleep(0.15)
+        before = len(terrain_updates)
+        rays_before = len(rays)
+        terrain.publish(cloud('map', paired_stamp))
+        time.sleep(0.2)
+        self.assertEqual(len(terrain_updates), before,
+                         'Terrain ran while its queued scan awaited TF')
+        paired_tf = TransformStamped()
+        paired_tf.header = Header(stamp=paired_stamp, frame_id='map')
+        paired_tf.child_frame_id = 'paired_sensor'
+        paired_tf.transform.rotation.w = 1.0
+        transforms.publish(TFMessage(transforms=[paired_tf]))
+        wait_for(lambda: len(terrain_updates) > before and len(rays) > rays_before)
+        self.assertGreater(rays[-1].width, 0,
+                           'Late scan TF was not used by the terrain update')
+
 
 if __name__ == '__main__':
     rospy.init_node('test_scan_tf_ros1', anonymous=True)
