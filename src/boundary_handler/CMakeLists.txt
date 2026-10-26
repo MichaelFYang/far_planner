@@ -46,6 +46,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_input_parser test/test_input_parser.cpp test/test_intersection.cpp)
   target_include_directories(test_input_parser PRIVATE include)
+  ament_target_dependencies(test_input_parser visibility_graph_msg)
 endif()
 
 ament_package()

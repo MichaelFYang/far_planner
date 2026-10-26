@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "graph_decoder/atomic_file.h"
+#include <visibility_graph_msg/graph_file_writer.h>
 #include "graph_decoder/graph_file_parser.h"
 
 namespace {
@@ -89,6 +89,23 @@ TEST(GraphFileWriter, ReplacesCompleteFilesAndPreservesOldFileOnFailure) {
     struct stat saved_mode{};
     ASSERT_EQ(::stat(path.c_str(), &saved_mode), 0);
     EXPECT_EQ(saved_mode.st_mode & 0777, 0640);
+
+    const std::string new_path = std::string(directory) + "/new.vgh";
+    const std::string reference_path = std::string(directory) + "/ofstream.vgh";
+    {
+        std::ofstream reference(reference_path);
+        reference << "reference\n";
+    }
+    graph_file::AtomicWrite(new_path, [](std::FILE* output) {
+        std::fputs("new graph\n", output);
+    });
+    struct stat new_mode{}, reference_mode{};
+    ASSERT_EQ(::stat(new_path.c_str(), &new_mode), 0);
+    ASSERT_EQ(::stat(reference_path.c_str(), &reference_mode), 0);
+    EXPECT_EQ(new_mode.st_mode & 0777, reference_mode.st_mode & 0777);
+    std::remove(new_path.c_str());
+    std::remove(reference_path.c_str());
+
     DIR* entries = ::opendir(directory);
     ASSERT_NE(entries, nullptr);
     int files = 0;

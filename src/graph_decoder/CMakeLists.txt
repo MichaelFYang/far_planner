@@ -48,6 +48,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_gtest(test_graph_file_parser test/test_graph_file_parser.cpp)
+  ament_target_dependencies(test_graph_file_parser visibility_graph_msg)
   target_include_directories(test_graph_file_parser PRIVATE include)
   target_compile_definitions(test_graph_file_parser PRIVATE
     FAR_GRAPH_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../far_planner/data")
