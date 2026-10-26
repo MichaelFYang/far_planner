@@ -192,9 +192,11 @@ TEST_F(FrameTransforms, NormalizesLegacyLeadingSlashes)
 TEST_F(FrameTransforms, IdentityTransformDoesNotRequireATfTree)
 {
     auto cloud = Cloud(10);
-    FARUtil::TransformPCLFrame("/map", "map", Handle(), cloud, Stamp(10, 0));
+    cloud->header.stamp = 42; // An unrelated PCL stamp must not escape.
+    FARUtil::TransformPCLFrame("/map", "map", Handle(), cloud, Stamp(10, 123456789));
     EXPECT_FLOAT_EQ(cloud->front().x, 2.0f);
     EXPECT_EQ(cloud->header.frame_id, "map");
+    EXPECT_EQ(cloud->header.stamp, 10123456ULL);
 }
 
 TEST_F(FrameTransforms, EmptyFrameIsRejectedWithoutMutatingTheInput)
