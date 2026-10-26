@@ -3,6 +3,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "far_planner/map_handler.h"
 
 namespace {
@@ -92,4 +94,47 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     PointCloudPtr terrain_height(new PointCloud);
     map.UpdateTerrainHeightGrid(ground, terrain_height);
     EXPECT_FALSE(terrain_height->empty());
+
+    // When the next terrain analysis yields no traversable cells, the old
+    // index must not become a synthetic height sample at the world origin.
+    map.UpdateTerrainHeightGrid(CloudAt(1000000.0f), terrain_height);
+    EXPECT_TRUE(terrain_height->empty());
+    float min_height = 0.0f, max_height = 0.0f;
+    bool matched = true;
+    const Point3D query(0.0f, 0.0f, 4.0f);
+    EXPECT_FLOAT_EQ(MapHandler::NearestHeightOfRadius(query, 1.0f,
+                                                      min_height, max_height, matched), 4.0f);
+    EXPECT_FALSE(matched);
+    EXPECT_FLOAT_EQ(map.TerrainHeightOfPoint(query, matched, true), 4.0f);
+    EXPECT_FALSE(matched);
+}
+
+TEST(CloudUtilities, ConversionSkipsNonfiniteGeometryWithoutPadding) {
+    PointStack points = {Point3D(1.0f, 2.0f, 3.0f, 4.0f),
+                         Point3D(9.0f, 9.0f, std::numeric_limits<float>::quiet_NaN()),
+                         Point3D(5.0f, 6.0f, 7.0f, 8.0f)};
+    PointCloudPtr cloud(new PointCloud);
+    FARUtil::ConvertCloudToPCL(points, cloud);
+    ASSERT_EQ(cloud->size(), 2U);
+    EXPECT_FLOAT_EQ(cloud->points[0].z, 3.0f);
+    EXPECT_FLOAT_EQ(cloud->points[1].x, 5.0f);
+    EXPECT_FLOAT_EQ(cloud->points[1].intensity, 8.0f);
+}
+
+TEST(CloudUtilities, ClearingKdTreePreservesEmptyCloudAndCanRebuild) {
+    PointCloudPtr cloud(new PointCloud);
+    FARUtil::UpdateKdTrees(cloud);
+    EXPECT_TRUE(cloud->empty());
+    EXPECT_FALSE(FARUtil::kdtree_new_cloud_->getInputCloud());
+    EXPECT_EQ(FARUtil::PointInNewCounter(Point3D(0.0f, 0.0f, 0.0f), 1.0f), 0U);
+
+    cloud->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, 0.0f)));
+    FARUtil::UpdateKdTrees(cloud);
+    EXPECT_EQ(FARUtil::PointInNewCounter(Point3D(0.0f, 0.0f, 0.0f), 1.0f), 1U);
+
+    cloud->clear();
+    FARUtil::UpdateKdTrees(cloud);
+    EXPECT_TRUE(cloud->empty());
+    EXPECT_FALSE(FARUtil::kdtree_new_cloud_->getInputCloud());
+    EXPECT_EQ(FARUtil::PointInNewCounter(Point3D(0.0f, 0.0f, 0.0f), 1.0f), 0U);
 }

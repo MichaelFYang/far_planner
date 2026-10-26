@@ -200,7 +200,7 @@ void FARUtil::ConvertCloudToPCL(const PointStack& point_stack,
   point_cloud_ptr->points.resize(point_stack.size());
   std::size_t i = 0;
   for (const auto& p : point_stack) {
-    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.x)) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {
       if (FARUtil::IsDebug) std::cout << "FARUtil: nan or inf point detected." << std::endl;
       continue;
     }
@@ -212,6 +212,7 @@ void FARUtil::ConvertCloudToPCL(const PointStack& point_stack,
     point_cloud_ptr->points[i] = point;
     i++;
   }
+  point_cloud_ptr->resize(i);
 }
 
 geometry_msgs::msg::Point FARUtil::Point3DToGeoMsgPoint(const Point3D& point) {
@@ -256,10 +257,10 @@ void FARUtil::UpdateKdTrees(const PointCloudPtr& newObsCloudIn)
 
 void FARUtil::ClearKdTree(const PointCloudPtr& cloud_ptr,
                           const PointKdTreePtr& kdTree_ptr) {
-  PCLPoint temp_p;
-  temp_p.x = temp_p.y = temp_p.z = 0.0f;
-  cloud_ptr->resize(1), cloud_ptr->points[0] = temp_p;
-  kdTree_ptr->setInputCloud(cloud_ptr);
+  // PCL cannot build an empty FLANN tree. Release its old index and guard
+  // searches until the next nonempty update rebuilds it.
+  cloud_ptr->clear();
+  if (kdTree_ptr) *kdTree_ptr = pcl::KdTreeFLANN<PCLPoint>(false);
 }
 
 bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
@@ -272,6 +273,8 @@ std::size_t FARUtil::PointInXCounter(const Point3D& p,
                                      const float& radius,
                                      const PointKdTreePtr& KdTree) 
 {
+  if (!KdTree || !KdTree->getInputCloud() || KdTree->getInputCloud()->empty() ||
+      !std::isfinite(radius) || radius <= 0.0f) return 0;
   std::vector<int> pointSearchInd;
   std::vector<float> pointSearchSqDis;
   PCLPoint pcl_p;
