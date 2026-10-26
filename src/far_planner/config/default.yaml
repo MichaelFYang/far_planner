@@ -52,6 +52,5 @@ CDetector/img_folder_path               : /path
 # Graph Planner Params
 GPlanner/converge_distance              : 0.5  # Unit: meter
 GPlanner/goal_adjust_radius             : 2.0  # Unit: meter
-GPlanner/free_counter_thred             : 7
 GPlanner/reach_goal_vote_size           : 3
 GPlanner/path_momentum_thred            : 3
