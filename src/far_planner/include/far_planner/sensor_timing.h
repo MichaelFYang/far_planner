@@ -62,8 +62,8 @@ private:
     std::deque<Sample> samples_;
 };
 
-// Hold sensor messages until odometry brackets their measurement time. Entries are
-// ordered by stamp, bounded in count, and discarded after a finite steady age.
+// Hold measurements while a matching stamped TF or odometry pose arrives.
+// Entries are ordered by stamp, bounded in count, and expire by steady time.
 template <typename Message>
 class PendingMeasurementQueue {
 public:
