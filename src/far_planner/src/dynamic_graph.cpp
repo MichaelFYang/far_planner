@@ -66,9 +66,9 @@ bool DynamicGraph::IsInterNavpointNecessary() {
 }
 
 bool DynamicGraph::ExtractGraphNodes(const CTNodeStack& new_ctnodes) {
-    if (new_ctnodes.empty()) return false;
-    NavNodePtr new_node_ptr = NULL;
     new_nodes_.clear();
+    NavNodePtr new_node_ptr;
+    // Trajectory sampling also runs when no unmatched contour vertices remain.
     if (this->IsInterNavpointNecessary()) { // check wheter or not need inter navigation points
         if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "DG: One trajectory node has been created.");
         this->CreateNavNodeFromPoint(last_connect_pos_, new_node_ptr, false, true);
@@ -86,8 +86,7 @@ bool DynamicGraph::ExtractGraphNodes(const CTNodeStack& new_ctnodes) {
             new_nodes_.push_back(new_node_ptr);
         }
     }
-    if (new_nodes_.empty()) return false;
-    else return true;
+    return !new_nodes_.empty();
 }
 
 void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
