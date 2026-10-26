@@ -13,6 +13,7 @@
 #include "boundary_handler/parameter_validation.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 
+#include <ros/package.h>
 #include <iostream>
 #include <stdexcept>
 #include <utility>
@@ -32,15 +33,15 @@ void GraphExtractor::Init() {
 
 
 void GraphExtractor::LoadParams() {
-    const std::string prefix = "/boundary_handler/";
-    nh.param<std::string>(prefix + "world_frame", ge_params_.frame_id, "map");
+    ros::NodeHandle private_nh("~");
+    private_nh.param<std::string>("world_frame", ge_params_.frame_id, "map");
     std::string folder_path;
-    nh.param<std::string>(prefix + "folder_path", folder_path, "/home/usr/far_planner/boundary_handler/data/");
-    nh.param<std::string>(prefix + "boundary_file", ge_params_.bd_file_path, "boundary.ply");
-    nh.param<std::string>(prefix + "traj_file", ge_params_.traj_file_path, "trajectory.txt");
-    nh.param<std::string>(prefix + "graph_file", ge_params_.vgraph_path, "boundary_graph.vgh");
-    nh.param<float>(prefix + "visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0);
-    nh.param<float>(prefix + "height_tolz", ge_params_.height_tolz, 1.0);
+    private_nh.param<std::string>("folder_path", folder_path, ros::package::getPath("far_planner") + "/data");
+    private_nh.param<std::string>("boundary_file", ge_params_.bd_file_path, "boundary.ply");
+    private_nh.param<std::string>("traj_file", ge_params_.traj_file_path, "trajectory.txt");
+    private_nh.param<std::string>("graph_file", ge_params_.vgraph_path, "boundary_graph.vgh");
+    private_nh.param<float>("visual_scale_ratio", ge_params_.viz_scale_ratio, 1.0);
+    private_nh.param<float>("height_tolz", ge_params_.height_tolz, 1.0);
     ge_params_.frame_id = boundary_handler::NormalizeWorldFrame(ge_params_.frame_id);
     boundary_handler::ValidateGeometryParameters(ge_params_.viz_scale_ratio, ge_params_.height_tolz);
     ge_params_.vgraph_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.vgraph_path);

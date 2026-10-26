@@ -11,6 +11,7 @@ endif()
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  roslib
   std_msgs
   geometry_msgs
   visualization_msgs
@@ -19,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(CATKIN_DEPENDS
   roscpp
+  roslib
   std_msgs
   geometry_msgs
   visualization_msgs
