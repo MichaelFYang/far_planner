@@ -4,12 +4,14 @@
 
 import os
 import signal
+import struct
 import subprocess
 import tempfile
 import time
 
 import rclpy
 from geometry_msgs.msg import Point
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visibility_graph_msg.msg import Graph, Node
 from visualization_msgs.msg import MarkerArray
@@ -27,6 +29,7 @@ def test_decoder_keeps_last_valid_graph():
         node.create_subscription(Graph, '/decoded_vgraph', published.append, 10)
         node.create_subscription(MarkerArray, '/graph_decoder_viz', markers.append, 10)
         graphs = node.create_publisher(Graph, '/robot_vgraph', 10)
+        save_requests = node.create_publisher(String, '/save_file_dir', 10)
         client = node.create_client(Trigger, '/request_graph_service')
 
         with open(os.path.join(directory, 'decoder.log'), 'w+') as log:
@@ -56,7 +59,8 @@ def test_decoder_keeps_last_valid_graph():
 
             try:
                 spin_until(lambda: client.service_is_ready()
-                           and graphs.get_subscription_count() > 0)
+                           and graphs.get_subscription_count() > 0
+                           and save_requests.get_subscription_count() > 0)
                 valid = Graph()
                 valid.header.frame_id = 'map'
                 valid.robot_id = 7
@@ -65,6 +69,7 @@ def test_decoder_keeps_last_valid_graph():
                     graph_node = Node()
                     graph_node.header.frame_id = 'map'
                     graph_node.id = identifier
+                    graph_node.position.x = 1.23456789 if identifier == 1 else 0.0
                     graph_node.surface_dirs = [
                         Point(x=0.5, y=0.0, z=z_values[0]),
                         Point(x=0.0, y=0.5, z=z_values[1]),
@@ -80,6 +85,21 @@ def test_decoder_keeps_last_valid_graph():
                 for original, decoded in zip(valid.nodes, round_trip.nodes):
                     assert decoded.freetype == original.freetype
                     assert decoded.surface_dirs == original.surface_dirs
+
+                save_path = os.path.join(directory, 'saved_graph.vgh')
+                save_requests.publish(String(data=save_path))
+
+                def save_complete():
+                    if not os.path.exists(save_path):
+                        return False
+                    with open(save_path, encoding='utf-8') as graph_file:
+                        return graph_file.read().endswith('\n')
+
+                spin_until(save_complete)
+                with open(save_path, encoding='utf-8') as graph_file:
+                    saved_x = float(graph_file.readline().split()[2])
+                assert struct.pack('f', saved_x) == struct.pack('f', valid.nodes[0].position.x), \
+                    'Graph save lost float coordinate precision'
 
                 malformed = Graph()
                 malformed.header.frame_id = 'map'
