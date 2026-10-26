@@ -444,8 +444,9 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
                     sub.x() += i, sub.y() += j, sub.z() = 0;
                     if (free_terrain_grid_->InRange(sub)) {
                         const int ind = free_terrain_grid_->Sub2Ind(sub);
-                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | FREE_BIT;
-                        is_goal_in_freespace_ = true;
+                        auto& cell = free_terrain_grid_->GetCell(ind);
+                        cell |= FREE_BIT;
+                        if (cell == FREE_BIT) is_goal_in_freespace_ = true;
                     }
                 }
             }
