@@ -326,7 +326,7 @@ void GraphExtractor::ReadBoundaryFile(PolygonStack& polysOut) {
     const auto boundary_vertices = boundary_handler::ReadAsciiPly(input);
     PolygonStack polygons;
     PointStack vertices;
-    int poly_id = static_cast<int>(boundary_vertices.front().polygon_index);
+    int poly_id = boundary_vertices.front().polygon_index;
     auto append_polygon = [&]() {
         if (vertices.size() > 2) {
             PolygonPtr polygon;
@@ -336,7 +336,7 @@ void GraphExtractor::ReadBoundaryFile(PolygonStack& polysOut) {
         vertices.clear();
     };
     for (const auto& vertex : boundary_vertices) {
-        const int vertex_poly_id = static_cast<int>(vertex.polygon_index);
+        const int vertex_poly_id = vertex.polygon_index;
         if (vertex_poly_id != poly_id) {
             append_polygon();
             poly_id = vertex_poly_id;
