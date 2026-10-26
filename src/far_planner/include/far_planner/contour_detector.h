@@ -85,23 +85,24 @@ private:
 
     inline void InternalContoursIdxs(const std::vector<cv::Vec4i>& hierarchy,
                                      const std::size_t& high_idx,
-                                     std::unordered_set<int>& internal_idxs)
+                                     std::vector<unsigned char>& remove)
     {
         if (hierarchy[high_idx][2] == -1) return;
-        SameAndLowLevelIdxs(hierarchy, hierarchy[high_idx][2], internal_idxs);
+        SameAndLowLevelIdxs(hierarchy, hierarchy[high_idx][2], remove);
     }
 
     inline void SameAndLowLevelIdxs(const std::vector<cv::Vec4i>& hierarchy,
                                     int cur_idx,
-                                    std::unordered_set<int>& remove_idxs)
+                                    std::vector<unsigned char>& remove)
     {
         std::vector<int> pending;
         if (cur_idx >= 0) pending.push_back(cur_idx);
         while (!pending.empty()) {
             const int index = pending.back();
             pending.pop_back();
-            if (index < 0 || static_cast<std::size_t>(index) >= hierarchy.size()) continue;
-            remove_idxs.insert(index);
+            if (index < 0 || static_cast<std::size_t>(index) >= hierarchy.size() ||
+                static_cast<std::size_t>(index) >= remove.size()) continue;
+            remove[index] = 1;
             const auto& links = hierarchy[index];
             if (links[0] >= 0) pending.push_back(links[0]);
             if (links[2] >= 0) pending.push_back(links[2]);
