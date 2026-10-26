@@ -69,12 +69,14 @@ void DriveWidget::paintEvent(QPaintEvent * event)
 
 void DriveWidget::mouseMoveEvent(QMouseEvent * event)
 {
-  sendVelocitiesFromMouse(event->x(), event->y(), width(), height() );
+  const QPoint position = event->position().toPoint();
+  sendVelocitiesFromMouse(position.x(), position.y(), width(), height() );
 }
 
 void DriveWidget::mousePressEvent(QMouseEvent * event)
 {
-  sendVelocitiesFromMouse(event->x(), event->y(), width(), height() );
+  const QPoint position = event->position().toPoint();
+  sendVelocitiesFromMouse(position.x(), position.y(), width(), height() );
 }
 
 void DriveWidget::leaveEvent(QEvent * event)
@@ -90,6 +92,10 @@ void DriveWidget::mouseReleaseEvent(QMouseEvent * event)
 void DriveWidget::sendVelocitiesFromMouse(int x, int y, int width, int height)
 {
   int size = (( width > height ) ? height : width );
+  if (size < 2) {
+    stop();
+    return;
+  }
   int hpad = ( width - size ) / 2;
   int vpad = ( height - size ) / 2;
 
