@@ -189,8 +189,18 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     map.ResetGripMapCloud();
     map.GetOccupancyCeilsCenters(occupied);
     EXPECT_TRUE(occupied.empty());
+    PointStack old_neighbors{Point3D(1.0f, 0.0f, 0.0f)};
+    map.GetNeighborCeilsCenters(old_neighbors);
+    EXPECT_TRUE(old_neighbors.empty());
+    auto old_obstacles = CloudAt(1.0f);
+    auto old_free = CloudAt(1.0f);
+    map.GetSurroundObsCloud(old_obstacles);
+    map.GetSurroundFreeCloud(old_free);
+    EXPECT_TRUE(old_obstacles->empty());
+    EXPECT_TRUE(old_free->empty());
     EXPECT_EQ(CellSize(map, 1.0f, OBS_CLOUD), 0U);
     EXPECT_EQ(CellSize(map, 5.0f, FREE_CLOUD), 0U);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
     map.UpdateObsCloudGrid(CloudAt(1.0f));
     map.GetOccupancyCeilsCenters(occupied);
     EXPECT_EQ(occupied.size(), 1U);
@@ -267,6 +277,31 @@ TEST(MapHandler, EmptyTerrainAndResetDiscardOldHeightSamples) {
     EXPECT_FALSE(matched);
     EXPECT_FLOAT_EQ(map.TerrainHeightOfPoint(query, matched, true), query.z);
     EXPECT_FALSE(matched);
+}
+
+TEST(MapHandler, ResetRecentersAtNextOdometry) {
+    RestoreMapParameters restore;
+    FARUtil::kLeafSize = 0.2f;
+    FARUtil::robot_dim = 0.8f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams params{};
+    params.sensor_range = 6.0f;
+    params.floor_height = 2.5f;
+    params.cell_length = 2.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 20.0f;
+    params.grid_max_height = 6.0f;
+    params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    map.ResetGripMapCloud();
+
+    map.UpdateRobotPosition(Point3D(1000.0f, 0.0f, 0.0f));
+    auto obstacle = CloudAt(1000.0f);
+    map.UpdateObsCloudGrid(obstacle);
+    EXPECT_EQ(CellSize(map, 1000.0f, OBS_CLOUD), 1U);
+    EXPECT_EQ(obstacle->size(), 1U);
 }
 
 TEST(CloudUtilities, ConversionSkipsNonfiniteGeometryWithoutPadding) {
