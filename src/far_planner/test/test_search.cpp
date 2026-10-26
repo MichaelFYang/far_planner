@@ -93,21 +93,25 @@ class GoalFreeSpaceGuard {
 public:
     GoalFreeSpaceGuard()
         : previous_inflate_(FARUtil::kObsInflate),
-          previous_terrain_range_(FARUtil::kTerrainRange)
+          previous_terrain_range_(FARUtil::kTerrainRange),
+          previous_local_range_(FARUtil::kLocalPlanRange)
     {
         FARUtil::kObsInflate = 2;
         FARUtil::kTerrainRange = 10.0f;
+        FARUtil::kLocalPlanRange = 3.0f;
     }
 
     ~GoalFreeSpaceGuard()
     {
         FARUtil::kObsInflate = previous_inflate_;
         FARUtil::kTerrainRange = previous_terrain_range_;
+        FARUtil::kLocalPlanRange = previous_local_range_;
     }
 
 private:
     int previous_inflate_;
     float previous_terrain_range_;
+    float previous_local_range_;
 };
 
 TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
@@ -131,12 +135,14 @@ TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
     const auto odom = Node(std::numeric_limits<std::size_t>::max(), -1.0f, 0.0f);
     odom->is_odom = true;
     odom->is_navpoint = false;
-    planner.UpdaetVGraph({odom});
+    const auto nearby_nav = Node(std::numeric_limits<std::size_t>::max() - 1, -1.5f, 0.0f);
+    nearby_nav->is_navpoint = true;
+    planner.UpdaetVGraph({odom, nearby_nav});
     planner.UpdateGoal(Point3D(0.0f, 0.0f, 0.0f));
     const auto goal = planner.GetGoalNodePtr();
     ASSERT_NE(goal, nullptr);
     Link(odom, goal);
-    planner.UpdaetVGraph({odom, goal});
+    planner.UpdaetVGraph({odom, nearby_nav, goal});
 
     PCLPoint point{};
     PointCloudPtr obstacles(new PointCloud);
@@ -152,6 +158,11 @@ TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
     planner.UpdateFreeTerrainGrid(Point3D(0.0f, 0.0f, 0.0f), obstacles, free);
     planner.UpdateGraphTraverability(odom, goal);
     EXPECT_TRUE(goal->is_free_traversable);
+
+    free->clear();
+    planner.UpdateFreeTerrainGrid(Point3D(0.0f, 0.0f, 0.0f), obstacles, free);
+    planner.UpdateGraphTraverability(odom, goal);
+    EXPECT_TRUE(goal->is_free_traversable);  // Nearby-node fallback without terrain.
 
     planner.ResetPlannerInternalValues();
 }
