@@ -1,5 +1,6 @@
 #ifndef GRID_UTIL_H
 #define GRID_UTIL_H
+// SPDX-License-Identifier: MIT
 
 /**
  * @file grid.h
@@ -36,6 +37,7 @@ public:
     origin_ = origin;
     size_ = size;
     resolution_ = resolution;
+    resolution_inv_.setZero();
     dimension_ = dimension;
 
     if (dimension_ < 1 || dimension_ > 3) {
@@ -50,7 +52,8 @@ public:
     }
     for (int i = 0; i < dimension_; i++)
     {
-      if (!std::isfinite(resolution_(i)) || resolution_(i) <= 0.0) {
+      if (!std::isfinite(resolution_(i)) || resolution_(i) <= 0.0 ||
+          !std::isfinite(1.0 / resolution_(i))) {
         throw std::invalid_argument("Grid resolution must be positive and finite");
       }
       resolution_inv_(i) = 1.0 / resolution_(i);
@@ -90,11 +93,17 @@ public:
 
   void SetResolution(const Eigen::Vector3d& resolution)
   {
-    resolution_ = resolution;
+    Eigen::Vector3d inverse = Eigen::Vector3d::Zero();
     for (int i = 0; i < dimension_; i++)
     {
-      resolution_inv_(i) = 1.0 / resolution(i);
+      if (!std::isfinite(resolution(i)) || resolution(i) <= 0.0 ||
+          !std::isfinite(1.0 / resolution(i))) {
+        throw std::invalid_argument("Grid resolution must be positive and finite");
+      }
+      inverse(i) = 1.0 / resolution(i);
     }
+    resolution_ = resolution;
+    resolution_inv_ = inverse;
   }
 
   Eigen::Vector3d GetResolution() const
@@ -172,9 +181,27 @@ public:
   Eigen::Vector3i Pos2Sub(const Eigen::Vector3d& pos) const
   {
     Eigen::Vector3i sub(0, 0, 0);
+    const int limit = std::numeric_limits<int>::max() / 2;
     for (int i = 0; i < dimension_; i++)
     {
-      sub(i) = pos(i) - origin_(i) > -1e-7 ? static_cast<int>((pos(i) - origin_(i)) * resolution_inv_(i)) : -1;
+      const double offset = pos(i) - origin_(i);
+      if (offset >= 0.0) {
+        const double scaled = offset * resolution_inv_(i);
+        sub(i) = scaled < size_(i) || scaled < limit ?
+                 static_cast<int>(scaled) : std::max(limit, size_(i));
+        continue;
+      }
+      if (offset >= -1e-7) {
+        sub(i) = 0;  // Preserve tolerance at the lower boundary.
+        continue;
+      }
+      if (!std::isfinite(offset)) {
+        sub(i) = -limit;
+        continue;
+      }
+      const double scaled = offset * resolution_inv_(i);
+      sub(i) = !std::isfinite(scaled) || scaled <= -limit ?
+               -limit : static_cast<int>(std::floor(scaled));
     }
     return sub;
   }
@@ -258,14 +285,15 @@ public:
                     std::vector<Eigen::Vector3i>& subs)
   {
     subs.clear();
-    const Eigen::Vector3i diff_sub = end_sub - start_sub;
+    if (!InRange(start_sub)) return;
+    const Eigen::Vector3d diff_sub = end_sub.cast<double>() - start_sub.cast<double>();
     const double max_dist = diff_sub.squaredNorm();
-    const int step_x = signum(diff_sub.x());
-    const int step_y = signum(diff_sub.y());
-    const int step_z = signum(diff_sub.z());
-    const double t_delta_x = step_x == 0 ? DBL_MAX : (double)step_x / (double)diff_sub.x();
-    const double t_delta_y = step_y == 0 ? DBL_MAX : (double)step_y / (double)diff_sub.y();
-    const double t_delta_z = step_z == 0 ? DBL_MAX : (double)step_z / (double)diff_sub.z();
+    const int step_x = (end_sub.x() > start_sub.x()) - (end_sub.x() < start_sub.x());
+    const int step_y = (end_sub.y() > start_sub.y()) - (end_sub.y() < start_sub.y());
+    const int step_z = (end_sub.z() > start_sub.z()) - (end_sub.z() < start_sub.z());
+    const double t_delta_x = step_x == 0 ? DBL_MAX : 1.0 / std::abs(diff_sub.x());
+    const double t_delta_y = step_y == 0 ? DBL_MAX : 1.0 / std::abs(diff_sub.y());
+    const double t_delta_z = step_z == 0 ? DBL_MAX : 1.0 / std::abs(diff_sub.z());
 
 
     double t_max_x = step_x == 0 ? DBL_MAX : intbound(start_sub.x(), diff_sub.x());
@@ -276,7 +304,7 @@ public:
 
     while (InRange(cur_sub)) {
       subs.push_back(cur_sub);
-      dist = (cur_sub - start_sub).squaredNorm();
+      dist = (cur_sub.cast<double>() - start_sub.cast<double>()).squaredNorm();
       if (cur_sub == end_sub || dist > max_dist)
       {
         return;
@@ -333,10 +361,6 @@ private:
   }
 
   // Math Helper functions
-  int signum(const int& x)
-  {
-    return x == 0 ? 0 : x < 0 ? -1 : 1;
-  }
   double mod(const double& value, const double& modulus)
   {
     return std::fmod(std::fmod(value, modulus) + modulus, modulus);

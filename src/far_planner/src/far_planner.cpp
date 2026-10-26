@@ -690,6 +690,10 @@ void FARMaster::LoadROSParams() {
   scan_params_.terrain_range = master_params_.terrain_range;
   scan_params_.voxel_size    = master_params_.voxel_dim;
   scan_params_.ceil_height   = map_params_.floor_height;
+  if (FARUtil::kObsInflate > far_planner::CheckedDimension(
+          static_cast<double>(scan_params_.terrain_range) * 2.0,
+          scan_params_.voxel_size, "scan grid width", 0, true))
+    throw std::invalid_argument("util/obs_inflate_size exceeds the scan grid width");
 
   // contour detector params
   nh_->declare_parameter<float>(cdetect_prefix + "/resize_ratio", 5.0);

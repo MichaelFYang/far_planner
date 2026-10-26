@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "far_planner/map_handler.h"
+#include "far_planner/scan_handler.h"
 
 TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
     grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
@@ -20,6 +21,32 @@ TEST(GridStorage, RejectsInvalidDimensionsBeforeAllocating) {
     EXPECT_THROW((grid_ns::Grid<int>(Eigen::Vector3i(std::numeric_limits<int>::max(), 2, 1), 0)), std::length_error);
     EXPECT_THROW((grid_ns::Grid<int>(Eigen::Vector3i(2, 2, 2), 0,
                                      Eigen::Vector3d::Zero(), Eigen::Vector3d(1, 0, 1))), std::invalid_argument);
+}
+
+TEST(GridStorage, RejectsExtremePositionsAndKeepsResolutionOnInvalidUpdate) {
+    grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
+    const double huge = std::numeric_limits<double>::max();
+    const auto positive = grid.Pos2Sub(huge, 0.0, 0.0);
+    const auto negative = grid.Pos2Sub(-huge, 0.0, 0.0);
+    const auto invalid = grid.Pos2Sub(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);
+    EXPECT_FALSE(grid.InRange(positive));
+    EXPECT_FALSE(grid.InRange(negative));
+    EXPECT_FALSE(grid.InRange(invalid));
+    EXPECT_GT(positive.x(), grid.GetSize().x());
+    EXPECT_LT(negative.x(), -1);
+    EXPECT_EQ(grid.Pos2Sub(-1e-8, 0.0, 0.0).x(), 0);
+    EXPECT_THROW(grid.SetResolution(Eigen::Vector3d(1.0, 0.0, 1.0)), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(grid.GetResolution().y(), 1.0);
+}
+
+TEST(GridStorage, RayTraceUsesWideDistanceMath) {
+    grid_ns::Grid<int, true> grid(Eigen::Vector3i(50002, 1, 1), 0);
+    std::vector<Eigen::Vector3i> cells;
+    grid.RayTraceSubs(Eigen::Vector3i(0, 0, 0), Eigen::Vector3i(50000, 0, 0), cells);
+    ASSERT_EQ(cells.size(), 50001U);
+    EXPECT_EQ(cells.back().x(), 50000);
+    grid.RayTraceSubs(Eigen::Vector3i(-1, 0, 0), Eigen::Vector3i(0, 0, 0), cells);
+    EXPECT_TRUE(cells.empty());
 }
 
 TEST(GridStorage, SparseCellsMaterializeOnlyWhenWritten) {
@@ -42,11 +69,13 @@ struct RestoreMapParameters {
     float leaf = FARUtil::kLeafSize;
     float robot = FARUtil::robot_dim;
     float height = FARUtil::vehicle_height;
+    int inflate = FARUtil::kObsInflate;
     Point3D position = FARUtil::robot_pos;
     ~RestoreMapParameters() {
         FARUtil::kLeafSize = leaf;
         FARUtil::robot_dim = robot;
         FARUtil::vehicle_height = height;
+        FARUtil::kObsInflate = inflate;
         FARUtil::robot_pos = position;
     }
 };
@@ -64,6 +93,32 @@ std::size_t CellSize(MapHandler& map, float x, CloudType type) {
 }
 
 }  // namespace
+
+TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
+    RestoreMapParameters restore;
+    FARUtil::kObsInflate = 0;
+    ScanHandlerParams params{};
+    params.terrain_range = 2.0f;
+    params.voxel_size = 1.0f;
+    params.ceil_height = 2.0f;
+    ScanHandler scan;
+    scan.Init(params);
+    scan.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    PointCloudPtr free_cloud(new PointCloud);
+    auto near_cloud = CloudAt(1.0f);
+    scan.SetCurrentScanCloud(near_cloud, free_cloud);
+    PointCloudPtr baseline(new PointCloud);
+    scan.GridVisualCloud(baseline, GridStatus::SCAN);
+    ASSERT_FALSE(baseline->empty());
+
+    scan.ReInitGrids();
+    auto mixed_cloud = CloudAt(1.0f);
+    mixed_cloud->push_back(FARUtil::Point3DToPCLPoint(Point3D(1e30f, 0.0f, 0.0f)));
+    scan.SetCurrentScanCloud(mixed_cloud, free_cloud);
+    PointCloudPtr actual(new PointCloud);
+    scan.GridVisualCloud(actual, GridStatus::SCAN);
+    EXPECT_EQ(actual->size(), baseline->size());
+}
 
 TEST(MapHandler, RejectsInvalidDerivedGridDimensions) {
     RestoreMapParameters restore;
