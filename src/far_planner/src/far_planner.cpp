@@ -1087,7 +1087,9 @@ void FARMaster::ProcessTerrainCloud(const sensor_msgs::msg::PointCloud2::SharedP
   FARUtil::StackCloudByTime(FARUtil::cur_new_cloud_, FARUtil::stack_new_cloud_, FARUtil::kNewDecayTime, nh_);
   FARUtil::UpdateKdTrees(FARUtil::stack_new_cloud_);
 
-  if (!FARUtil::surround_obs_cloud_->empty()) is_cloud_init_ = true;
+  // Observed free space is sufficient to start planning without obstacles.
+  if (!FARUtil::surround_obs_cloud_->empty() ||
+      !FARUtil::surround_free_cloud_->empty()) is_cloud_init_ = true;
 
   /* visualize clouds */
   planner_viz_.VizPointCloud(new_PCL_pub_, FARUtil::stack_new_cloud_);
