@@ -173,6 +173,8 @@ Cloud overlap and new-obstacle extraction now tag a combined working cloud befor
 
 An empty neighborhood free cloud now clears the previous terrain-height output, traversability flags, extended terrain-neighbor indices, and height KD-tree. Map reset clears the same state; planner reset also clears its cached sensor and debug clouds and releases the new-obstacle KD-tree index. Reset invalidates the old map origin, so the next accepted odometry recenters the empty grid before new clouds enter it. Until then, map getters clear their output containers instead of returning stale caller data. Map regressions verify old heights disappear and a replay starting far from the prior origin can populate its new neighborhood.
 
+`ClusterFilterCloud` now releases its temporary FLANN index after replacing the point cloud; a subsequent empty input also releases any retained index. Its regression checks the filtered point order and that searches cannot use an index built for the old point set.
+
 In a four-second Noetic desktop-container smoke test, the planner completed initialization with its code-default 5 km map span and reached 101,620 KB peak RSS before receiving sensor data. This is an empty-map startup observation, not a bound on memory after mapping.
 
 An isolated retention-stage benchmark is reproducible with `cmake -S benchmarks -B /tmp/far-cloud-decay-build -DCMAKE_BUILD_TYPE=Release`, `cmake --build /tmp/far-cloud-decay-build`, and `/tmp/far-cloud-decay-build/cloud_decay`. `benchmarks/COLCON_IGNORE` keeps this optional build out of normal workspace builds. On an i9-12900K with GCC 13.3 and PCL 1.14, half the points expired; runs alternated implementation order. Median/p95 milliseconds were:

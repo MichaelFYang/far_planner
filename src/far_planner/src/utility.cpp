@@ -471,7 +471,10 @@ float FARUtil::NoiseCosValue(const float& dot_value, const bool& is_large, const
 void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
                                 const float& radius,
                                 const std::size_t c_thred) {
-  if (cloudInOut->empty()) return;
+  if (cloudInOut->empty()) {
+    *FARUtil::kdtree_filter_cloud_ = pcl::KdTreeFLANN<PCLPoint>(false);
+    return;
+  }
   PointCloudPtr temp_ptr(new pcl::PointCloud<PCLPoint>());
   FARUtil::kdtree_filter_cloud_->setInputCloud(cloudInOut);
   temp_ptr->resize(cloudInOut->size());
@@ -485,6 +488,8 @@ void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
   }
   temp_ptr->resize(idx);
   cloudInOut->swap(*temp_ptr);
+  // The index was built for the pre-filter points, which the swap replaced.
+  *FARUtil::kdtree_filter_cloud_ = pcl::KdTreeFLANN<PCLPoint>(false);
 }
 
 void FARUtil::TransferCloud(const Point3D& transPoint, const PointCloudPtr& cloudInOut) {
