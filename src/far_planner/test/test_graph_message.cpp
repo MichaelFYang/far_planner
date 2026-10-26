@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <limits>
+#include <memory>
+#include <vector>
 
 #include "far_planner/graph_msger.h"
 
@@ -14,6 +17,31 @@ using NodeMessage = visibility_graph_msg::Node;
 using GraphMessage = visibility_graph_msg::msg::Graph;
 using NodeMessage = visibility_graph_msg::msg::Node;
 #endif
+
+NavNodePtr EncodeNode(std::size_t id) {
+    auto node = std::make_shared<NavNode>();
+    node->id = id;
+    node->position = Point3D(static_cast<float>(id), 0.0f, 0.0f);
+    node->surf_dirs = {Point3D(1.0f, 0.0f, 0.0f), Point3D(0.0f, 1.0f, 0.0f)};
+    node->free_direct = CONVEX;
+    node->is_finalized = true;
+    node->is_navpoint = true;
+    return node;
+}
+
+}
+
+class GraphEncodingTestAccess {
+public:
+    static GraphMessage Encode(const NodePtrStack& nodes) {
+        GraphMessage graph;
+        graph.header.frame_id = "map";
+        GraphMsger::EncodeGraph(nodes, graph);
+        return graph;
+    }
+};
+
+namespace {
 
 GraphMessage ValidGraph() {
     GraphMessage graph;
@@ -81,4 +109,33 @@ TEST(GraphMessage, RejectsInconsistentNodeFrameAndCount) {
     EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error));
     graph.size = 0;
     EXPECT_FALSE(GraphMsger::ValidateGraphMessage(graph, "map", error));
+}
+
+TEST(GraphMessage, EncodesOnlyEdgesToPublishedNodes) {
+    const auto kept = EncodeNode(1);
+    const auto no_regular_edges = EncodeNode(2);
+    const auto connected = EncodeNode(3);
+    const auto odom = EncodeNode(4);
+    const auto absent = EncodeNode(5);
+    odom->is_odom = true;
+    const NodePtrStack neighbors = {no_regular_edges, connected, odom, absent};
+    kept->connect_nodes = neighbors;
+    kept->poly_connects = neighbors;
+    kept->contour_connects = neighbors;
+    kept->trajectory_connects = neighbors;
+    connected->connect_nodes = {no_regular_edges};
+
+    const auto graph = GraphEncodingTestAccess::Encode(
+        {kept, no_regular_edges, connected, odom});
+    ASSERT_EQ(graph.size, 2U);
+    ASSERT_EQ(graph.nodes.size(), 2U);
+    EXPECT_EQ(graph.nodes[0].id, 1U);
+    EXPECT_EQ(graph.nodes[1].id, 3U);
+    EXPECT_EQ(graph.nodes[0].connect_nodes, std::vector<std::uint32_t>({3}));
+    EXPECT_EQ(graph.nodes[0].poly_connects, std::vector<std::uint32_t>({3}));
+    EXPECT_EQ(graph.nodes[0].contour_connects, std::vector<std::uint32_t>({3}));
+    EXPECT_EQ(graph.nodes[0].trajectory_connects, std::vector<std::uint32_t>({3}));
+    EXPECT_TRUE(graph.nodes[1].connect_nodes.empty());
+    std::string error;
+    EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error)) << error;
 }

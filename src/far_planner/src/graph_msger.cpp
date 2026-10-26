@@ -11,6 +11,7 @@
 #include <visibility_graph_msg/graph_validation.h>
 
 #include <utility>
+#include <unordered_set>
 
 /***************************************************************************************/
 
@@ -27,8 +28,19 @@ void GraphMsger::Init(const rclcpp::Node::SharedPtr nh, const GraphMsgerParams& 
 void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut) {
     graphOut.nodes.clear();
     const std::string frame_id = graphOut.header.frame_id;
+    std::unordered_set<const NavNode*> encoded_nodes;
+    encoded_nodes.reserve(graphIn.size());
     for (const auto& node_ptr : graphIn) {
-        if (node_ptr->connect_nodes.empty() || !IsEncodeType(node_ptr)) continue;
+        if (node_ptr && !node_ptr->connect_nodes.empty() && IsEncodeType(node_ptr)) {
+            encoded_nodes.insert(node_ptr.get());
+        }
+    }
+    graphOut.nodes.reserve(encoded_nodes.size());
+    const auto is_encoded = [&encoded_nodes](const NavNodePtr& node_ptr) {
+        return node_ptr && encoded_nodes.count(node_ptr.get()) != 0;
+    };
+    for (const auto& node_ptr : graphIn) {
+        if (!is_encoded(node_ptr)) continue;
         visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
         msg_node.header.stamp = graphOut.header.stamp;
@@ -43,19 +55,19 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         msg_node.surface_dirs.push_back(FARUtil::Point3DToGeoMsgPoint(node_ptr->surf_dirs.second));
         // Encode connections
         for (const auto& cnode_ptr : node_ptr->connect_nodes) {
-            if (!IsEncodeType(cnode_ptr)) continue;
+            if (!is_encoded(cnode_ptr)) continue;
             msg_node.connect_nodes.push_back(cnode_ptr->id);
         }
         for (const auto& cnode_ptr : node_ptr->poly_connects) {
-            if (!IsEncodeType(cnode_ptr)) continue;
+            if (!is_encoded(cnode_ptr)) continue;
             msg_node.poly_connects.push_back(cnode_ptr->id);
         }
         for (const auto& cnode_ptr : node_ptr->contour_connects) {
-            if (!IsEncodeType(cnode_ptr)) continue;
+            if (!is_encoded(cnode_ptr)) continue;
             msg_node.contour_connects.push_back(cnode_ptr->id);
         }
         for (const auto& cnode_ptr : node_ptr->trajectory_connects) {
-            if (!IsEncodeType(cnode_ptr)) continue;
+            if (!is_encoded(cnode_ptr)) continue;
             msg_node.trajectory_connects.push_back(cnode_ptr->id);
         }
         graphOut.nodes.push_back(std::move(msg_node));
