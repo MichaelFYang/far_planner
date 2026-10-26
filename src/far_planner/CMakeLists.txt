@@ -88,6 +88,10 @@ if(BUILD_TESTING)
     ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
   )
   ament_add_pytest_test(test_terrain_input_topics test/test_terrain_input_topics.py TIMEOUT 40)
+  ament_add_pytest_test(test_dynamic_terrain_retention test/test_dynamic_terrain_retention.py
+    TIMEOUT 25
+    ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
+  )
 endif()
 
 ament_package()
