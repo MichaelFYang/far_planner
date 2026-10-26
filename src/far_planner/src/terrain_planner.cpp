@@ -101,7 +101,7 @@ void TerrainPlanner::GridVisualCloud() {
         temp_cloud.points.reserve(N);
         for (int ind=0; ind<N; ind++) {
             if (!terrain_grids_->GetCell(ind)->is_occupied) {
-                temp_cloud.points.push_back(this->Ind2PCLPoint(ind));
+                temp_cloud.push_back(this->Ind2PCLPoint(ind));
             }
         }
         pcl::toROSMsg(temp_cloud, terrain_map_msg_);
