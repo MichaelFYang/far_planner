@@ -35,6 +35,15 @@ public:
 #endif
         graph.TopTwoContourConnector(node);
     }
+
+    static bool NeedsInterNav(DynamicGraph& graph, const NavNodePtr& odom,
+                              const NavNodePtr& internav) {
+        graph.odom_node_ptr_ = odom;
+        graph.cur_internav_ptr_ = internav;
+        graph.is_bridge_internav_ = true;
+        graph.last_connect_pos_ = Point3D(0.0f, 0.0f, 0.0f);
+        return graph.IsInterNavpointNecessary();
+    }
 };
 
 TEST(GraphVotes, TopTwoSelectionPreservesStrictRankAndTies)
@@ -116,6 +125,27 @@ TEST(GraphVotes, RepeatedContourFillPreservesVotesAndLinks)
     GraphVoteTestAccess::Disconnect(first, second);
     first->potential_contours.clear();
     second->potential_contours.clear();
+}
+
+TEST(GraphVotes, EmptyOdomVoteHistoryDoesNotAccessItsLastElement)
+{
+    struct RestoreGlobals {
+        Point3D free_odom = FARUtil::free_odom_p;
+        float near_dist = FARUtil::kNearDist;
+        ~RestoreGlobals() {
+            FARUtil::free_odom_p = free_odom;
+            FARUtil::kNearDist = near_dist;
+        }
+    } restore;
+    FARUtil::free_odom_p = Point3D(0.0f, 0.0f, 0.0f);
+    FARUtil::kNearDist = 1.0f;
+
+    DynamicGraph graph;
+    auto odom = std::make_shared<NavNode>();
+    auto internav = std::make_shared<NavNode>();
+    internav->id = 42;
+    odom->edge_votes.emplace(internav->id, std::deque<int>{});
+    EXPECT_FALSE(GraphVoteTestAccess::NeedsInterNav(graph, odom, internav));
 }
 
 TEST(GraphLifecycle, EraseNodeFromStackRemovesFirstLastAndConsecutiveCopies)

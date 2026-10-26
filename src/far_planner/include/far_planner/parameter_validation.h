@@ -21,6 +21,14 @@ inline void RequireNonNegativeFinite(double value, const std::string& name) {
         throw std::invalid_argument(name + " must be nonnegative and finite");
 }
 
+inline void RequirePositiveInteger(int value, const std::string& name) {
+    if (value <= 0) throw std::invalid_argument(name + " must be a positive integer");
+}
+
+inline void RequireNonNegativeInteger(int value, const std::string& name) {
+    if (value < 0) throw std::invalid_argument(name + " must be a nonnegative integer");
+}
+
 inline std::uint16_t CheckedRobotId(int value) {
     if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
         throw std::invalid_argument("graph_msger/robot_id must be between 0 and 65535");

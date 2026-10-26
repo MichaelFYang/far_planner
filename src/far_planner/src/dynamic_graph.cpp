@@ -56,7 +56,8 @@ bool DynamicGraph::IsInterNavpointNecessary() {
         if (min_dist > FARUtil::kNavClearDist && min_dist < FARUtil::kINF) return true;
     } 
     if ((FARUtil::free_odom_p - last_connect_pos_).norm() > FARUtil::kNearDist || 
-        (it != odom_node_ptr_->edge_votes.end() && it->second.back() == 1)) 
+        (it != odom_node_ptr_->edge_votes.end() && !it->second.empty() &&
+         it->second.back() == 1))
     {
         last_connect_pos_ = FARUtil::free_odom_p;
     }
