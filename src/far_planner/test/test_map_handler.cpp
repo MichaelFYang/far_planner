@@ -206,6 +206,32 @@ TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
     EXPECT_EQ(actual->width, actual->size());
 }
 
+TEST(ScanHandler, InflatesOnlyCellsInsideTheLocalGrid) {
+    RestoreMapParameters restore;
+    FARUtil::kObsInflate = 0;
+    ScanHandlerParams params{};
+    params.terrain_range = 2.0f;
+    params.voxel_size = 1.0f;
+    params.ceil_height = 2.0f;
+    ScanHandler scan;
+    scan.Init(params);
+    scan.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    PointCloudPtr free_cloud(new PointCloud);
+    PointCloudPtr inflated(new PointCloud);
+
+    scan.SetCurrentScanCloud(CloudAt(2.0f), free_cloud);
+    scan.GridVisualCloud(inflated, GridStatus::SCAN);
+    ASSERT_EQ(inflated->size(), 18U);
+    for (const auto& point : inflated->points) {
+        EXPECT_TRUE(point.x == 1.0f || point.x == 2.0f);
+    }
+
+    scan.ReInitGrids();
+    scan.SetCurrentScanCloud(CloudAt(4.0f), free_cloud);
+    scan.GridVisualCloud(inflated, GridStatus::SCAN);
+    EXPECT_TRUE(inflated->empty());
+}
+
 TEST(MapHandler, RejectsInvalidDerivedGridDimensions) {
     RestoreMapParameters restore;
     FARUtil::robot_dim = 0.8f;
