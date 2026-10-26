@@ -267,6 +267,27 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 transforms.publish(TFMessage(transforms=[terrain_tf]))
                 spin_until(lambda: len(received) == 10)
                 assert x_values(received[-1]), 'Terrain was not retried after TF arrived'
+
+                # Odometry itself can wait for stamped TF. Queued terrain at
+                # the same time must resume without a new sensor callback.
+                pose.header.frame_id = 'late_odom'
+                pose.header.stamp.nanosec = 600000000
+                pose.pose.pose.position.x = 0.0
+                odom.publish(pose)
+                clouds.publish(cloud('late_odom', 5, 600000000))
+                settle(0.2)
+                assert len(received) == 10, 'Terrain ran before odometry TF arrived'
+                odom_tf = TransformStamped()
+                odom_tf.header.frame_id = 'map'
+                odom_tf.child_frame_id = 'late_odom'
+                odom_tf.header.stamp.sec = 5
+                odom_tf.header.stamp.nanosec = 600000000
+                odom_tf.transform.translation.x = 35.0
+                odom_tf.transform.rotation.w = 1.0
+                transforms.publish(TFMessage(transforms=[odom_tf]))
+                spin_until(lambda: len(received) == 11)
+                assert any(abs(x - 37.0) < 1e-4 for x in x_values(received[-1])), (
+                    'Odometry or terrain did not resume at the stamped TF')
             except Exception:
                 log.flush()
                 log.seek(0)
