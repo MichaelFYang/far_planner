@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <random>
@@ -14,6 +15,15 @@
 
 class GraphVoteTestAccess {
 public:
+    static void Fill(DynamicGraph& graph, const NavNodePtr& first,
+                     const NavNodePtr& second, int count) {
+        graph.FillContourConnect(first, second, count);
+    }
+
+    static void Disconnect(const NavNodePtr& first, const NavNodePtr& second) {
+        DynamicGraph::DeleteContourConnect(first, second);
+    }
+
     static void Connect(const NavNodePtr& first, const NavNodePtr& second) {
         DynamicGraph::AddContourConnect(first, second);
         DynamicGraph::AddEdge(first, second);
@@ -81,6 +91,31 @@ TEST(GraphVotes, MissingPotentialVoteDoesNotDereferenceTheMapEnd)
 #ifndef FAR_PLANNER_ROS1
     rclcpp::shutdown();
 #endif
+}
+
+TEST(GraphVotes, RepeatedContourFillPreservesVotesAndLinks)
+{
+    DynamicGraph graph;
+    auto first = std::make_shared<NavNode>();
+    auto second = std::make_shared<NavNode>();
+    first->id = 51;
+    second->id = 52;
+    GraphVoteTestAccess::Fill(graph, first, second, 4);
+    ASSERT_EQ(first->contour_votes.count(second->id), 1U);
+    ASSERT_EQ(second->contour_votes.count(first->id), 1U);
+    first->contour_votes.at(second->id).back() = 0;
+    second->contour_votes.at(first->id).back() = 0;
+    GraphVoteTestAccess::Fill(graph, first, second, 8);
+    const std::deque<int> expected{1, 1, 1, 0};
+    EXPECT_EQ(first->contour_votes.at(second->id), expected);
+    EXPECT_EQ(second->contour_votes.at(first->id), expected);
+    EXPECT_EQ(first->potential_contours.size(), 1U);
+    EXPECT_EQ(second->potential_contours.size(), 1U);
+    EXPECT_EQ(first->contour_connects.size(), 1U);
+    EXPECT_EQ(second->contour_connects.size(), 1U);
+    GraphVoteTestAccess::Disconnect(first, second);
+    first->potential_contours.clear();
+    second->potential_contours.clear();
 }
 
 TEST(GraphLifecycle, EraseNodeFromStackRemovesFirstLastAndConsecutiveCopies)
