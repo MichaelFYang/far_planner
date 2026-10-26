@@ -8,6 +8,7 @@ import unittest
 
 import rospy
 import rostest
+from geometry_msgs.msg import Point
 from std_srvs.srv import Trigger
 from visibility_graph_msg.msg import Graph, Node
 from visualization_msgs.msg import MarkerArray
@@ -47,17 +48,26 @@ class DecoderCallbackTest(unittest.TestCase):
         valid = Graph()
         valid.header.frame_id = 'map'
         valid.robot_id = 7
-        for identifier in (1, 2):
+        for identifier, z_values in ((1, (-1.0, -1.0)),
+                                     (2, (0.25, 0.75))):
             node = Node()
             node.header.frame_id = 'map'
             node.id = identifier
-            node.surface_dirs = [node.position, node.position]
+            node.surface_dirs = [
+                Point(x=0.5, y=0.0, z=z_values[0]),
+                Point(x=0.0, y=0.5, z=z_values[1]),
+            ]
+            node.FreeType = 3 if identifier == 1 else 1
             valid.nodes.append(node)
         valid.nodes[0].connect_nodes = [2]
         valid.size = 2
         graphs.publish(valid)
         wait_for(lambda: len(markers) > 0)
-        self.assertEqual([n.id for n in request_graph(2, 7).nodes], [1, 2])
+        round_trip = request_graph(2, 7)
+        self.assertEqual([n.id for n in round_trip.nodes], [1, 2])
+        for original, decoded in zip(valid.nodes, round_trip.nodes):
+            self.assertEqual(decoded.FreeType, original.FreeType)
+            self.assertEqual(decoded.surface_dirs, original.surface_dirs)
 
         malformed = Graph()
         malformed.header.frame_id = 'map'

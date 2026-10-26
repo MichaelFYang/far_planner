@@ -137,6 +137,8 @@ The graph decoder now applies the same validator before replacing its displayed 
 
 Graph serialization moves each completed node into the outgoing message instead of copying its connection vectors. The decoder iterates validated connection IDs in the incoming message directly and reserves its node and ID-index containers up front. This removes four temporary connection arrays and their per-node copies; planner throughput has not been measured from this change.
 
+The graph decoder preserves all three coordinates of both surface directions when receiving and republishing a graph. The Z coordinate carries the `-1` pillar sentinel and may also contain a nonzero direction component. A live message round-trip test checks both cases.
+
 ## Scan sensor origin stage
 
 When a scan arrives in a sensor frame, the cloud transform also supplies the sensor's world-frame translation at that same scan timestamp. Scan ray tracing starts from that translation, accounting for the scanner's offset from the odometry body. A scan already in the world frame still uses the interpolated odometry position because its original sensor frame is unavailable. Failed TF leaves both the accepted cloud and ray origin unchanged. Moving-TF regression tests cover the returned origin, interpolation, identity fallback, failure, and rotation while preserving intensity and cloud metadata.
