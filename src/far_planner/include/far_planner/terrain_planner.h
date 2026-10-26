@@ -19,8 +19,8 @@ struct TerrainNode {
     int id;
     Point3D position;
     bool is_occupied = false;
-    float fscore;
-    float gscore;
+    float fscore = FARUtil::kINF;
+    float gscore = FARUtil::kINF;
     std::shared_ptr<TerrainNode> parent;
 };
 
@@ -71,6 +71,7 @@ private:
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
     std::vector<int> occupied_cells_;
+    std::vector<int> searched_cells_;
     PointCloudPtr local_obs_cloud_;
     std::uint64_t local_terrain_revision_ = 0;
     std::uint64_t last_projected_revision_ = 0;
@@ -108,11 +109,12 @@ private:
 
     inline void ResetGridsPlanStatus() {
         if (!is_grids_init_) return;
-        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (const int i : searched_cells_) {
             terrain_grids_->GetCell(i)->fscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->gscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->parent = NULL;
         }
+        searched_cells_.clear();
     }
 
     inline Point3D Ind2Point3D(const int& ind) {

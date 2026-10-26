@@ -167,6 +167,55 @@ TEST(TerrainSearch, QueueDecreaseMustReturnTheShortestGridPath)
     EXPECT_NEAR(length, 4.0f + std::sqrt(2.0f), 1e-4f);
 }
 
+TEST(TerrainSearch, RepeatedQueriesClearPriorSearchState)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "terrain_repeated_search_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("terrain_repeated_search_test");
+#endif
+    const LocalPlanRangeGuard range(0.0f);
+    TerrainPlannerParams params;
+    params.world_frame = "map";
+    params.radius = 2.5f;
+    params.voxel_size = 1.0f;
+    params.inflate_size = 0;
+    TerrainPlanner planner;
+    planner.Init(node, params);
+    planner.UpdateCenterNode(Node(102, 0.0f, 0.0f));
+
+    PointCloudPtr obstacles(new PointCloud);
+    for (int y = -2; y <= 2; ++y) {
+        PCLPoint point{};
+        point.x = 0.0f;
+        point.y = static_cast<float>(y);
+        obstacles->push_back(point);
+    }
+    planner.SetLocalTerrainObsCloud(obstacles, 1);
+    PointStack path;
+    EXPECT_FALSE(planner.PlanPathFromPToP(Point3D(-2.0f, 0.0f, 0.0f),
+                                         Point3D(2.0f, 0.0f, 0.0f), path));
+    EXPECT_TRUE(path.empty());
+
+    ASSERT_TRUE(planner.PlanPathFromPToP(Point3D(-2.0f, -2.0f, 0.0f),
+                                        Point3D(-2.0f, 2.0f, 0.0f), path));
+    float length = 0.0f;
+    for (std::size_t i = 1; i < path.size(); ++i) length += (path[i] - path[i - 1]).norm();
+    EXPECT_NEAR(length, 4.0f, 1e-4f);
+
+    obstacles->clear();
+    planner.SetLocalTerrainObsCloud(obstacles, 2);
+    ASSERT_TRUE(planner.PlanPathFromPToP(Point3D(-2.0f, 0.0f, 0.0f),
+                                        Point3D(2.0f, 0.0f, 0.0f), path));
+    length = 0.0f;
+    for (std::size_t i = 1; i < path.size(); ++i) length += (path[i] - path[i - 1]).norm();
+    EXPECT_NEAR(length, 4.0f, 1e-4f);
+}
+
 TEST(TerrainSearch, ReplacesLocalObstacleOccupancyWithEachCloud)
 {
 #ifdef FAR_PLANNER_ROS1
