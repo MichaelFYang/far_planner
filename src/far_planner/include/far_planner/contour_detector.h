@@ -17,6 +17,7 @@ struct ContourDetectParams {
 
 class ContourDetector {
 private:
+    friend class ContourDetectorTestAccess;
     Point3D odom_pos_;
     cv::Point2f free_odom_resized_;
     ContourDetectParams cd_params_;
@@ -75,12 +76,9 @@ private:
                                      const cv::Point2f& add_p,
                                      std::size_t& refined_idx)
     {
-        if (refined_idx < 2) return;
-        if (!IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) {
-            return;
-        } else {
-            -- refined_idx;
-            RemoveWallConnection(contour, add_p, refined_idx);
+        while (refined_idx >= 2 &&
+               IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) {
+            --refined_idx;
         }
     }
 
@@ -93,15 +91,19 @@ private:
     }
 
     inline void SameAndLowLevelIdxs(const std::vector<cv::Vec4i>& hierarchy,
-                                    const std::size_t& cur_idx,
+                                    int cur_idx,
                                     std::unordered_set<int>& remove_idxs)
     {
-        if (cur_idx == -1) return;
-        int next_idx = cur_idx;
-        while (next_idx != -1) {
-            remove_idxs.insert(next_idx);
-            SameAndLowLevelIdxs(hierarchy, hierarchy[next_idx][2], remove_idxs);
-            next_idx = hierarchy[next_idx][0];
+        std::vector<int> pending;
+        if (cur_idx >= 0) pending.push_back(cur_idx);
+        while (!pending.empty()) {
+            const int index = pending.back();
+            pending.pop_back();
+            if (index < 0 || static_cast<std::size_t>(index) >= hierarchy.size()) continue;
+            remove_idxs.insert(index);
+            const auto& links = hierarchy[index];
+            if (links[0] >= 0) pending.push_back(links[0]);
+            if (links[2] >= 0) pending.push_back(links[2]);
         }
     }
 
@@ -179,25 +181,13 @@ private:
     {
         cv::Point2f diff_p1 = first_p - mid_p;
         cv::Point2f diff_p2 = add_p - mid_p;
-        diff_p1 /= std::hypotf(diff_p1.x, diff_p1.y);
-        diff_p2 /= std::hypotf(diff_p2.x, diff_p2.y);
+        const float first_length = std::hypotf(diff_p1.x, diff_p1.y);
+        const float second_length = std::hypotf(diff_p2.x, diff_p2.y);
+        if (!(first_length > 0.0f) || !(second_length > 0.0f)) return false;
+        diff_p1 /= first_length;
+        diff_p2 /= second_length;
         if (abs(diff_p1.dot(diff_p2)) > ALIGN_ANGLE_COS) return true;
         return false;
-    }
-
-    inline void CopyContours(const std::vector<std::vector<cv::Point2i>>& raw_contours,
-                             std::vector<std::vector<cv::Point2f>>& contours)
-    {
-        const std::size_t N = raw_contours.size();
-        contours.clear(), contours.resize(N);
-        for (std::size_t i=0; i<N; i++) {
-            const auto c = raw_contours[i];
-            const std::size_t c_size = c.size();
-            contours[i].resize(c_size);
-            for (std::size_t j=0; j<c.size(); j++) {
-                contours[i][j] = (cv::Point2f)c[j];
-            }
-        }
     }
 
     inline void RoundContours(const std::vector<std::vector<cv::Point2f>>& filtered_contours,
@@ -206,7 +196,7 @@ private:
         const std::size_t N = filtered_contours.size();
         round_contours.clear(), round_contours.resize(N);
         for (std::size_t i=0; i<N; i++) {
-            const auto c = filtered_contours[i];
+            const auto& c = filtered_contours[i];
             const std::size_t c_size = c.size();
             round_contours[i].resize(c_size);
             for (std::size_t j=0; j<c.size(); j++) {
