@@ -9,6 +9,9 @@
 #include "far_planner/scan_handler.h"
 #include "far_planner/parameter_validation.h"
 
+#include <cstdint>
+#include <utility>
+
 /***************************************************************************************/
 
 const char INIT_BIT = char(0); // 0000
@@ -59,6 +62,11 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
     }
     const double max_distance = static_cast<double>(scan_params_.voxel_size) *
         (static_cast<double>(row_num_) + col_num_ + level_num_);
+    const auto clipped_span = [](int center, int radius, int size) {
+        const auto first = std::max<std::int64_t>(0, static_cast<std::int64_t>(center) - radius);
+        const auto last = std::min<std::int64_t>(size - 1, static_cast<std::int64_t>(center) + radius);
+        return std::make_pair(static_cast<int>(first), static_cast<int>(last));
+    };
     for (const auto& point : obstacle_scan->points) { // assign obstacle scan voxels
         const float r = pcl::euclideanDistance(point, center_p_);
         if (!std::isfinite(r) || static_cast<double>(r) > max_distance) continue;
@@ -68,16 +76,15 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
         const int N = static_cast<int>(std::min<double>(
             std::ceil(static_cast<double>(r) * ANG_RES_Y / scan_params_.voxel_size / 2.0),
             level_num_));
-        Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
-        for (int i = -L; i <= L; i++) {
-            for (int j = -L; j <= L; j++) {
-                for (int k = -N; k <= N; k++) {
-                    Eigen::Vector3i sub;
-                    sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = c_sub.z() + k;
-                    if (voxel_grids_->InRange(sub)) {
-                        const int ind = voxel_grids_->Sub2Ind(sub);
-                        voxel_grids_->GetCell(ind) = voxel_grids_->GetCell(ind) | SCAN_BIT;
-                    }
+        const Eigen::Vector3i center = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
+        const auto x = clipped_span(center.x(), L, row_num_);
+        const auto y = clipped_span(center.y(), L, col_num_);
+        const auto z = clipped_span(center.z(), N, level_num_);
+        for (int ix = x.first; ix <= x.second; ++ix) {
+            for (int iy = y.first; iy <= y.second; ++iy) {
+                for (int iz = z.first; iz <= z.second; ++iz) {
+                    const int ind = voxel_grids_->Sub2Ind(Eigen::Vector3i(ix, iy, iz));
+                    voxel_grids_->GetCell(ind) |= SCAN_BIT;
                 }
             }
         }
