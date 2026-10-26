@@ -73,7 +73,10 @@ void MapHandler::ResetGripMapCloud() {
         world_free_cloud_grid_->EraseCell(ind);
     }
     visited_cell_indices_.clear();
+    neighbor_obs_indices_.clear();
+    neighbor_free_indices_.clear();
     this->ClearTerrainHeightData();
+    is_init_ = false;
 }
 
 void MapHandler::ClearTerrainHeightData() {
@@ -192,8 +195,8 @@ void MapHandler::SetTerrainHeightGridOrigin(const Point3D& robot_pos) {
 }
 
 void MapHandler::GetSurroundObsCloud(const PointCloudPtr& obsCloudOut) {
-    if (!is_init_) return;
     obsCloudOut->clear();
+    if (!is_init_) return;
     for (const auto& neighbor_ind : neighbor_obs_indices_) {
         const auto cell = world_obs_cloud_grid_->GetCellValue(neighbor_ind);
         if (cell && !cell->empty()) *obsCloudOut += *cell;
@@ -201,8 +204,8 @@ void MapHandler::GetSurroundObsCloud(const PointCloudPtr& obsCloudOut) {
 }
 
 void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
-    if (!is_init_) return;
     freeCloudOut->clear();
+    if (!is_init_) return;
     for (const auto& neighbor_ind : neighbor_free_indices_) {
         const auto cell = world_free_cloud_grid_->GetCellValue(neighbor_ind);
         if (cell && !cell->empty()) *freeCloudOut += *cell;
@@ -526,8 +529,8 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
 
 
 void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
-    if (!is_init_) return;
     neighbor_centers.clear();
+    if (!is_init_) return;
     for (const auto& ind : neighbor_obs_indices_) {
         if (visited_cell_indices_.count(ind) == 0) continue;
         Point3D center_p(world_obs_cloud_grid_->Ind2Pos(ind));
@@ -536,8 +539,8 @@ void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
 }
 
 void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
-    if (!is_init_) return;
     occupancy_centers.clear();
+    if (!is_init_) return;
     for (const int ind : visited_cell_indices_) {
         Point3D center_p(world_obs_cloud_grid_->Ind2Pos(ind));
         occupancy_centers.push_back(center_p);
