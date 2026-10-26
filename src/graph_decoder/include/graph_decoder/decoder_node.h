@@ -93,10 +93,13 @@ private:
     rclcpp::Publisher<MarkerArray>::SharedPtr graph_viz_pub_;
     rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr graph_pub_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr request_graph_service_;
+    rclcpp::TimerBase::SharedPtr graph_viz_timer_;
 
     GraphDecoderParams gd_params_;
     NodePtrStack received_graph_;
     std::size_t robot_id_;
+    std::size_t graph_viz_subscriber_count_ = 0;
+    std::size_t graph_viz_refresh_ticks_ = 0;
 
     void LoadParams();
 
@@ -123,6 +126,7 @@ private:
 
 
     void VisualizeGraph(const NodePtrStack& graphIn);
+    void VisualizeForNewSubscribers();
 
     void CreateNavNode(const graph_file::NodeRecord& record, NavNodePtr& node_ptr);
 

@@ -27,7 +27,8 @@ def test_decoder_keeps_last_valid_graph():
         published = []
         markers = []
         node.create_subscription(Graph, '/decoded_vgraph', published.append, 10)
-        node.create_subscription(MarkerArray, '/graph_decoder_viz', markers.append, 10)
+        marker_subscription = node.create_subscription(
+            MarkerArray, '/graph_decoder_viz', markers.append, 10)
         graphs = node.create_publisher(Graph, '/robot_vgraph', 10)
         save_requests = node.create_publisher(String, '/save_file_dir', 10)
         read_requests = node.create_publisher(String, '/read_file_dir', 10)
@@ -101,6 +102,28 @@ def test_decoder_keeps_last_valid_graph():
                                   'contour_connects', 'trajectory_connects'):
                         assert getattr(decoded, field) == getattr(original, field)
 
+                node.destroy_subscription(marker_subscription)
+                markers.clear()
+                spin_until(lambda: node.count_subscribers('/graph_decoder_viz') == 0)
+                valid.nodes[0].position.x = 2.3456789
+                graphs.publish(valid)
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    snapshot = request_graph(2, 7)
+                    if struct.pack('f', snapshot.nodes[0].position.x) == struct.pack(
+                            'f', valid.nodes[0].position.x):
+                        break
+                else:
+                    raise AssertionError('Decoder did not accept updated graph')
+                marker_subscription = node.create_subscription(
+                    MarkerArray, '/graph_decoder_viz', markers.append, 10)
+                spin_until(lambda: len(markers) > 0)
+                late_marker = {marker.ns: marker for marker in markers[-1].markers}
+                assert struct.pack('f', late_marker['global_vertex'].points[0].x) == struct.pack(
+                    'f', valid.nodes[0].position.x)
+                markers.clear()
+                spin_until(lambda: len(markers) > 0, timeout=3.5)
+
                 save_path = os.path.join(directory, 'saved_graph.vgh')
                 save_requests.publish(String(data=save_path))
 
@@ -115,15 +138,23 @@ def test_decoder_keeps_last_valid_graph():
                     saved_x = float(graph_file.readline().split()[2])
                 assert struct.pack('f', saved_x) == struct.pack('f', valid.nodes[0].position.x), \
                     'Graph save lost float coordinate precision'
+                node.destroy_subscription(marker_subscription)
+                markers.clear()
+                spin_until(lambda: node.count_subscribers('/graph_decoder_viz') == 0)
                 previous = len(published)
                 read_requests.publish(String(data=save_path))
                 spin_until(lambda: len(published) > previous)
                 loaded = published[-1]
                 assert [n.id for n in loaded.nodes] == [1, 2]
+                assert loaded.robot_id == 0
                 assert struct.pack('f', loaded.nodes[0].position.x) == struct.pack('f', valid.nodes[0].position.x)
                 for field in ('connect_nodes', 'poly_connects',
                               'contour_connects', 'trajectory_connects'):
                     assert list(getattr(loaded.nodes[0], field)) == [2]
+                marker_subscription = node.create_subscription(
+                    MarkerArray, '/graph_decoder_viz', markers.append, 10)
+                spin_until(lambda: len(markers) > 0)
+                assert [n.id for n in request_graph(2, 0).nodes] == [1, 2]
 
                 malformed = Graph()
                 malformed.header.frame_id = 'map'
@@ -135,7 +166,7 @@ def test_decoder_keeps_last_valid_graph():
                 # The decoder emits no marker acknowledgement for a rejected graph.
                 deadline = time.monotonic() + 0.35
                 spin_until(lambda: time.monotonic() >= deadline, 1.0)
-                assert [n.id for n in request_graph(2, 7).nodes] == [1, 2]
+                assert [n.id for n in request_graph(2, 0).nodes] == [1, 2]
 
                 empty = Graph()
                 empty.header.frame_id = 'map'

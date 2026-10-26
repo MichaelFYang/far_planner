@@ -134,13 +134,13 @@ The decoder and boundary extractor now share `visibility_graph_msg/graph_file_wr
 
 Boundary visibility-edge generation now visits only `j < i`; for `n` vertices it checks `n(n−1)/2` unordered pairs instead of looping over `n²` positions and skipping half. Candidate order and graph output stay the same; whole-extractor latency has not been measured.
 
-Incoming graph messages are built before replacing the last accepted graph. Replacing or destroying a decoder graph clears its strong connection links; temporary graphs loaded from files release their links after publication. This prevents reciprocal edges from retaining old graph nodes on repeated updates.
+Incoming graph messages are built before replacing the last accepted graph. Replacing or destroying a decoder graph clears its strong connection links, including a graph loaded from a file. This prevents reciprocal edges from retaining old graph nodes on repeated updates. A successful file load becomes the decoder's current graph, so save and request operations use it; its robot ID is zero because the file format has no robot ID.
 
 Incoming decoded graph messages now validate their world frame, finite node positions and surface directions, direction count and type, unique IDs, and every connection target before touching the persistent graph. This prevents a missing `surface_dirs[1]` access and avoids partial graph updates on malformed input. The callback also reads the shared message by reference instead of copying the full node and edge arrays.
 
 Graph publishers set the graph header and each node header to the same world frame and publication timestamp. The stamp describes when the accumulated graph snapshot was published; its geometry can include older observations. Incoming graphs must declare the expected node count, and every node frame must match the graph frame. The receiver does not silently transform mismatched node coordinates.
 
-The graph decoder now applies the same validator before replacing its displayed and saved graph. A bad frame, geometry, duplicate ID, size, or connection leaves the previous graph intact; an explicitly empty, correctly framed graph clears it. The shared validator lives in `visibility_graph_msg` so both consumers use the same rules.
+The graph decoder now applies the same validator before replacing its displayed and saved graph. A bad frame, geometry, duplicate ID, size, or connection leaves the previous graph intact; an explicitly empty, correctly framed graph clears it. The shared validator lives in `visibility_graph_msg` so both consumers use the same rules. The decoder refreshes stored graph markers when a viewer connects and about every two seconds while viewers remain; it does no marker construction without a viewer.
 
 Decoder startup strips leading `/` from `world_frame` and rejects an empty or whitespace-containing frame and a nonpositive or nonfinite `visual_scale_ratio`. Invalid settings exit with a diagnostic instead of silently rejecting every graph or publishing unusable markers.
 
