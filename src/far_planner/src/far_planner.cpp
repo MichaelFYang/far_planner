@@ -127,12 +127,11 @@ void FARMaster::Init() {
   kdtree_viewpoint_obs_cloud_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
 
   // set kdtree sorted value
-  FARUtil::kdtree_new_cloud_->setSortedResults(false);
   FARUtil::kdtree_filter_cloud_->setSortedResults(false);
   kdtree_viewpoint_obs_cloud_->setSortedResults(false);
 
   // init global utility cloud
-  FARUtil::stack_new_cloud_->clear();
+  FARUtil::ClearKdTree(FARUtil::stack_new_cloud_, FARUtil::kdtree_new_cloud_);
   FARUtil::stack_dyobs_cloud_->clear();
 
   // clear temp vectors and memory
@@ -206,7 +205,7 @@ void FARMaster::ResetEnvironmentAndGraph() {
   /* Reset clouds */
   FARUtil::surround_obs_cloud_->clear();
   FARUtil::surround_free_cloud_->clear();
-  FARUtil::stack_new_cloud_->clear();
+  FARUtil::ClearKdTree(FARUtil::stack_new_cloud_, FARUtil::kdtree_new_cloud_);
   FARUtil::stack_dyobs_cloud_->clear();
   FARUtil::cur_new_cloud_->clear();
   FARUtil::cur_dyobs_cloud_->clear();
