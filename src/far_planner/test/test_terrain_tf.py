@@ -376,6 +376,20 @@ def test_terrain_transform_is_timestamped_and_atomic():
                 transforms.publish(TFMessage(transforms=[paired_tf]))
                 spin_until(lambda: len(received) == before + 1 and len(rays) == rays_before + 1)
                 assert x_values(rays[-1]), 'Late scan TF was not used by the terrain update'
+
+                # Terrain may arrive before its matching scan. The short wait
+                # lets that later callback contribute to the same map update.
+                pose.header.stamp.nanosec = 500000000
+                odom.publish(pose)
+                settle()
+                before = len(received)
+                rays_before = len(rays)
+                clouds.publish(cloud('map', 6, 500000000))
+                settle(0.1)
+                assert len(received) == before, 'Terrain ran before its scan arrived'
+                scans.publish(cloud('map', 6, 500000000))
+                spin_until(lambda: len(received) == before + 1 and len(rays) == rays_before + 1)
+                assert x_values(rays[-1]), 'Scan arriving after terrain was not ray traced'
             except Exception:
                 log.flush()
                 log.seek(0)
