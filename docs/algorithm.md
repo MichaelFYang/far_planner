@@ -108,6 +108,8 @@ The two original cases failed before the fix. The map regression also compares 9
 
 Goal refinement receives the current odometry position explicitly. It previously dereferenced a pointer populated only by an earlier graph traversal, so a goal arriving between graph initialization and the first planning tick could crash, including after reset. The indoor simulator exposed this sequence; a focused regression checks refinement before any traversal and again after reset.
 
+`PathToGoal` reports arrival within `g_planner/converge_distance` of either the active adjusted goal or the original requested goal. Free-grid and polygon refinement can move the active XY target; `goal_adjust_radius` sizes the free-grid search but does not bound the later polygon projection. An arrival status therefore does not guarantee that the original requested XYZ was reached. The garage validation below checks that separately.
+
 When local terrain occupies the goal grid, free-space classification requires a cell marked free without an overlapping inflated obstacle. Previously, one overlapping free sample could admit the goal to the covered traversal even when no free cell existed; a nearby navigation node could also bypass that blocked terrain. The navigation-node fallback now applies only when the goal grid has no terrain cells. A route-level regression fails on the old behavior and checks blocked terrain, obstacle removal, and the no-terrain fallback.
 
 In multi-layer mode, goal-grid projection now rejects obstacle points outside `goal.z ± kTolerZ`. Free points describe ground, so their height is compared after adding `vehicle_height`. This derived tolerance is `floor_height - 2 * voxel_dim`; its boundary remains inclusive, matching the node-layer rule. Out-of-band samples neither occupy nor free a goal-grid cell; the existing same-layer navigation-node fallback still applies when no relevant terrain remains. Single-layer mode retains its XY projection.
@@ -311,7 +313,27 @@ The 50.6-second input recording was replayed with ROS simulated time under Addre
 
 After correcting the scan/terrain wiring, the installed Jazzy launch ran with `is_static_env=false` for five cycles of the same route: all 15 goals reported arrival, with a maximum final XY error of 0.133 m. During 222 seconds of observation it published 1,074 nonempty scan-ray debug clouds and 538 graph snapshots. After the first 60 seconds, sampled planner RSS stayed between 122.1 and 129.5 MiB; the published graph peaked at 91 nodes and ended at 80. This short repeat run exercises dynamic-mode processing in a static world; it does not establish moving-obstacle performance or long-duration memory stability.
 
-These runs use one indoor environment on Jazzy. Broader moving-obstacle cases, multi-layer navigation, interactive RViz behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+The indoor runs above cover one environment on native Jazzy; the garage case below adds a ramp route. Broader moving-obstacle cases, additional multi-layer routes, interactive RViz behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+
+## Garage ramp navigation validation
+
+A native Jazzy Release run on `b5782bc` used the same upstream simulator snapshot and its supplied `garage` world. FAR used the default parameters with `is_multi_layer=true`; live parameters confirmed `voxel_dim=0.15`, `vehicle_height=0.75`, `map_handler/floor_height=2.5`, and `is_static_env=true`. Extended terrain analysis enabled `checkTerrainConn`. The vehicle started at `(0, 74)` with initial terrain Z of 0.1 m. RViz and joystick nodes were omitted; the installed FAR launch supplied the normal scan/terrain topic wiring.
+
+All five sequential goals reported arrival during 236.9 seconds of observation. Each goal required a new false-to-true arrival sequence and an independent XYZ error below 0.6 m, followed by a one-second dwell:
+
+| Requested XYZ (m) | Time from command (s) | XYZ error (m) |
+| --- | --- | --- |
+| `(15, 78, 0.85)` | 8.79 | 0.062 |
+| `(50, 78, 1.70)` | 18.20 | 0.078 |
+| `(50, 30, 4.15)` | 89.80 | 0.075 |
+| `(50, 78, 1.70)` | 50.60 | 0.094 |
+| `(0, 74, 0.85)` | 57.00 | 0.261 |
+
+Sampled vehicle Z ranged from 0.850 to 4.376 m, exercising a 3.526 m height change and return. The observer checked all 574 graph snapshots for finite positions, matching sizes, unique IDs, and resolved connection IDs; the graph peaked at 603 nodes and ended at 598. All 563 observed waypoints were finite and in `map`. The route included backtracking between ramp lanes before reaching the upper goal, so it is not a shortest-route benchmark.
+
+The recording's three cloud streams used `map` and strictly increasing stamps. Odometry bracketed all 1,147 messages in each terrain stream and 1,148 of 1,149 scans; the largest pose bracket was 5.429 ms. One scan had no bracket in the recording. This checks input availability for interpolation, not acceptance of every message or nontrivial sensor-frame TF chains.
+
+An earlier pilot target at `(40, 74, 1.70)` was refined and reported arrival 3.07 m from the requested point. It failed the independent requested-goal acceptance check and is not counted as a successful ramp traversal. The table uses open-lane targets that passed that check. The simulator integrates planar motion and sets vehicle Z from terrain observations, rather than contact dynamics; this run covers one selected garage route on native Jazzy, not general multi-layer navigation or collision safety. Assets, launch wrappers, recordings, and plots remain outside the repository.
 
 ## Dynamic terrain retention validation
 
