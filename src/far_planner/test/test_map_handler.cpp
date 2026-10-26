@@ -400,6 +400,63 @@ TEST(MapHandler, FindsConnectedGroundAfterSearchingFromEmptyRobotCell) {
     EXPECT_FLOAT_EQ(ground->points[1].y, 1.0f);
 }
 
+TEST(MapHandler, TerrainNeighborsFollowColumnHeightUpdatesAndMapEdges) {
+    RestoreMapParameters restore;
+    struct RestoreTolerance {
+        float value = FARUtil::kTolerZ;
+        ~RestoreTolerance() { FARUtil::kTolerZ = value; }
+    } restore_tolerance;
+    FARUtil::kTolerZ = 2.0f;
+    FARUtil::kLeafSize = 0.2f;
+    FARUtil::robot_dim = 1.0f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams params{};
+    params.sensor_range = 3.0f;
+    params.floor_height = 2.5f;
+    params.cell_length = 1.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 11.0f;
+    params.grid_max_height = 6.0f;
+    params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    MapHandlerTestAccess::SetTerrainInflation(map, 0);
+    PointCloudPtr ground(new PointCloud);
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, -0.75f)));
+    PointCloudPtr heights(new PointCloud);
+    map.UpdateTerrainHeightGrid(ground, heights);
+    ASSERT_EQ(heights->size(), 1U);
+    // The five candidate levels share X/Y but retain distinct vertical tests.
+    // The public query takes a body height and subtracts vehicle_height.
+    for (int z = -2; z <= 2; ++z) {
+        const Point3D query(1.0f, 0.0f, z + FARUtil::vehicle_height);
+        EXPECT_EQ(MapHandler::IsNavPointOnTerrainNeighbor(query, false),
+                  z >= -1 && z <= 1) << "z=" << z;
+        EXPECT_EQ(MapHandler::IsNavPointOnTerrainNeighbor(query, true),
+                  z <= 1) << "extended z=" << z;
+    }
+    EXPECT_FALSE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(2.0f, 1.0f, 0.0f), false));
+
+    // New evidence must replace the previous bounds even at the same pose.
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    ground->front().z = -0.60f;
+    map.UpdateTerrainHeightGrid(ground, heights);
+    ASSERT_EQ(heights->size(), 1U);
+    EXPECT_TRUE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(1.0f, 0.0f, 2.75f), false));
+
+    // Moving to a clipped neighborhood changes both the XY key and the heights.
+    map.UpdateRobotPosition(Point3D(5.0f, 5.0f, 0.0f));
+    ground->front().x = ground->front().y = 5.0f;
+    ground->front().z = -0.75f;
+    map.UpdateTerrainHeightGrid(ground, heights);
+    ASSERT_EQ(heights->size(), 1U);
+    EXPECT_TRUE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(5.0f, 5.0f, 0.0f), false));
+    EXPECT_FALSE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(5.0f, 5.0f, 2.75f), false));
+    EXPECT_TRUE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(5.0f, 5.0f, -1.25f), true));
+    EXPECT_FALSE(MapHandler::IsNavPointOnTerrainNeighbor(Point3D(4.0f, 4.0f, 0.0f), false));
+}
+
 TEST(MapHandler, GoalHeightSelectsThePhysicallyClosestVerticalCell) {
     RestoreMapParameters restore;
     FARUtil::kLeafSize = 0.2f;

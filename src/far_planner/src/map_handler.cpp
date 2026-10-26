@@ -367,17 +367,36 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
 }
 
 void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs, std::unordered_set<int>& extend_terrain_obs) {
+    if (!kdtree_terrain_clould_ || !kdtree_terrain_clould_->getInputCloud() ||
+        kdtree_terrain_clould_->getInputCloud()->empty()) {
+        neighbor_obs.clear();
+        extend_terrain_obs.clear();
+        return;
+    }
     const float R = map_params_.cell_length * 0.7071f; // sqrt(2)/2
+    struct HeightBounds {
+        float min, max;
+        bool matched;
+    };
+    // Radius queries flatten Z. Reuse each XY column only within this update,
+    // so changed terrain and recentered neighborhoods never reuse old bounds.
+    const auto size = world_obs_cloud_grid_->GetSize();
+    const int xy_stride = size.x() * size.y();
+    std::unordered_map<int, HeightBounds> column_heights;
+    column_heights.reserve(neighbor_obs.size());
     for (auto it = neighbor_obs.begin(); it != neighbor_obs.end();) {
         const int idx = *it;
-        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); 
-        const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(pos.x, pos.y, 0.0f));
-        const int terrain_ind = terrain_height_grid_->Sub2Ind(sub);
-        bool inRange = false;
-        float minH, maxH;
-        const float avgH = NearestHeightOfRadius(pos, R, minH, maxH, inRange);
-        if (inRange && pos.z + map_params_.cell_height > minH &&
-                       pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
+        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx));
+        const int column = idx % xy_stride;
+        auto height = column_heights.find(column);
+        if (height == column_heights.end()) {
+            HeightBounds bounds;
+            NearestHeightOfRadius(pos, R, bounds.min, bounds.max, bounds.matched);
+            height = column_heights.emplace(column, bounds).first;
+        }
+        const auto& bounds = height->second;
+        if (bounds.matched && pos.z + map_params_.cell_height > bounds.min &&
+                              pos.z - map_params_.cell_height < bounds.max + FARUtil::kTolerZ)
         {
             ++it;
         } else {
