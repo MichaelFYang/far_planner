@@ -111,6 +111,10 @@ Goal refinement receives the current odometry position explicitly. It previously
 
 When local terrain occupies the goal grid, free-space classification requires a cell marked free without an overlapping inflated obstacle. Previously, one overlapping free sample could admit the goal to the covered traversal even when no free cell existed; a nearby navigation node could also bypass that blocked terrain. The navigation-node fallback now applies only when the goal grid has no terrain cells. A route-level regression fails on the old behavior and checks blocked terrain, obstacle removal, and the no-terrain fallback.
 
+In multi-layer mode, goal-grid projection now rejects obstacle points outside `goal.z ± kTolerZ`. Free points describe ground, so their height is compared after adding `vehicle_height`. This derived tolerance is `floor_height - 2 * voxel_dim`; its boundary remains inclusive, matching the node-layer rule. Out-of-band samples neither occupy nor free a goal-grid cell; the existing same-layer navigation-node fallback still applies when no relevant terrain remains. Single-layer mode retains its XY projection.
+
+A `MapHandler` → `GraphPlanner` regression starts the map on a ramp and verifies that coarse vertical extraction can include lower-floor samples at an upper-floor goal. It checks rejection of that free evidence, exclusion of the lower obstacle, preservation of a real goal-height obstacle, tolerance boundaries, and the single-layer policy. The old projection fails the cross-height cases. This validates goal classification, not full multi-layer navigation.
+
 Planner reset now clears the selected goal before dropping its pointer. Temporary goal removal also erases the node ID index entry, allowing the node to be released instead of accumulating across goal changes; lifecycle regressions failed before these fixes.
 
 Terrain A* now rejects a diagonal step if either adjacent cardinal cell is occupied. A two-obstacle corner regression failed on the old path, and the updated obstacle-grid route has an independently checked shortest length of 6 m under the corner-safe rule.
