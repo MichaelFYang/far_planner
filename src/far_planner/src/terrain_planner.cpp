@@ -181,7 +181,7 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
             }
         }
     }
-    if (!path.empty()) {
+    if (!path.empty() && local_path_pub_.getNumSubscribers() > 0) {
         viz_path_stack_.push_back(path);
     }
     return !path.empty();
@@ -203,6 +203,10 @@ void TerrainPlanner::ExtractPath(const TerrainNodePtr& end_ptr, PointStack& path
 }
 
 void TerrainPlanner::VisualPaths() {
+    if (local_path_pub_.getNumSubscribers() == 0) {
+        viz_path_stack_.clear();
+        return;
+    }
     Marker terrain_paths_marker;
     terrain_paths_marker.type = Marker::LINE_LIST;
     DPVisualizer::SetMarker(VizColor::ORANGE, "terrain_path", 0.3f, 0.85f, terrain_paths_marker);
