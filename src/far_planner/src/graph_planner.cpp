@@ -327,11 +327,12 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
                 is_use_internav_goal_   = true;
                 goal_node_ptr_          = node_ptr;
                 min_dist                = cur_dist;
-                goal_node_ptr_->is_goal = true;
             }
         }
     }
-    if (!is_use_internav_goal_) {
+    if (is_use_internav_goal_) {
+        goal_node_ptr_->is_goal = true;
+    } else {
         DynamicGraph::CreateNavNodeFromPoint(goal, goal_node_ptr_, false, false, true);
         DynamicGraph::AddNodeToGraph(goal_node_ptr_);
     }
