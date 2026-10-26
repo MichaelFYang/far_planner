@@ -21,14 +21,14 @@ void GraphExtractor::Init() {
     /* initialize subscriber and publisher */
     graph_viz_pub_ = nh.advertise<MarkerArray>("/graph_decoder_viz",5);
     viz_node_pub_  = nh.advertise<Marker>("/free_p_viz",5);
-    this->LoadParmas();
+    this->LoadParams();
     robot_id_ = 0;
     extracted_polys_.clear(), extracted_graph_.clear();
     this->ReadTrajFile(free_p_);
 }
 
 
-void GraphExtractor::LoadParmas() {
+void GraphExtractor::LoadParams() {
     const std::string prefix = "/boundary_handler/";
     nh.param<std::string>(prefix + "world_frame", ge_params_.frame_id, "map");
     std::string folder_path;
@@ -400,7 +400,6 @@ void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {
     Marker node_marker;
     node_marker.type = Marker::SPHERE;
     this->SetMarker(VizColor::GREEN, "free_position", 1.25f,  0.75f, node_marker);
-    std::size_t idx = 0;
     node_marker.pose.position.x = free_p.x;
     node_marker.pose.position.y = free_p.y;
     node_marker.pose.position.z = free_p.z;

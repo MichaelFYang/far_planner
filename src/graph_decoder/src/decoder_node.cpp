@@ -19,7 +19,7 @@ void GraphDecoder::Init() {
     graph_pub_     = nh.advertise<visibility_graph_msg::Graph>("decoded_vgraph", 5);
     graph_viz_pub_ = nh.advertise<MarkerArray>("/graph_decoder_viz",5);
 
-    this->LoadParmas();
+    this->LoadParams();
     save_graph_sub_ = nh.subscribe("/save_file_dir", 5, &GraphDecoder::SaveGraphCallBack, this);
     read_graph_sub_ = nh.subscribe("/read_file_dir", 5, &GraphDecoder::ReadGraphCallBack, this);
     request_graph_service_  = nh.advertiseService("/request_graph_service",  &GraphDecoder::RequestGraphService, this);
@@ -115,7 +115,7 @@ void GraphDecoder::CreateNavNode(const visibility_graph_msg::Node& msg,
 }
 
 
-void GraphDecoder::LoadParmas() {
+void GraphDecoder::LoadParams() {
     const std::string prefix = "/graph_decoder/";
     nh.param<std::string>(prefix + "world_frame", gd_params_.frame_id, "map");
     nh.param<float>(prefix + "visual_scale_ratio", gd_params_.viz_scale_ratio, 1.0);

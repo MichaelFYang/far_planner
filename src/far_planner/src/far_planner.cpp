@@ -65,7 +65,7 @@ void FARMaster::Init() {
   planner_viz_.Init(nh);
   map_handler_.Init(map_params_);
   scan_handler_.Init(scan_params_);
-  graph_msger_.Init(nh, msger_parmas_);
+  graph_msger_.Init(nh, msger_params_);
 
   /* init internal params */
   odom_node_ptr_      = NULL;
@@ -584,11 +584,11 @@ void FARMaster::LoadROSParams() {
   graph_params_.frontier_perimeter_thred = FARUtil::kMatchDist * 4.0f;
 
   // graph messager params
-  nh.param<int>(msger_prefix + "robot_id", msger_parmas_.robot_id, 0);
-  msger_parmas_.frame_id    = master_params_.world_frame;
-  msger_parmas_.votes_size  = graph_params_.votes_size;
-  msger_parmas_.pool_size   = graph_params_.pool_size;
-  msger_parmas_.dist_margin = graph_params_.filter_pos_margin;
+  nh.param<int>(msger_prefix + "robot_id", msger_params_.robot_id, 0);
+  msger_params_.frame_id    = master_params_.world_frame;
+  msger_params_.votes_size  = graph_params_.votes_size;
+  msger_params_.pool_size   = graph_params_.pool_size;
+  msger_params_.dist_margin = graph_params_.filter_pos_margin;
 
   // scan handler params
   scan_params_.terrain_range = master_params_.terrain_range;

@@ -115,7 +115,7 @@ private:
     ContourGraphParams  cg_params_;
     MapHandlerParams    map_params_;
     ScanHandlerParams   scan_params_;
-    GraphMsgerParams    msger_parmas_;
+    GraphMsgerParams    msger_params_;
     
     void LoadROSParams();
 
