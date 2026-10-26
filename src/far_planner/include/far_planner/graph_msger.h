@@ -76,12 +76,6 @@ private:
 
     void PublishGlobalGraph(const NodePtrStack& graphIn);
 
-    void ExtractConnectIdxs(const visibility_graph_msg::msg::Node& node,
-                            IdxStack& connect_idxs,
-                            IdxStack& poly_idxs,
-                            IdxStack& contour_idxs,
-                            IdxStack& traj_idxs);
-
 };
 
 #endif

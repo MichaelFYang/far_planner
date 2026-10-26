@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <unordered_set>
+#include <utility>
 
 /***************************************************************************************/
 
@@ -41,31 +42,26 @@ void GraphMsger::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::
         msg_node.is_frontier = node_ptr->is_frontier;
         msg_node.is_navpoint = node_ptr->is_navpoint;
         msg_node.is_boundary = node_ptr->is_boundary;
-        msg_node.surface_dirs.clear();
         msg_node.surface_dirs.push_back(FARUtil::Point3DToGeoMsgPoint(node_ptr->surf_dirs.first));
         msg_node.surface_dirs.push_back(FARUtil::Point3DToGeoMsgPoint(node_ptr->surf_dirs.second));
         // Encode connections
-        msg_node.connect_nodes.clear();
         for (const auto& cnode_ptr : node_ptr->connect_nodes) {
             if (!IsEncodeType(cnode_ptr)) continue;
             msg_node.connect_nodes.push_back(cnode_ptr->id);
         }
-        msg_node.poly_connects.clear();
         for (const auto& cnode_ptr : node_ptr->poly_connects) {
             if (!IsEncodeType(cnode_ptr)) continue;
             msg_node.poly_connects.push_back(cnode_ptr->id);
         }
-        msg_node.contour_connects.clear();
         for (const auto& cnode_ptr : node_ptr->contour_connects) {
             if (!IsEncodeType(cnode_ptr)) continue;
             msg_node.contour_connects.push_back(cnode_ptr->id);
         }
-        msg_node.trajectory_connects.clear();
         for (const auto& cnode_ptr : node_ptr->trajectory_connects) {
             if (!IsEncodeType(cnode_ptr)) continue;
             msg_node.trajectory_connects.push_back(cnode_ptr->id);
         }
-        graphOut.nodes.push_back(msg_node);
+        graphOut.nodes.push_back(std::move(msg_node));
     }
     graphOut.size = graphOut.nodes.size();
 }
@@ -77,12 +73,12 @@ void GraphMsger::UpdateGlobalGraph(const NodePtrStack& graph) {
 }
 
 void GraphMsger::PublishGlobalGraph(const NodePtrStack& graphIn) {
-    auto graph_msg = std::make_shared<visibility_graph_msg::msg::Graph>();
-    graph_msg->header.frame_id = gm_params_.frame_id;
-    graph_msg->header.stamp = nh_->now();
-    graph_msg->robot_id = gm_params_.robot_id;
-    this->EncodeGraph(graphIn, *graph_msg);
-    graph_pub_->publish(*graph_msg);
+    visibility_graph_msg::msg::Graph graph_msg;
+    graph_msg.header.frame_id = gm_params_.frame_id;
+    graph_msg.header.stamp = nh_->now();
+    graph_msg.robot_id = gm_params_.robot_id;
+    this->EncodeGraph(graphIn, graph_msg);
+    graph_pub_->publish(graph_msg);
 }
 
 bool GraphMsger::ValidateGraphMessage(const visibility_graph_msg::msg::Graph& graph,
@@ -140,6 +136,8 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr
     }
     NodePtrStack decoded_nodes;
     IdxMap nodeIdx_idx_map;
+    decoded_nodes.reserve(msg->nodes.size());
+    nodeIdx_idx_map.reserve(msg->nodes.size());
     for (std::size_t i=0; i<msg->nodes.size(); i++) {
         const auto& node = msg->nodes[i];
         const Point3D node_p = Point3D(node.position.x, node.position.y, node.position.z);
@@ -152,35 +150,33 @@ void GraphMsger::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr
         nodeIdx_idx_map.insert({node.id, i});
     }
     // Assign connections with fully connection votes
-    std::vector<std::size_t> connect_idxs, poly_idxs, contour_idxs, traj_idxs;
     for (std::size_t i=0; i<msg->nodes.size(); i++) {
         const auto& node = msg->nodes[i];
         const NavNodePtr node_ptr = decoded_nodes[i];
-        ExtractConnectIdxs(node, connect_idxs, poly_idxs, contour_idxs, traj_idxs);
         // graph connections
         NavNodePtr cnode_ptr = NULL;
-        for (const auto& cid : connect_idxs) {
+        for (const auto& cid : node.connect_nodes) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
             if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::AddEdge(node_ptr, cnode_ptr);
             }
         }
         // poly connections
-        for (const auto& cid : poly_idxs) {
+        for (const auto& cid : node.poly_connects) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
             if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillPolygonEdgeConnect(node_ptr, cnode_ptr, gm_params_.votes_size);
             }
         }
         // contour connections
-        for (const auto& cid : contour_idxs) {
+        for (const auto& cid : node.contour_connects) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
             if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillContourConnect(node_ptr, cnode_ptr, gm_params_.votes_size);
             }
         }
         // trajectory connection
-        for (const auto& cid : traj_idxs) {
+        for (const auto& cid : node.trajectory_connects) {
             cnode_ptr = IdToNodePtr(cid, nodeIdx_idx_map, decoded_nodes);
             if (cnode_ptr != NULL && (!node_ptr->is_active || !cnode_ptr->is_active || (node_ptr->is_boundary && cnode_ptr->is_boundary))) {
                 DynamicGraph::FillTrajConnect(node_ptr, cnode_ptr);
@@ -217,26 +213,5 @@ void GraphMsger::CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vno
     node_ptr->surf_dirs = surf_pair;
     const std::deque<PointPair> surf_queue(gm_params_.pool_size, surf_pair);
     node_ptr->surf_dirs_vec = surf_queue;
-}
-
-void GraphMsger::ExtractConnectIdxs(const visibility_graph_msg::msg::Node& node,
-                                    IdxStack& connect_idxs,
-                                    IdxStack& poly_idxs,
-                                    IdxStack& contour_idxs,
-                                    IdxStack& traj_idxs)
-{
-    connect_idxs.clear(), poly_idxs.clear(), contour_idxs.clear(), traj_idxs.clear();
-    for (const auto& cid : node.connect_nodes) {
-        connect_idxs.push_back((std::size_t)cid);
-    }
-    for (const auto& cid : node.poly_connects) {
-        poly_idxs.push_back((std::size_t)cid);
-    }    
-    for (const auto& cid : node.contour_connects) {
-        contour_idxs.push_back((std::size_t)cid);
-    }
-    for (const auto& cid : node.trajectory_connects) {
-        traj_idxs.push_back((std::size_t)cid);
-    }
 }
 

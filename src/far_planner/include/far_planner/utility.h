@@ -64,7 +64,6 @@ typedef std::vector<Point3D> PointStack;
 typedef std::vector<cv::Point2f> CVPointStack;
 typedef std::vector<NavNodePtr> NodePtrStack;
 
-typedef std::vector<std::size_t> IdxStack;
 typedef std::unordered_set<std::size_t> IdxSet;
 typedef std::unordered_map<std::size_t, std::size_t> IdxMap;
 
