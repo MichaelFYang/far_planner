@@ -4,9 +4,17 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <vector>
 
 #include "far_planner/map_handler.h"
 #include "far_planner/scan_handler.h"
+
+class ScanHandlerTestAccess {
+public:
+    static void Trace(ScanHandler& scan, const Eigen::Vector3i& endpoint) {
+        scan.SetRayCloud(endpoint);
+    }
+};
 
 TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
     grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
@@ -112,6 +120,39 @@ TEST(ScanHandler, EmptyInputsClearPriorOutputs) {
     output->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, 0.0f)));
     scan.ExtractDyObsCloud(empty, output);
     EXPECT_TRUE(output->empty());
+}
+
+TEST(ScanHandler, RayTracingCoversEachDominantAxisAndLargeOffsets) {
+    ScanHandlerParams params{};
+    params.terrain_range = 4.0f;
+    params.voxel_size = 1.0f;
+    params.ceil_height = 4.0f;
+    ScanHandler scan;
+    scan.Init(params);
+    scan.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    PointCloudPtr rays(new PointCloud);
+    const auto check = [&](const Eigen::Vector3i& endpoint,
+                           const std::vector<Point3D>& expected) {
+        scan.ReInitGrids();
+        ScanHandlerTestAccess::Trace(scan, endpoint);
+        scan.GridVisualCloud(rays, GridStatus::RAY);
+        ASSERT_EQ(rays->size(), expected.size());
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            EXPECT_FLOAT_EQ(rays->at(i).x, expected[i].x);
+            EXPECT_FLOAT_EQ(rays->at(i).y, expected[i].y);
+            EXPECT_FLOAT_EQ(rays->at(i).z, expected[i].z);
+        }
+    };
+    check(Eigen::Vector3i(7, 5, 4),
+          {Point3D(1.0f, 0.0f, 0.0f), Point3D(2.0f, 0.0f, 0.0f)});
+    check(Eigen::Vector3i(5, 7, 4),
+          {Point3D(0.0f, 1.0f, 0.0f), Point3D(0.0f, 2.0f, 0.0f)});
+    check(Eigen::Vector3i(5, 4, 7),
+          {Point3D(0.0f, 0.0f, 1.0f), Point3D(0.0f, 0.0f, 2.0f)});
+    // Squaring a 65536-cell offset overflowed the previous int guard.
+    check(Eigen::Vector3i(65540, 4, 4),
+          {Point3D(1.0f, 0.0f, 0.0f), Point3D(2.0f, 0.0f, 0.0f),
+           Point3D(3.0f, 0.0f, 0.0f), Point3D(4.0f, 0.0f, 0.0f)});
 }
 
 TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
