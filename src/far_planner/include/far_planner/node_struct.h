@@ -2,6 +2,7 @@
 #define NODE_STRUCT_H
 
 #include "point_struct.h"
+#include <boost/functional/hash.hpp>
 
 enum NodeType {
     NOT_DEFINED = 0,
