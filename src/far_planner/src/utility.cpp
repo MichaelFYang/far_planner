@@ -74,14 +74,6 @@ void FARUtil::ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHig
   }
 }
 
-void FARUtil::ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut) {
-  const float curTime = ros::Time::now().toSec() - FARUtil::systemStartTime;
-  for (std::size_t i=0; i<cloudInOut->size(); i++) {
-    cloudInOut->points[i].intensity = curTime;
-  }
-}
-
-
 void FARUtil::CropPCLCloud(const PointCloudPtr& cloudIn,
                           const PointCloudPtr& cloudCropped,
                           const Point3D& centriod,
@@ -546,31 +538,14 @@ void FARUtil::StackCloudByTime(const PointCloudPtr& curInCloud,
                               const PointCloudPtr& StackCloud,
                               const float& duration) 
 {
-  pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
-  outliers->indices.resize(StackCloud->size());
-  FARUtil::ResetCloudIntensityWithTime(curInCloud);
-  *StackCloud += *curInCloud;
-  std::size_t idx = 0;
-  std::size_t outIdx = 0;
   const float curTime = ros::Time::now().toSec() - FARUtil::systemStartTime;
-  for (const auto& pcl_p : StackCloud->points) {
-    if (curTime - pcl_p.intensity > duration) {
-      outliers->indices[outIdx] = idx;
-      outIdx ++;
-    }
-    idx ++;
-  }
-  outliers->indices.resize(outIdx);
-  FARUtil::RemoveIndicesFromCloud(outliers, StackCloud);
-}
-
-void FARUtil::RemoveIndicesFromCloud(const pcl::PointIndices::Ptr& outliers,
-                                    const PointCloudPtr& cloudInOut) {
-  pcl::ExtractIndices<PCLPoint> extract;
-  extract.setInputCloud(cloudInOut);
-  extract.setIndices(outliers);
-  extract.setNegative(true);
-  extract.filter(*cloudInOut);
+  for (auto& point : curInCloud->points) point.intensity = curTime;
+  *StackCloud += *curInCloud;
+  const auto end = std::remove_if(StackCloud->points.begin(), StackCloud->points.end(),
+      [curTime, duration](const PCLPoint& point) {
+        return curTime - point.intensity > duration;
+      });
+  StackCloud->resize(static_cast<std::size_t>(end - StackCloud->points.begin()));
 }
 
 float FARUtil::ApproxAtan2(const float& y, const float x) {

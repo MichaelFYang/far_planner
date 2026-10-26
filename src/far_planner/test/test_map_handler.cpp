@@ -138,3 +138,44 @@ TEST(CloudUtilities, ClearingKdTreePreservesEmptyCloudAndCanRebuild) {
     EXPECT_FALSE(FARUtil::kdtree_new_cloud_->getInputCloud());
     EXPECT_EQ(FARUtil::PointInNewCounter(Point3D(0.0f, 0.0f, 0.0f), 1.0f), 0U);
 }
+
+TEST(CloudUtilities, DecayKeepsRecentPointsInOrder) {
+#ifdef FAR_PLANNER_ROS1
+    ros::Time::init();
+    const double now = ros::Time::now().toSec();
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("cloud_decay_test");
+    const double now = node->now().seconds();
+#endif
+    const double previous_start = FARUtil::systemStartTime;
+    FARUtil::systemStartTime = now - 10.0;
+    PointCloudPtr stack(new PointCloud);
+    stack->push_back(FARUtil::Point3DToPCLPoint(Point3D(1.0f, 0.0f, 0.0f, 3.0f)));
+    stack->push_back(FARUtil::Point3DToPCLPoint(Point3D(2.0f, 0.0f, 0.0f, 9.0f)));
+    stack->push_back(FARUtil::Point3DToPCLPoint(Point3D(3.0f, 0.0f, 0.0f, 4.0f)));
+    PointCloudPtr current(new PointCloud);
+    current->push_back(FARUtil::Point3DToPCLPoint(Point3D(4.0f, 0.0f, 0.0f, -1.0f)));
+#ifdef FAR_PLANNER_ROS1
+    FARUtil::StackCloudByTime(current, stack, 5.0f);
+#else
+    FARUtil::StackCloudByTime(current, stack, 5.0f, node);
+#endif
+    // A bad negative duration must not overrun an index list after appending.
+    PointCloudPtr invalid_window(new PointCloud);
+    PointCloudPtr one_point(new PointCloud);
+    one_point->push_back(FARUtil::Point3DToPCLPoint(Point3D(5.0f, 0.0f, 0.0f)));
+#ifdef FAR_PLANNER_ROS1
+    FARUtil::StackCloudByTime(one_point, invalid_window, -1.0f);
+#else
+    FARUtil::StackCloudByTime(one_point, invalid_window, -1.0f, node);
+#endif
+    FARUtil::systemStartTime = previous_start;
+    EXPECT_TRUE(invalid_window->empty());
+    ASSERT_EQ(stack->size(), 2U);
+    EXPECT_FLOAT_EQ(stack->points[0].x, 2.0f);
+    EXPECT_FLOAT_EQ(stack->points[1].x, 4.0f);
+    EXPECT_FLOAT_EQ(stack->points[1].intensity, current->points[0].intensity);
+    EXPECT_GE(current->points[0].intensity, 9.0f);
+    EXPECT_LT(current->points[0].intensity, 11.0f);
+}
