@@ -99,6 +99,8 @@ A five-node geometric graph demonstrated the old failure: the cost to node 1 set
 
 Goal snapping now marks only the closest navigation point after scanning all candidates. Previously, each improving candidate retained `is_goal`, making a discarded point appear static after later goal resets. The new regression fails on the old behavior and checks selection plus replacement.
 
+Goal free-space classification now requires a grid cell marked free without an overlapping inflated obstacle. Previously, one overlapping free sample could admit the goal to the covered traversal even when no free cell existed. A route-level regression fails on the old behavior and also checks that removing the obstacle restores the covered route.
+
 Planner reset now clears the selected goal before dropping its pointer. Temporary goal removal also erases the node ID index entry, allowing the node to be released instead of accumulating across goal changes; lifecycle regressions failed before these fixes.
 
 Terrain A* now rejects a diagonal step if either adjacent cardinal cell is occupied. A two-obstacle corner regression failed on the old path, and the updated obstacle-grid route has an independently checked shortest length of 6 m under the corner-safe rule.

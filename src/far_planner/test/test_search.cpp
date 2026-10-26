@@ -89,6 +89,73 @@ private:
     bool previous_multi_layer_;
 };
 
+class GoalFreeSpaceGuard {
+public:
+    GoalFreeSpaceGuard()
+        : previous_inflate_(FARUtil::kObsInflate),
+          previous_terrain_range_(FARUtil::kTerrainRange)
+    {
+        FARUtil::kObsInflate = 2;
+        FARUtil::kTerrainRange = 10.0f;
+    }
+
+    ~GoalFreeSpaceGuard()
+    {
+        FARUtil::kObsInflate = previous_inflate_;
+        FARUtil::kTerrainRange = previous_terrain_range_;
+    }
+
+private:
+    int previous_inflate_;
+    float previous_terrain_range_;
+};
+
+TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "graph_goal_free_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("graph_goal_free_test");
+#endif
+    const GoalSnapGuard goal_guard;
+    const GoalFreeSpaceGuard free_space_guard;
+
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+    const auto odom = Node(std::numeric_limits<std::size_t>::max(), -1.0f, 0.0f);
+    odom->is_odom = true;
+    odom->is_navpoint = false;
+    planner.UpdaetVGraph({odom});
+    planner.UpdateGoal(Point3D(0.0f, 0.0f, 0.0f));
+    const auto goal = planner.GetGoalNodePtr();
+    ASSERT_NE(goal, nullptr);
+    Link(odom, goal);
+    planner.UpdaetVGraph({odom, goal});
+
+    PCLPoint point{};
+    PointCloudPtr obstacles(new PointCloud);
+    PointCloudPtr free(new PointCloud);
+    obstacles->push_back(point);
+    free->push_back(point);
+    planner.UpdateFreeTerrainGrid(Point3D(0.0f, 0.0f, 0.0f), obstacles, free);
+    planner.UpdateGraphTraverability(odom, goal);
+    EXPECT_TRUE(goal->is_traversable);
+    EXPECT_FALSE(goal->is_free_traversable);
+
+    obstacles->clear();
+    planner.UpdateFreeTerrainGrid(Point3D(0.0f, 0.0f, 0.0f), obstacles, free);
+    planner.UpdateGraphTraverability(odom, goal);
+    EXPECT_TRUE(goal->is_free_traversable);
+
+    planner.ResetPlannerInternalValues();
+}
+
 TEST(GraphGoal, OnlyTheNearestSnappedNavpointIsMarkedAsGoal)
 {
 #ifdef FAR_PLANNER_ROS1
