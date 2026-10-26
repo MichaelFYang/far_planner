@@ -75,6 +75,7 @@ auto clock_now() { return ros::Time::now(); }
 auto duration(double seconds) { return ros::Duration(seconds); }
 #else
 #include <rclcpp/rclcpp.hpp>
+#include <rosgraph_msgs/msg/clock.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -361,6 +362,27 @@ int main(int argc, char ** argv) {
     wait([&] { return goals.size() == 6; }, "No measurement-time goal");
     require(std::abs(goals.back().point.z - 2.25) < 1e-5, "Goal height used latest TF instead of odometry-time TF");
     std::cout << "PASS measurement-time TF (2.25 m, latest would be 6.25 m)" << std::endl;
+#ifndef FAR_UI_ROS1
+    // RViz can switch to a paused simulation clock after its plugins load.
+    auto clock_pub = observer->create_publisher<rosgraph_msgs::msg::Clock>("/clock", rclcpp::ClockQoS());
+    auto rviz_raw_node = rviz_node->get_raw_node();
+    require(rviz_raw_node->set_parameter(rclcpp::Parameter("use_sim_time", true)).successful,
+      "RViz rejected use_sim_time");
+    rosgraph_msgs::msg::Clock simulated_clock;
+    simulated_clock.clock.sec = 200;
+    for (int i = 0; i < 20; ++i) { clock_pub->publish(simulated_clock); pump(30); }
+    wait([&] { return rviz_raw_node->now().nanoseconds() == 200000000000LL; },
+      "RViz did not receive the simulation clock");
+    nav::Odometry simulated_odom;
+    simulated_odom.header.frame_id = "map";
+    simulated_odom.header.stamp = simulated_clock.clock;
+    simulated_odom.pose.pose.position.z = 1.25;
+    simulated_odom.pose.pose.orientation.w = 1.0;
+    for (int i = 0; i < 5; ++i) { publish(odom_pub, simulated_odom); pump(80); }
+    click_goal();
+    wait([&] { return goals.size() == 7; }, "No goal after switching RViz to simulated time");
+    require(goals.back().header.stamp == simulated_clock.clock, "Goal ignored RViz simulated time");
+#endif
     std::vector<sensor::Joy> goal_joys;
     for (const auto & joy : joys) if (joy.header.frame_id == "goalpoint_tool") goal_joys.push_back(joy);
     require(goal_joys.size() == goals.size(), "Goal/resume command count differs");
@@ -494,6 +516,18 @@ int main(int argc, char ** argv) {
     pump(150);
     for (const auto & joy : joys) for (float value : joy.axes) require(std::isfinite(value), "Nonfinite joystick axis");
     std::cout << "PASS joystick motion, release, idle and undersized stop" << std::endl;
+#ifndef FAR_UI_ROS1
+    for (const auto & joy : joys) {
+      if (joy.header.frame_id == "teleop_panel") {
+        require(joy.header.stamp == simulated_clock.clock,
+          "Panel command timestamp ignored RViz simulated time");
+      }
+    }
+    report["sim_time_checked"] = true;
+    std::cout << "PASS RViz simulation clock for goals, resume and joystick commands" << std::endl;
+#else
+    report["sim_time_checked"] = false;
+#endif
     report["toggle_messages"] = static_cast<int>(attempts.size() + updates.size());
     report["reset_messages"] = resets;
     report["panel_resumes"] = panel_resumes();

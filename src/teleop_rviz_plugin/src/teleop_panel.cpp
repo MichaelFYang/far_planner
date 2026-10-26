@@ -39,15 +39,14 @@ TeleopPanel::TeleopPanel(QWidget * parent)
 
   QTimer * output_timer = new QTimer(this);
 
-  connect(push_button_1_, SIGNAL(pressed()), this, SLOT(pressButton1()));
-  connect(push_button_2_, SIGNAL(pressed()), this, SLOT(pressButton2()));
-  connect(push_button_3_, SIGNAL(pressed()), this, SLOT(pressButton3()));
-  connect(push_button_4_, SIGNAL(pressed()), this, SLOT(pressButton4()));
-  connect(check_box_1_, SIGNAL(stateChanged(int)), this, SLOT(clickBox1(int)));
-  connect(check_box_2_, SIGNAL(stateChanged(int)), this, SLOT(clickBox2(int)));
-  connect(drive_widget_, SIGNAL(outputVelocity(float,float,bool)), this,
-      SLOT(setVel(float,float,bool)));
-  connect(output_timer, SIGNAL(timeout()), this, SLOT(sendVel()));
+  connect(push_button_1_, &QPushButton::pressed, this, &TeleopPanel::pressButton1);
+  connect(push_button_2_, &QPushButton::pressed, this, &TeleopPanel::pressButton2);
+  connect(push_button_3_, &QPushButton::pressed, this, &TeleopPanel::pressButton3);
+  connect(push_button_4_, &QPushButton::pressed, this, &TeleopPanel::pressButton4);
+  connect(check_box_1_, &QCheckBox::toggled, this, &TeleopPanel::clickBox1);
+  connect(check_box_2_, &QCheckBox::toggled, this, &TeleopPanel::clickBox2);
+  connect(drive_widget_, &DriveWidget::outputVelocity, this, &TeleopPanel::setVel);
+  connect(output_timer, &QTimer::timeout, this, &TeleopPanel::sendVel);
 
   output_timer->start(100);
 
