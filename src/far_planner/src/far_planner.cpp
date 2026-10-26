@@ -22,6 +22,13 @@ std::uint64_t MeasurementStamp(const ros::Time& stamp) {
 
 /***************************************************************************************/
 
+FARMaster::~FARMaster() {
+  // Break graph ownership cycles on normal shutdown as well as explicit reset.
+  graph_planner_.ResetPlannerInternalValues();
+  graph_manager_.ResetCurrentGraph();
+  contour_graph_.ResetCurrentContour();
+}
+
 void FARMaster::Init() {
   /* initialize subscriber and publisher */
   reset_graph_sub_    = nh.subscribe("/reset_visibility_graph", 5, &FARMaster::ResetGraphCallBack, this);

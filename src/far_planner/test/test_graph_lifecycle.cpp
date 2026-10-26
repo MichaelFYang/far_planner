@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "far_planner/dynamic_graph.h"
+#include "far_planner/far_planner.h"
 #include "far_planner/vote_selection.h"
 
 class GraphVoteTestAccess {
@@ -229,6 +230,55 @@ TEST(GraphLifecycle, ResetReleasesReciprocalEdgesAndSearchParents)
         a.reset(); b.reset();
     }
     EXPECT_TRUE(released);
+}
+
+TEST(GraphLifecycle, PlannerDestructionReleasesLinkedGraphsWithoutExplicitReset)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "planner_shutdown_test");
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+#endif
+    DynamicGraph graph;
+    ContourGraph contours;
+    graph.ResetCurrentGraph();
+    contours.ResetCurrentContour();
+    std::weak_ptr<NavNode> weak_nav;
+    std::weak_ptr<CTNode> weak_contour;
+    {
+        FARMaster planner;
+#ifndef FAR_PLANNER_ROS1
+        struct ShutdownBeforePlanner {
+            ~ShutdownBeforePlanner() { rclcpp::shutdown(); }
+        } shutdown_before_planner;
+#endif
+        auto first = std::make_shared<NavNode>();
+        auto second = std::make_shared<NavNode>();
+        first->id = 1;
+        second->id = 2;
+        DynamicGraph::AddNodeToGraph(first);
+        DynamicGraph::AddNodeToGraph(second);
+        DynamicGraph::AddEdge(first, second);
+        first->parent = second;
+        second->free_parent = first;
+        auto front = std::make_shared<CTNode>();
+        auto back = std::make_shared<CTNode>();
+        front->front = back;
+        back->back = front;
+        first->ctnode = front;
+        ContourGraph::contour_graph_ = {front, back};
+        weak_nav = first;
+        weak_contour = front;
+    }
+    EXPECT_TRUE(DynamicGraph::GetNavGraph().empty());
+    EXPECT_TRUE(ContourGraph::contour_graph_.empty());
+    EXPECT_TRUE(weak_nav.expired());
+    EXPECT_TRUE(weak_contour.expired());
+    // Also release fixture state when running against the failing baseline.
+    graph.ResetCurrentGraph();
+    contours.ResetCurrentContour();
 }
 
 TEST(GraphLifecycle, ContourResetReleasesLinkedVertices)

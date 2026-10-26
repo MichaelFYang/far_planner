@@ -36,7 +36,7 @@ struct FARMasterParams {
 class FARMaster {
 public:
     FARMaster() = default;
-    ~FARMaster() = default;
+    ~FARMaster();
 
     void Init(); // ROS initialization
     void Loop(); // Main Loop Function
