@@ -489,8 +489,9 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     const std::array<int, 4> dy = { 0, 1, 0,-1};
     std::deque<int> q;
     bool is_robot_terrain_init = false;
-    std::unordered_set<int> visited_set;
-    q.push_back(robot_idx), visited_set.insert(robot_idx);
+    std::vector<unsigned char> visited(terrain_height_grid_->GetCellNumber(), 0);
+    q.push_back(robot_idx);
+    visited[robot_idx] = 1;
     while (!q.empty()) {
         const int cur_id = q.front();
         q.pop_front();
@@ -509,6 +510,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
                     AddTraversePoint(cur_id);
                     is_robot_terrain_init = true; // init terrain height map current robot height
                     q.clear();
+                    visited[cur_id] = 2; // Search connected ground afresh from this seed.
                 }
             } else {
                 AddTraversePoint(cur_id);
@@ -517,14 +519,15 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
             continue;
         }
         const Eigen::Vector3i csub = terrain_height_grid_->Ind2Sub(cur_id);
+        const unsigned char visit_phase = is_robot_terrain_init ? 2 : 1;
         for (int i=0; i<4; i++) {
             Eigen::Vector3i ref_sub = csub;
             ref_sub.x() += dx[i], ref_sub.y() += dy[i];
             if (!terrain_height_grid_->InRange(ref_sub)) continue;
             const int ref_id = terrain_height_grid_->Sub2Ind(ref_sub);
-            if (!visited_set.count(ref_id) && (!is_robot_terrain_init || IsTraversableNeighbor(cur_id, ref_id))) {
+            if (visited[ref_id] != visit_phase && (!is_robot_terrain_init || IsTraversableNeighbor(cur_id, ref_id))) {
                 q.push_back(ref_id);
-                visited_set.insert(ref_id);
+                visited[ref_id] = visit_phase;
             }
         }
     }
