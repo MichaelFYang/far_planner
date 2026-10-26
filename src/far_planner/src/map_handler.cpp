@@ -8,6 +8,7 @@
 
 
 #include "far_planner/map_handler.h"
+#include "far_planner/parameter_validation.h"
 
 namespace {
 PointCloudPtr& EnsureCloud(grid_ns::Grid<PointCloudPtr, true>& grid, int index) {
@@ -21,13 +22,15 @@ PointCloudPtr& EnsureCloud(grid_ns::Grid<PointCloudPtr, true>& grid, int index) 
 
 void MapHandler::Init(const MapHandlerParams& params) {
     map_params_ = params;
-    const int row_num = std::ceil(map_params_.grid_max_length / map_params_.cell_length);
+    const int row_num = far_planner::CheckedDimension(
+        map_params_.grid_max_length, map_params_.cell_length, "world map width");
     const int col_num = row_num;
-    int level_num = std::ceil(map_params_.grid_max_height / map_params_.cell_height);
-    neighbor_Lnum_ = std::ceil(map_params_.sensor_range * 2.0f / map_params_.cell_length) + 1; 
+    const int level_num = far_planner::CheckedDimension(
+        map_params_.grid_max_height, map_params_.cell_height, "world map height", 0, true);
+    neighbor_Lnum_ = far_planner::CheckedDimension(
+        static_cast<double>(map_params_.sensor_range) * 2.0, map_params_.cell_length,
+        "map neighborhood width", 1, true);
     neighbor_Hnum_ = 5; 
-    if (level_num % 2 == 0) level_num ++;         // force to odd number, robot will be at center
-    if (neighbor_Lnum_ % 2 == 0) neighbor_Lnum_ ++; // force to odd number
 
     // inlitialize grid 
     Eigen::Vector3i pointcloud_grid_size(row_num, col_num, level_num);
@@ -43,8 +46,9 @@ void MapHandler::Init(const MapHandlerParams& params) {
     visited_cell_indices_.clear();
 
     // init terrain height map
-    int height_dim = std::ceil((map_params_.sensor_range + map_params_.cell_length) * 2.0f / FARUtil::robot_dim);
-    if (height_dim % 2 == 0) height_dim ++;
+    const int height_dim = far_planner::CheckedDimension(
+        (static_cast<double>(map_params_.sensor_range) + map_params_.cell_length) * 2.0,
+        FARUtil::robot_dim, "terrain-height grid width", 0, true);
     Eigen::Vector3i height_grid_size(height_dim, height_dim, 1);
     Eigen::Vector3d height_grid_origin(0,0,0);
     Eigen::Vector3d height_grid_resolution(FARUtil::robot_dim, FARUtil::robot_dim, FARUtil::kLeafSize);

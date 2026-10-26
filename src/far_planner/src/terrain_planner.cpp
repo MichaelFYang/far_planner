@@ -7,6 +7,7 @@
 
 
 #include "far_planner/terrain_planner.h"
+#include "far_planner/parameter_validation.h"
 
 #include <functional>
 
@@ -15,7 +16,9 @@
 void TerrainPlanner::Init(const ros::NodeHandle& nh, const TerrainPlannerParams& params) {
     nh_ = nh;
     tp_params_ = params;
-    row_num_ = std::ceil((FARUtil::kLocalPlanRange + tp_params_.radius) * 2.0f / tp_params_.voxel_size);
+    row_num_ = far_planner::CheckedDimension(
+        (static_cast<double>(FARUtil::kLocalPlanRange) + tp_params_.radius) * 2.0,
+        tp_params_.voxel_size, "local terrain grid width");
     col_num_ = row_num_;
     TerrainNodePtr init_terrain_node_ptr = NULL;
     Eigen::Vector3i grid_size(row_num_, col_num_, 1);
