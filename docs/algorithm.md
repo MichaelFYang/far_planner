@@ -103,11 +103,11 @@ Normal contour replacement now clears reciprocal front/back and connection links
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
-Default `Point3D` values now initialize XYZ and intensity to zero in the planner, boundary extractor, and graph decoder. Contour pixels construct a complete point directly, so their intensity is defined before any conversion to a PCL point.
+Default planner `Point3D` values initialize XYZ and intensity to zero. The boundary extractor and graph decoder use coordinate-only points with zero-initialized XYZ. Contour pixels construct a complete point directly, so their intensity is defined before PCL conversion.
 
 ## Boundary input stage
 
-The boundary extractor now reads ASCII PLY through a bounded, checked parser. It requires `element vertex N` and `end_header`, accepts at most one million finite XYZI vertices, and rejects truncated rows before modifying the accepted cloud or polygon stack. The trajectory reader requires finite X, Y, and Z values; extra trajectory fields remain allowed for the sample format. File streams close automatically, and the executable reports an input error without saving a partial graph. Parser unit tests cover malformed headers, missing coordinates, nonfinite values, and oversized IDs. Process smoke checks verify the sample still produces 25 nodes and malformed input exits without a graph.
+The boundary extractor reads ASCII PLY through a bounded, checked parser. It requires `element vertex N` and `end_header`, accepts at most one million finite XYZ vertices with a polygon index, and rejects truncated rows before modifying the polygon stack. Parsed vertices feed polygon grouping directly, without a temporary PCL cloud. Segment intersection uses a local 2D point type, so the extractor has no OpenCV dependency. The trajectory reader requires finite X, Y, and Z values; extra trajectory fields remain allowed for the sample format. File streams close automatically, and the executable reports an input error without saving a partial graph. Parser and intersection tests cover malformed input and segment edge cases. Process smoke checks verify the sample still produces 25 nodes and malformed input exits without a graph.
 
 ## Saved graph decoder stage
 

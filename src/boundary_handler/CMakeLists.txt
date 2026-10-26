@@ -12,25 +12,17 @@ endif()
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
-  std_srvs
-  sensor_msgs
   geometry_msgs
   visualization_msgs
   visibility_graph_msg
-  pcl_ros
 )
-find_package(PCL REQUIRED)
-find_package(OpenCV REQUIRED)
 
 catkin_package(CATKIN_DEPENDS
   roscpp
   std_msgs
-  std_srvs
-  sensor_msgs
   geometry_msgs
   visualization_msgs
   visibility_graph_msg
-  pcl_ros
 )
 
 add_executable(${PROJECT_NAME}
@@ -40,11 +32,8 @@ add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_include_directories(${PROJECT_NAME} PRIVATE
   include
   ${catkin_INCLUDE_DIRS}
-  ${PCL_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
 )
-add_definitions(${PCL_DEFINITIONS})
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -59,7 +48,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 )
 
 if(CATKIN_ENABLE_TESTING)
-  catkin_add_gtest(test_input_parser test/test_input_parser.cpp)
+  catkin_add_gtest(test_input_parser test/test_input_parser.cpp test/test_intersection.cpp)
   if(TARGET test_input_parser)
     target_compile_definitions(test_input_parser PRIVATE FAR_PLANNER_ROS1)
     target_include_directories(test_input_parser PRIVATE include)

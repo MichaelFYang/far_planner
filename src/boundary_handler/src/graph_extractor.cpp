@@ -12,6 +12,7 @@
 #include "boundary_handler/input_parser.h"
 
 #include <stdexcept>
+#include <utility>
 
 /***************************************************************************************/
 
@@ -22,7 +23,6 @@ void GraphExtractor::Init() {
     viz_node_pub_  = nh.advertise<Marker>("/free_p_viz",5);
     this->LoadParmas();
     robot_id_ = 0;
-    boundary_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     extracted_polys_.clear(), extracted_graph_.clear();
     this->ReadTrajFile(free_p_);
 }
@@ -108,7 +108,7 @@ void GraphExtractor::SetColor(const VizColor& color,
 void GraphExtractor::Run() {
     /* Main Running Function */
     ROS_INFO("Start reading boundary file ...");
-    this->ReadBoundaryFile(boundary_ptr_, extracted_polys_);
+    this->ReadBoundaryFile(extracted_polys_);
     ROS_INFO("Boundary reading success, constructing V-Graph ...");
     this->ConstructVGraph(extracted_polys_, extracted_graph_);
     ROS_INFO("V-Graph constructed.");
@@ -205,14 +205,9 @@ PointPair GraphExtractor::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNo
 }
 
 bool GraphExtractor::IsEdgeCollideSegment(const PointPair& line, const PointPair& edge) {
-    const cv::Point2f start_p(line.first.x, line.first.y);
-    const cv::Point2f end_p(line.second.x, line.second.y);
-    const cv::Point2f edge_p1(edge.first.x, edge.first.y);
-    const cv::Point2f edge_p2(edge.second.x, edge.second.y);
-    if (POLYOPS::doIntersect(start_p, end_p, edge_p1, edge_p2)) {
-        return true;
-    }
-    return false;
+    return POLYOPS::doIntersect(
+        {line.first.x, line.first.y}, {line.second.x, line.second.y},
+        {edge.first.x, edge.first.y}, {edge.second.x, edge.second.y});
 }
 
 bool GraphExtractor::IsInDirectConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
@@ -325,23 +320,30 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
     graphOut.size = graphOut.nodes.size();
 }
 
-void GraphExtractor::ReadBoundaryFile(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
+void GraphExtractor::ReadBoundaryFile(PolygonStack& polysOut) {
     std::ifstream input(ge_params_.bd_file_path);
     if (!input) throw std::runtime_error("Cannot open boundary: " + ge_params_.bd_file_path);
-    const auto vertices = boundary_handler::ReadAsciiPly(input);
-    PointCloudPtr candidate(new PointCloud);
-    candidate->reserve(vertices.size());
-    for (const auto& vertex : vertices) {
-        PCLPoint point{};
-        point.x = vertex.x;
-        point.y = vertex.y;
-        point.z = vertex.z;
-        point.intensity = vertex.polygon_index;
-        candidate->push_back(point);
-    }
+    const auto boundary_vertices = boundary_handler::ReadAsciiPly(input);
     PolygonStack polygons;
-    this->FilterPolyBoundary(candidate, polygons);
-    bd_cloud->swap(*candidate);
+    PointStack vertices;
+    int poly_id = static_cast<int>(boundary_vertices.front().polygon_index);
+    auto append_polygon = [&]() {
+        if (vertices.size() > 2) {
+            PolygonPtr polygon;
+            this->CreatePolygon(vertices, polygon, free_p_);
+            polygons.push_back(std::move(polygon));
+        }
+        vertices.clear();
+    };
+    for (const auto& vertex : boundary_vertices) {
+        const int vertex_poly_id = static_cast<int>(vertex.polygon_index);
+        if (vertex_poly_id != poly_id) {
+            append_polygon();
+            poly_id = vertex_poly_id;
+        }
+        vertices.emplace_back(vertex.x, vertex.y, vertex.z);
+    }
+    append_polygon();
     polysOut.swap(polygons);
 }
 
@@ -350,33 +352,6 @@ void GraphExtractor::ReadTrajFile(Point3D& free_p) {
     if (!input) throw std::runtime_error("Cannot open trajectory: " + ge_params_.traj_file_path);
     const auto values = boundary_handler::ReadTrajectory(input);
     free_p = Point3D(values[0], values[1], values[2]);
-}
-
-void GraphExtractor::FilterPolyBoundary(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
-    polysOut.clear();
-    if (bd_cloud->empty()) return;
-    int poly_id = (int)bd_cloud->points[0].intensity;
-    PointStack vertices;
-    vertices.clear();
-    for (const auto& p : bd_cloud->points) {
-        if ((int)p.intensity == poly_id) {
-            vertices.push_back(Point3D(p));
-        } else {
-            if (vertices.size() > 2) { // at least 3 vertices to form a polygon
-                PolygonPtr new_poly_ptr = NULL;
-                this->CreatePolygon(vertices, new_poly_ptr, free_p_);
-                polysOut.push_back(new_poly_ptr);
-            }
-            vertices.clear();
-            vertices.push_back(Point3D(p));
-            poly_id = (int)p.intensity;
-        }
-    }
-    if (vertices.size() > 2) { // last polygon
-        PolygonPtr new_poly_ptr = NULL;
-        this->CreatePolygon(vertices, new_poly_ptr, free_p_);
-        polysOut.push_back(new_poly_ptr);
-    }
 }
 
 void GraphExtractor::SaveVGraph(const NodePtrStack& graphIn) {

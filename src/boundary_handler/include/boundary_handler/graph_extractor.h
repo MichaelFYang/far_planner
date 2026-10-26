@@ -6,16 +6,17 @@
 #include <fstream>
 #include <vector>
 #include <unordered_map>
-#include <std_msgs/String.h>
+#include <std_msgs/ColorRGBA.h>
 #include <visibility_graph_msg/Graph.h>
 #include <visibility_graph_msg/Node.h>
-#include <std_srvs/Trigger.h>
 #include <geometry_msgs/Point.h>
 
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
 #include "boundary_handler/point_struct.h"
+#include "boundary_handler/input_parser.h"
+#include <algorithm>
 
 typedef visualization_msgs::Marker Marker;
 typedef visualization_msgs::MarkerArray MarkerArray;
@@ -116,7 +117,6 @@ private:
     Point3D free_p_;
     PointStack traj_;
 
-    PointCloudPtr boundary_ptr_;
 
     void LoadParmas();
 
@@ -130,11 +130,10 @@ private:
     
     void SetColor(const VizColor& color, const float alpha, Marker& scan_marker);
 
-    void ReadBoundaryFile(const PointCloudPtr& bd_cloud, PolygonStack& polysOut);
+    void ReadBoundaryFile(PolygonStack& polysOut);
 
     void ReadTrajFile(Point3D& free_p);
 
-    void FilterPolyBoundary(const PointCloudPtr& bd_cloud, PolygonStack& polysOut);
 
     bool IsValidConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 

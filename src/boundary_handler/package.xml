@@ -8,14 +8,9 @@
   <buildtool_depend>catkin</buildtool_depend>
   <depend>roscpp</depend>
   <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
-  <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>visibility_graph_msg</depend>
-  <depend>pcl_ros</depend>
-  <depend>libpcl-all-dev</depend>
-  <depend>libopencv-dev</depend>
   <test_depend>gtest</test_depend>
   <exec_depend>roslaunch</exec_depend>
   <exec_depend>far_planner</exec_depend>
