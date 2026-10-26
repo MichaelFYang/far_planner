@@ -379,9 +379,12 @@ The same 50.643-second indoor input recording was replayed with simulated time a
 | Humble desktop container, same planner source | 3 | 113 | 100 |
 | Lyrical desktop container, `5fb9a58` | 3 | 113 | 103 |
 | Noetic desktop-full container, callback scheduling fix | 3 | 110 | 99 |
+| Melodic desktop-full container, ROS 1 planner source at `d211f4d` | 3 | 110 | 99 |
 | Native Jazzy ASan/UBSan, same planner source | 3 | 113 | 102 |
 
 Humble used a SQLite bag with compatible metadata; all 18,363 serialized payloads, timestamps, and ordering matched the original MCAP recording. ROS 1 used [Rosbags](https://ternaris.gitlab.io/rosbags/) 0.11.9 to convert serialization and retain latched static TF. Every converted message passed a CDR round-trip check; one byte-level difference decoded to the same message values. Noetic previously produced no graph because measurement-time terrain matching failed at the default callback cadence. The sanitizer replay enabled leak detection and exited without AddressSanitizer, UndefinedBehaviorSanitizer, or LeakSanitizer findings. These are recorded-input checks, not closed-loop navigation on every distribution or nontrivial sensor-frame TF coverage.
+
+Melodic consumed the same converted ROS 1 bag at the default 2.5 Hz graph/planning rate. Its Python 2 observer retained the same graph, waypoint, arrival-transition, and requested-XY checks. The planner production sources matched the ROS 1 refactor branch at `d211f4d`; the process exited with code zero and no error/fatal log entries.
 
 ## Repeated navigation with live allocation profiling
 
