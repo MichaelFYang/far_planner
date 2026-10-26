@@ -3,7 +3,85 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <functional>
+#include <limits>
+#include <random>
+#include <vector>
+
 #include "far_planner/dynamic_graph.h"
+#include "far_planner/vote_selection.h"
+
+class GraphVoteTestAccess {
+public:
+    static void Connect(const NavNodePtr& first, const NavNodePtr& second) {
+        DynamicGraph::AddContourConnect(first, second);
+        DynamicGraph::AddEdge(first, second);
+    }
+
+    static void Select(DynamicGraph& graph, const NavNodePtr& node) {
+#ifndef FAR_PLANNER_ROS1
+        graph.nh_ = rclcpp::Node::make_shared("graph_vote_test");
+#endif
+        graph.TopTwoContourConnector(node);
+    }
+};
+
+TEST(GraphVotes, TopTwoSelectionPreservesStrictRankAndTies)
+{
+    far_planner::TopTwoScores empty;
+    EXPECT_FALSE(empty.Includes(0));
+    std::mt19937 random(12345);
+    std::uniform_int_distribution<int> score(-5, 5);
+    for (int count = 1; count <= 32; ++count) {
+        for (int sample = 0; sample < 40; ++sample) {
+            far_planner::TopTwoScores top;
+            std::vector<int> scores;
+            for (int i = 0; i < count; ++i) {
+                const int value = score(random);
+                top.Observe(value);
+                scores.push_back(value);
+            }
+            std::sort(scores.begin(), scores.end(), std::greater<int>());
+            for (const int value : scores) {
+                const int rank = std::count_if(scores.begin(), scores.end(),
+                    [value](int other) { return other > value; });
+                EXPECT_EQ(top.Includes(value), rank < 2);
+            }
+        }
+    }
+    far_planner::TopTwoScores extremes;
+    extremes.Observe(std::numeric_limits<int>::min());
+    extremes.Observe(std::numeric_limits<int>::max());
+    EXPECT_TRUE(extremes.Includes(std::numeric_limits<int>::min()));
+}
+
+TEST(GraphVotes, MissingPotentialVoteDoesNotDereferenceTheMapEnd)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "graph_vote_test");
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+#endif
+    DynamicGraph graph;
+    auto node = std::make_shared<NavNode>();
+    auto potential = std::make_shared<NavNode>();
+    potential->id = 42;
+    node->potential_contours.push_back(potential);
+    GraphVoteTestAccess::Connect(node, potential);
+    ASSERT_EQ(node->contour_connects.size(), 1U);
+    ASSERT_EQ(node->connect_nodes.size(), 1U);
+    GraphVoteTestAccess::Select(graph, node);
+    EXPECT_TRUE(node->contour_connects.empty());
+    EXPECT_TRUE(node->connect_nodes.empty());
+    EXPECT_TRUE(potential->contour_connects.empty());
+    EXPECT_TRUE(potential->connect_nodes.empty());
+#ifndef FAR_PLANNER_ROS1
+    rclcpp::shutdown();
+#endif
+}
 
 TEST(GraphLifecycle, EraseNodeFromStackRemovesFirstLastAndConsecutiveCopies)
 {
