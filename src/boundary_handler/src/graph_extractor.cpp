@@ -13,6 +13,11 @@
 #include "boundary_handler/parameter_validation.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 
+#if __has_include(<ament_index_cpp/get_package_share_path.hpp>)
+#include <ament_index_cpp/get_package_share_path.hpp>
+#else
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#endif
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <stdexcept>
 #include <utility>
@@ -46,9 +51,14 @@ void GraphExtractor::Init() {
 
 
 void GraphExtractor::LoadParams() {
+#if __has_include(<ament_index_cpp/get_package_share_path.hpp>)
+    const auto default_folder_path = (ament_index_cpp::get_package_share_path("far_planner") / "data").string();
+#else
+    const auto default_folder_path = ament_index_cpp::get_package_share_directory("far_planner") + "/data";
+#endif
     // Declare parameters if they haven't been declared yet
     nh_->declare_parameter("world_frame", "map");
-    nh_->declare_parameter("folder_path", "/home/workspace/src/boundary_handler/data/");
+    nh_->declare_parameter("folder_path", default_folder_path);
     nh_->declare_parameter("boundary_file", "boundary.ply");
     nh_->declare_parameter("traj_file", "trajectory.txt");
     nh_->declare_parameter("graph_file", "boundary_graph.vgh");
