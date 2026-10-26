@@ -71,7 +71,7 @@ private:
 
     NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
 
-    static void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
+    static bool EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
     void GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg);
 
