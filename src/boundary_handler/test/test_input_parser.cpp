@@ -1,8 +1,17 @@
 // Copyright (c) 2026 Fan Yang and contributors
 // SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+#include <unistd.h>
 #include "boundary_handler/input_parser.h"
+#include <visibility_graph_msg/graph_file_writer.h>
 
 TEST(InputParser, ParsesBoundaryAndTrajectory)
 {
@@ -43,6 +52,34 @@ TEST(InputParser, RejectsTruncatedAndNonfiniteCoordinates)
         std::istringstream input(content);
         EXPECT_THROW(boundary_handler::ReadTrajectory(input), std::runtime_error);
     }
+}
+
+TEST(GraphFileWriter, PreservesBoundaryVertexFloatPrecision)
+{
+    struct Point { float x, y, z; };
+    struct Node {
+        std::size_t id = 7;
+        int free_direct = 1;
+        Point position{1.0f, 2.0f, 1.23456789f};
+        std::pair<Point, Point> surf_dirs{{0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+        bool is_covered = true, is_frontier = false, is_navpoint = false, is_boundary = true;
+        std::vector<std::size_t> connect_idxs{7}, poly_idxs, contour_idxs, traj_idxs;
+    };
+    char directory_template[] = "/tmp/far-boundary-writer-XXXXXX";
+    const char* directory = ::mkdtemp(directory_template);
+    ASSERT_NE(directory, nullptr);
+    const std::string path = std::string(directory) + "/boundary_graph.vgh";
+    const auto node = std::make_shared<Node>();
+    graph_file::WriteGraphFile(path, std::vector<std::shared_ptr<Node>>{node});
+    std::ifstream input(path);
+    ASSERT_TRUE(input.good());
+    std::string id, type, x, y, z;
+    input >> id >> type >> x >> y >> z;
+    EXPECT_EQ(id, "7");
+    EXPECT_EQ(std::stof(z), node->position.z);
+    input.close();
+    std::remove(path.c_str());
+    ::rmdir(directory);
 }
 
 #ifdef FAR_PLANNER_ROS1

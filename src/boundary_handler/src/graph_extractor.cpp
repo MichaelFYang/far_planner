@@ -10,6 +10,7 @@
 #include "boundary_handler/graph_extractor.h"
 #include "boundary_handler/intersection.h"
 #include "boundary_handler/input_parser.h"
+#include <visibility_graph_msg/graph_file_writer.h>
 
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <stdexcept>
@@ -177,8 +178,7 @@ void GraphExtractor::ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& 
     const std::size_t GN = graphOut.size();
     // generate visbility connections
     for (std::size_t i=0; i<GN; i++) {
-        for (std::size_t j=0; j<GN; j++) {
-            if (i == j || j > i) continue;
+        for (std::size_t j=0; j<i; j++) {
             const NavNodePtr node_ptr1 = graphOut[i];
             const NavNodePtr node_ptr2 = graphOut[j];
             if (this->IsValidConnect(node_ptr1, node_ptr2)) {
@@ -381,45 +381,9 @@ void GraphExtractor::ReadTrajFile(Point3D& free_p) {
 }
 
 void GraphExtractor::SaveVGraph(const NodePtrStack& graphIn) {
-    if (graphIn.empty()) return;
-    const std::string file_path = ge_params_.vgraph_path;
-    if (file_path == "") return;
-    std::ofstream graph_file;
-    graph_file.open(file_path);
-    // Lambda function
-    auto OutputPoint3D = [&](const Point3D& p) {
-        graph_file << std::to_string(p.x) << " ";
-        graph_file << std::to_string(p.y) << " ";
-        graph_file << std::to_string(p.z) << " ";
-    };
-    for (const auto& node_ptr : graphIn) {
-        graph_file << std::to_string(node_ptr->id) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->free_direct)) << " ";
-        OutputPoint3D(node_ptr->position);
-        OutputPoint3D(node_ptr->surf_dirs.first);
-        OutputPoint3D(node_ptr->surf_dirs.second);
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_covered))  << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_frontier)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_navpoint)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_boundary)) << " ";
-        for (const auto& cidx : node_ptr->connect_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->poly_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        } 
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->contour_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->traj_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "\n";
-    }
-    graph_file.close();
+    if (graphIn.empty()) throw std::runtime_error("cannot save an empty boundary graph");
+    if (ge_params_.vgraph_path.empty()) throw std::invalid_argument("boundary graph output path is empty");
+    graph_file::WriteGraphFile(ge_params_.vgraph_path, graphIn);
 }
 
 void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {

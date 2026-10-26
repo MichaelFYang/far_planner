@@ -30,6 +30,7 @@ def test_decoder_keeps_last_valid_graph():
         node.create_subscription(MarkerArray, '/graph_decoder_viz', markers.append, 10)
         graphs = node.create_publisher(Graph, '/robot_vgraph', 10)
         save_requests = node.create_publisher(String, '/save_file_dir', 10)
+        read_requests = node.create_publisher(String, '/read_file_dir', 10)
         client = node.create_client(Trigger, '/request_graph_service')
 
         with open(os.path.join(directory, 'decoder.log'), 'w+') as log:
@@ -60,7 +61,8 @@ def test_decoder_keeps_last_valid_graph():
             try:
                 spin_until(lambda: client.service_is_ready()
                            and graphs.get_subscription_count() > 0
-                           and save_requests.get_subscription_count() > 0)
+                           and save_requests.get_subscription_count() > 0
+                           and read_requests.get_subscription_count() > 0)
                 valid = Graph()
                 valid.header.frame_id = 'map'
                 valid.robot_id = 7
@@ -100,6 +102,12 @@ def test_decoder_keeps_last_valid_graph():
                     saved_x = float(graph_file.readline().split()[2])
                 assert struct.pack('f', saved_x) == struct.pack('f', valid.nodes[0].position.x), \
                     'Graph save lost float coordinate precision'
+                previous = len(published)
+                read_requests.publish(String(data=save_path))
+                spin_until(lambda: len(published) > previous)
+                loaded = published[-1]
+                assert [n.id for n in loaded.nodes] == [1, 2]
+                assert struct.pack('f', loaded.nodes[0].position.x) == struct.pack('f', valid.nodes[0].position.x)
 
                 malformed = Graph()
                 malformed.header.frame_id = 'map'
