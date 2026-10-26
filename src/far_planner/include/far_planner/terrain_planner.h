@@ -71,6 +71,8 @@ private:
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
     std::vector<int> occupied_cells_;
+    PointCloudPtr local_obs_cloud_;
+    std::uint64_t local_terrain_revision_ = 0;
     std::uint64_t last_projected_revision_ = 0;
     bool needs_projection_ = true;
 
