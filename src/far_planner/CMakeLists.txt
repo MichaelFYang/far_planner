@@ -9,6 +9,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+find_package(PCL REQUIRED COMPONENTS common filters kdtree)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -18,11 +19,9 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   visualization_msgs
   visibility_graph_msg
-  pcl_ros
   pcl_conversions
   tf
 )
-find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui imgcodecs)
 find_package(Eigen3 REQUIRED)
 
@@ -35,7 +34,6 @@ catkin_package(CATKIN_DEPENDS
   nav_msgs
   visualization_msgs
   visibility_graph_msg
-  pcl_ros
   pcl_conversions
   tf
 )

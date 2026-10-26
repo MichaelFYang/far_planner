@@ -67,6 +67,7 @@ A measurement in frame `sensor` at time `t` must use `T_world_sensor(t)`, with t
 The timestamped-transform stage fixes the following confirmed defects:
 
 - Cloud and odometry lookups use the original ROS measurement timestamp, including nanoseconds before PCL rounds timestamps to microseconds. Identity-frame clouds also receive that timestamp in PCL metadata, so both transform paths report the same measurement time. Stamped measurements never request the latest pose.
+- On ROS 1, the stamped TF quaternion and translation now feed `pcl::transformPointCloud` directly, preserving the float quaternion/translation conversion used by the previous wrapper. This removes the `pcl_ros` dependency. Existing timestamp, rotation, intensity, metadata, failure-atomicity, and delayed-TF tests cover the replacement.
 - `ProcessCloud` builds a candidate and commits it only after a successful transform. Its callers return on failure before changing map state. Goal transform failures also propagate and prevent goal replacement.
 - Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
 - RViz goal clicks use the current fixed frame for their XY coordinates. The tool transforms its latest stamped odometry pose into that frame before copying the robot height; if the transform is unavailable, it does not publish the goal. Before any odometry arrives, the goal height defaults to zero. Each click publishes one goal and then the resume command, avoiding a duplicate planner goal reset.
@@ -329,6 +330,20 @@ The 50.6-second input recording was replayed with ROS simulated time under Addre
 After correcting the scan/terrain wiring, the installed Jazzy launch ran with `is_static_env=false` for five cycles of the same route: all 15 goals reported arrival, with a maximum final XY error of 0.133 m. During 222 seconds of observation it published 1,074 nonempty scan-ray debug clouds and 538 graph snapshots. After the first 60 seconds, sampled planner RSS stayed between 122.1 and 129.5 MiB; the published graph peaked at 91 nodes and ended at 80. This short repeat run exercises dynamic-mode processing in a static world; it does not establish moving-obstacle performance or long-duration memory stability.
 
 The indoor runs above cover one environment on native Jazzy; the garage case below adds a ramp route. Broader moving-obstacle cases, additional multi-layer routes, interactive RViz behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+
+## Build dependency audit
+
+The planner requests PCL `common`, `filters`, and `kdtree` before loading the ROS conversion package, rather than discovering every installed PCL module. Filters retain their own transitive dependencies. The unused PCL search header is removed. On ROS 1, direct PCL cloud transformation also removes the `pcl_ros` manifest/CMake dependency and the runtime `pcl_ros_tf`, segmentation, features, and ML libraries.
+
+| Build | PCL/VTK-related link-command entries, before / after | Direct ELF dependencies, before / after |
+| --- | ---: | ---: |
+| Native Jazzy | 67 / 15 | 28 / 28 |
+| Lyrical desktop container | 72 / 14 | 27 / 27 |
+| Noetic desktop-full container | 166 / 102 | 18 / 16 |
+
+Noetic's conversion package still exports upstream I/O/VTK link paths; these exports are retained. ELF linkers already discarded unused direct libraries on the tested ROS 2 builds, so their shorter link commands are not a measured runtime-memory improvement. OpenCV image codecs and GUI support remain required by image saving and visualization. GDCM dictionary initialization in the allocation trace comes through the installed OpenCV image-codec library.
+
+In eight alternating Noetic startups per build, sampled one second after process creation with the default configuration and no sensor input, median RSS changed from 99.60 to 79.78 MiB; mapped shared-library files fell from 217 to 213 in every run. All processes exited normally. This measures startup only. Humble/Jazzy/Lyrical each pass 120 reported planner checks, Noetic passes its full 264-check workspace suite, and the native C++ sanitizer suite passes 110 tests. The Noetic recording replay after the dependency change still produces three arrivals, 110 consistent graphs, 99 finite waypoints, and a normal exit.
 
 ## Cross-distribution recording replay
 

@@ -152,13 +152,16 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
 
     tf::StampedTransform transform;
     tf_listener->lookupTransform(target, source, stamp, transform);
+    const auto rotation = transform.getRotation();
+    const auto& translation = transform.getOrigin();
     PointCloud transformed;
-    pcl_ros::transformPointCloud(*cloudInOut, transformed, transform);
+    pcl::transformPointCloud(*cloudInOut, transformed,
+        Eigen::Vector3f(translation.x(), translation.y(), translation.z()),
+        Eigen::Quaternionf(rotation.w(), rotation.x(), rotation.y(), rotation.z()));
     transformed.header.frame_id = target;
     transformed.header.stamp = stamp.toNSec() / 1000ULL;
     cloudInOut->swap(transformed);
     if (sensor_origin) {
-        const auto& translation = transform.getOrigin();
         *sensor_origin = Point3D(translation.x(), translation.y(), translation.z());
     }
 }
