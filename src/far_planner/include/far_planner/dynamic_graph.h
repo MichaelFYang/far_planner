@@ -607,6 +607,7 @@ public:
         ClearNodeConnectInGraph(node_ptr);
         //DEBUG
         if (!node_ptr->contour_connects.empty()) std::cout << "DG: Goal node should not have contour connections." << std::endl;
+        RemoveNodeIdFromMap(node_ptr);
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 

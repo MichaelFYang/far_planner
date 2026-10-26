@@ -98,6 +98,43 @@ TEST(GraphGoal, OnlyTheNearestSnappedNavpointIsMarkedAsGoal)
     EXPECT_EQ(planner.GetGoalNodePtr(), farther);
     EXPECT_TRUE(farther->is_goal);
     EXPECT_FALSE(nearer->is_goal);
+    planner.ResetPlannerInternalValues();
+    EXPECT_FALSE(farther->is_goal);
+}
+
+TEST(GraphGoal, ResetReleasesTemporaryGoalFromTheNodeIndex)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "graph_goal_reset_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("graph_goal_reset_test");
+#endif
+    const GoalSnapGuard guard;
+    DynamicGraph graph;
+    graph.ResetCurrentGraph();
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+    planner.UpdateGoal(Point3D(10.0f, 10.0f, 0.0f));
+    auto goal = planner.GetGoalNodePtr();
+    ASSERT_NE(goal, nullptr);
+    const auto id = goal->id;
+    std::weak_ptr<NavNode> weak_goal = goal;
+    EXPECT_EQ(DynamicGraph::MappedNavNodeFromId(id), goal);
+
+    planner.ResetPlannerInternalValues();
+    EXPECT_TRUE(graph.GetNavGraph().empty());
+    const bool removed_from_index = DynamicGraph::MappedNavNodeFromId(id) == nullptr;
+    goal.reset();
+    const bool released = weak_goal.expired();
+    graph.ResetCurrentGraph();
+    EXPECT_TRUE(removed_from_index);
+    EXPECT_TRUE(released);
 }
 
 TEST(GraphSearch, DecreaseOfQueuedNodeMustReorderBothTraversals)
