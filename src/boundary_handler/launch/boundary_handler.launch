@@ -20,8 +20,8 @@ def generate_launch_description():
         DeclareLaunchArgument('graph_file', default_value='boundary_graph.vgh'),
         DeclareLaunchArgument(
             'folder_path',
-            default_value=str(Path(get_package_share_directory('far_planner')) / 'data') + '/',
-            description='Directory for boundary, trajectory, and output graph files (trailing /)',
+            default_value=str(Path(get_package_share_directory('far_planner')) / 'data'),
+            description='Directory for boundary, trajectory, and output graph files',
         ),
         DeclareLaunchArgument('use_rviz', default_value='true'),
         Node(

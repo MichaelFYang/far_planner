@@ -10,6 +10,7 @@
 #include "boundary_handler/graph_extractor.h"
 #include "boundary_handler/intersection.h"
 #include "boundary_handler/input_parser.h"
+#include "boundary_handler/parameter_validation.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 
 #include <rclcpp/executors/single_threaded_executor.hpp>
@@ -64,10 +65,11 @@ void GraphExtractor::LoadParams() {
     nh_->get_parameter("visual_scale_ratio", ge_params_.viz_scale_ratio);
     nh_->get_parameter("height_tolz", ge_params_.height_tolz);
 
-    // Append folder_path to the paths
-    ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
-    ge_params_.bd_file_path   = folder_path + ge_params_.bd_file_path;
-    ge_params_.traj_file_path = folder_path + ge_params_.traj_file_path;
+    ge_params_.frame_id = boundary_handler::NormalizeWorldFrame(ge_params_.frame_id);
+    boundary_handler::ValidateGeometryParameters(ge_params_.viz_scale_ratio, ge_params_.height_tolz);
+    ge_params_.vgraph_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.vgraph_path);
+    ge_params_.bd_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.bd_file_path);
+    ge_params_.traj_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.traj_file_path);
 }
 
 
@@ -524,7 +526,7 @@ int main(int argc, char** argv){
         ge_node = std::make_shared<GraphExtractor>();
         ge_node->Run();
     } catch (const std::exception& ex) {
-        RCLCPP_ERROR(rclcpp::get_logger("boundary_handler"), "Boundary input error: %s", ex.what());
+        RCLCPP_ERROR(rclcpp::get_logger("boundary_handler"), "Boundary setup error: %s", ex.what());
         rclcpp::shutdown();
         return 1;
     }
