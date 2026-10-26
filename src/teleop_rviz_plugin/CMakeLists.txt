@@ -10,7 +10,6 @@ find_package(rviz_rendering REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
@@ -32,7 +31,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE include)
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
   pluginlib::pluginlib
-  geometry_msgs::geometry_msgs
   rclcpp::rclcpp
   rviz_common::rviz_common
   rviz_rendering::rviz_rendering
@@ -46,7 +44,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Qt6::Widgets)
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
 ament_export_dependencies(
-  geometry_msgs
   rclcpp
   rviz_common
   rviz_rendering

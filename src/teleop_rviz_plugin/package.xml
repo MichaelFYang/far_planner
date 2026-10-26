@@ -14,7 +14,6 @@
   <depend>rviz_rendering</depend>
   <depend>rviz_default_plugins</depend>
   <depend>qt6-base-dev</depend>
-  <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>rviz_ogre_vendor</depend>
   <depend>pluginlib</depend>
