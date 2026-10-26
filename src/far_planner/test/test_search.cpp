@@ -167,6 +167,120 @@ TEST(GraphGoal, OverlappingObstacleAndFreeCellsAreNotFreeTerrain)
     planner.ResetPlannerInternalValues();
 }
 
+TEST(GraphGoal, TerrainEvidenceRespectsTheGoalLayer)
+{
+#ifdef FAR_PLANNER_ROS1
+    int argc = 0;
+    char** argv = nullptr;
+    if (!ros::isInitialized()) ros::init(argc, argv, "goal_layer_test");
+    ros::NodeHandle node;
+#else
+    if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+    auto node = rclcpp::Node::make_shared("goal_layer_test");
+#endif
+    const GoalSnapGuard goal_guard;
+    const GoalFreeSpaceGuard free_space_guard;
+    struct RestoreHeights {
+        float robot = FARUtil::robot_dim;
+        float vehicle = FARUtil::vehicle_height;
+        float tolerance = FARUtil::kTolerZ;
+        ~RestoreHeights() {
+            FARUtil::robot_dim = robot;
+            FARUtil::vehicle_height = vehicle;
+            FARUtil::kTolerZ = tolerance;
+        }
+    } restore;
+    FARUtil::kLeafSize = 0.25f;
+    FARUtil::robot_dim = 1.0f;
+    FARUtil::vehicle_height = 0.75f;
+    FARUtil::kTolerZ = 2.0f;
+    MapHandlerParams map_params{};
+    map_params.sensor_range = 3.0f;
+    map_params.floor_height = 2.5f;
+    map_params.cell_length = 1.0f;
+    map_params.cell_height = 1.0f;
+    map_params.grid_max_length = 10.0f;
+    map_params.grid_max_height = 10.0f;
+    map_params.height_voxel_dim = 0.5f;
+    MapHandler map;
+    map.Init(map_params);
+    // Map origin can be established on a ramp before either floor is visited.
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.5f));
+    GraphPlannerParams params{};
+    params.adjust_radius = 2.0f;
+    GraphPlanner planner;
+    planner.Init(node, params);
+    const auto odom = Node(std::numeric_limits<std::size_t>::max(), -1.0f, 0.0f);
+    odom->position.z = 0.5f;
+    odom->is_odom = true;
+    odom->is_navpoint = false;
+    const auto lower_nav = Node(std::numeric_limits<std::size_t>::max() - 1, -1.5f, 0.0f);
+    lower_nav->is_navpoint = true;
+    planner.UpdaetVGraph({odom, lower_nav});
+    planner.UpdateGoal(Point3D(0.0f, 0.0f, 2.125f));
+    const auto goal = planner.GetGoalNodePtr();
+    ASSERT_NE(goal, nullptr);
+    ASSERT_FALSE(FARUtil::IsAtSameLayer(lower_nav, goal));
+    Link(odom, goal); // Attemptable connection; free classification is checked separately.
+    planner.UpdaetVGraph({odom, lower_nav, goal});
+    PointCloudPtr input(new PointCloud);
+    PointCloudPtr obstacles(new PointCloud);
+    PointCloudPtr free_cloud(new PointCloud);
+    const auto check = [&](bool expected_free, const char* context) {
+        SCOPED_TRACE(context);
+        planner.UpdateFreeTerrainGrid(goal->position, obstacles, free_cloud);
+        planner.UpdateGraphTraverability(odom, goal);
+        EXPECT_TRUE(goal->is_traversable);
+        EXPECT_EQ(goal->is_free_traversable, expected_free);
+    };
+    const auto extract = [&]() {
+        map.GetCloudOfPoint(goal->position, obstacles, OBS_CLOUD, true);
+        map.GetCloudOfPoint(goal->position, free_cloud, FREE_CLOUD, true);
+    };
+    input->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, -0.75f)));
+    map.UpdateFreeCloudGrid(input);
+    extract();
+    ASSERT_EQ(free_cloud->size(), 1U); // Coarse vertical extraction includes the other floor.
+    check(false, "other-floor free terrain");
+
+    input->front().z = -0.25f;
+    input->front().intensity = 1.0f;
+    map.UpdateObsCloudGrid(input);
+    input->front().z = goal->position.z - FARUtil::vehicle_height;
+    input->front().intensity = 0.0f;
+    map.UpdateFreeCloudGrid(input);
+    extract();
+    ASSERT_EQ(obstacles->size(), 1U);
+    ASSERT_EQ(free_cloud->size(), 2U);
+    check(true, "other-floor obstacle");
+
+    input->front().z = goal->position.z;
+    input->front().intensity = 1.0f;
+    map.UpdateObsCloudGrid(input);
+    extract();
+    check(false, "obstacle at the goal height");
+
+    // The same height tolerance is inclusive for both terrain kinds. Free
+    // samples describe the ground; their body height includes vehicle_height.
+    for (const float offset : {-2.125f, -2.0f, 0.0f, 2.0f, 2.125f}) {
+        SCOPED_TRACE(offset);
+        obstacles->clear();
+        free_cloud->clear();
+        free_cloud->push_back(FARUtil::Point3DToPCLPoint(
+            Point3D(0.0f, 0.0f, goal->position.z - FARUtil::vehicle_height + offset)));
+        check(std::abs(offset) <= FARUtil::kTolerZ, "free height boundary");
+        free_cloud->front().z = goal->position.z - FARUtil::vehicle_height;
+        obstacles->push_back(FARUtil::Point3DToPCLPoint(
+            Point3D(0.0f, 0.0f, goal->position.z + offset, 1.0f)));
+        check(std::abs(offset) > FARUtil::kTolerZ, "obstacle height boundary");
+    }
+    FARUtil::IsMultiLayer = false;
+    obstacles->clear();
+    free_cloud->front().z = -0.75f;
+    check(true, "single-layer XY projection");
+    planner.ResetPlannerInternalValues();
+}
+
 TEST(GraphGoal, AdjustsFirstGoalBeforeAnyGraphSearch)
 {
 #ifdef FAR_PLANNER_ROS1

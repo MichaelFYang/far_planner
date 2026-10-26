@@ -426,6 +426,8 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     if (!freeCloudIn->empty() || !obsCloudIn->empty()) { // process terrain cloud
         const int C_IF = FARUtil::kObsInflate;
         for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
+            if (FARUtil::IsMultiLayer &&
+                std::abs(static_cast<double>(point.z) - center.z) > FARUtil::kTolerZ) continue;
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
             c_sub.z() = 0;
             free_terrain_grid_->ForEachXYCellInRadius(c_sub, C_IF, [&](int ind) {
@@ -434,6 +436,10 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
             });
         }
         for (const auto& point : freeCloudIn->points) { // Set free cloud in free terrain grid
+            // Free points describe ground, while the goal Z describes the vehicle body.
+            if (FARUtil::IsMultiLayer &&
+                std::abs(static_cast<double>(point.z) + FARUtil::vehicle_height - center.z) >
+                    FARUtil::kTolerZ) continue;
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
             c_sub.z() = 0;
             free_terrain_grid_->ForEachXYCellInRadius(c_sub, 1, [&](int ind) {
