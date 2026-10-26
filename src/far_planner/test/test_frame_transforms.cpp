@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 
@@ -193,6 +194,43 @@ TEST_F(FrameTransforms, UsesCloudMeasurementTimeInsteadOfLatestTransform)
     EXPECT_FLOAT_EQ(cloud->front().intensity, 7.0f);
     EXPECT_EQ(cloud->header.frame_id, "map");
     EXPECT_EQ(cloud->header.stamp, 10000000ULL);
+}
+
+TEST_F(FrameTransforms, RotatesCloudWithoutChangingOtherPointFields)
+{
+    const double quarter_turn_component = std::sqrt(0.5);
+#ifdef FAR_PLANNER_ROS1
+    tf::Transform transform(tf::Quaternion(0.0, 0.0, quarter_turn_component, quarter_turn_component),
+                            tf::Vector3(1.0, 2.0, 3.0));
+    ASSERT_TRUE(buffer->setTransform(
+        tf::StampedTransform(transform, Stamp(10, 0), "map", "rotated_sensor"), "test"));
+#else
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.frame_id = "map";
+    transform.child_frame_id = "rotated_sensor";
+    transform.header.stamp.sec = 10;
+    transform.transform.translation.x = 1.0;
+    transform.transform.translation.y = 2.0;
+    transform.transform.translation.z = 3.0;
+    transform.transform.rotation.z = quarter_turn_component;
+    transform.transform.rotation.w = quarter_turn_component;
+    ASSERT_TRUE(buffer->setTransform(transform, "test"));
+#endif
+    auto cloud = Cloud(10);
+    Point3D origin;
+    FARUtil::TransformPCLFrame("rotated_sensor", "map", Handle(), cloud, Stamp(10, 0), &origin);
+    ASSERT_EQ(cloud->size(), 1U);
+    EXPECT_NEAR(cloud->front().x, 0.0f, 1e-5f);
+    EXPECT_NEAR(cloud->front().y, 4.0f, 1e-5f);
+    EXPECT_NEAR(cloud->front().z, 3.5f, 1e-5f);
+    EXPECT_FLOAT_EQ(cloud->front().intensity, 7.0f);
+    EXPECT_FLOAT_EQ(origin.x, 1.0f);
+    EXPECT_FLOAT_EQ(origin.y, 2.0f);
+    EXPECT_FLOAT_EQ(origin.z, 3.0f);
+    EXPECT_EQ(cloud->header.frame_id, "map");
+    EXPECT_EQ(cloud->header.stamp, 10000000ULL);
+    EXPECT_EQ(cloud->width, 1U);
+    EXPECT_EQ(cloud->height, 1U);
 }
 
 TEST_F(FrameTransforms, ReturnsSensorOriginFromTheSameMeasurementTime)
