@@ -32,6 +32,7 @@
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>rcl_interfaces</test_depend>
+  <test_depend>ros2launch</test_depend>
   <test_depend>tf2_msgs</test_depend>
   <test_depend>rosgraph_msgs</test_depend>
   <test_depend>ament_lint_auto</test_depend>

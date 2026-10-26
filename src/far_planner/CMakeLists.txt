@@ -96,6 +96,7 @@ if(BUILD_TESTING)
     TIMEOUT 20
     ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
   )
+  ament_add_pytest_test(test_terrain_input_topics test/test_terrain_input_topics.py TIMEOUT 40)
 endif()
 
 ament_package()
