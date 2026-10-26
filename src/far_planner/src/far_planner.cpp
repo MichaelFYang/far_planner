@@ -651,7 +651,10 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(planner_prefix + "/reach_goal_vote_size", gp_params_.votes_size);
   nh_->get_parameter(planner_prefix + "/path_momentum_thred", gp_params_.momentum_thred);
 
+  far_planner::RequireNonNegativeFinite(gp_params_.converge_dist, "g_planner/converge_distance");
   far_planner::RequirePositiveFinite(gp_params_.adjust_radius, "g_planner/goal_adjust_radius");
+  far_planner::RequirePositiveInteger(gp_params_.votes_size, "g_planner/reach_goal_vote_size");
+  far_planner::RequireNonNegativeInteger(gp_params_.momentum_thred, "g_planner/path_momentum_thred");
   gp_params_.momentum_dist = master_params_.robot_dim / 2.0f;
   gp_params_.is_autoswitch = master_params_.is_attempt_autoswitch;
 
@@ -668,6 +671,11 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(graph_prefix + "/clear_dumper_thred", graph_params_.dumper_thred);
   nh_->get_parameter(graph_prefix + "/node_finalize_thred", graph_params_.finalize_thred);
   nh_->get_parameter(graph_prefix + "/filter_pool_size", graph_params_.pool_size);
+
+  far_planner::RequirePositiveInteger(graph_params_.votes_size, "graph/connect_votes_size");
+  far_planner::RequireNonNegativeInteger(graph_params_.dumper_thred, "graph/clear_dumper_thred");
+  far_planner::RequirePositiveInteger(graph_params_.finalize_thred, "graph/node_finalize_thred");
+  far_planner::RequirePositiveInteger(graph_params_.pool_size, "graph/filter_pool_size");
 
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
