@@ -8,6 +8,7 @@
 #include "goalpoint_rviz_plugin/goalpoint_tool.hpp"
 #include <rviz/frame_manager.h>
 #include <cmath>
+#include <exception>
 
 namespace rviz
 {
@@ -15,8 +16,8 @@ GoalPointTool::GoalPointTool()
 {
   shortcut_key_ = 'w';
 
-  topic_property_ = new StringProperty("Topic", "goalpoint",
-      "The topic on which to publish goal waypiont for dynamic route planner.",
+  topic_property_ = new StringProperty("Topic", "/goal_point",
+      "The topic on which to publish goal waypoints for the dynamic route planner.",
                                        getPropertyContainer(), SLOT(updateTopic()), this);
 }
 
@@ -24,15 +25,26 @@ void GoalPointTool::onInitialize()
 {
   PoseTool::onInitialize();
   setName("Goalpoint");
+  sub_ = nh_.subscribe<nav_msgs::Odometry>("/state_estimation", 5, &GoalPointTool::odomHandler,
+      this);
+  pub_joy_ = nh_.advertise<sensor_msgs::Joy>("/joy", 5);
   updateTopic();
 }
 
 void GoalPointTool::updateTopic()
 {
-  sub_ = nh_.subscribe<nav_msgs::Odometry>("/state_estimation", 5, &GoalPointTool::odomHandler,
-      this);
-  pub_ = nh_.advertise<geometry_msgs::PointStamped>("/goal_point", 5);
-  pub_joy_ = nh_.advertise<sensor_msgs::Joy>("/joy", 5);
+  const std::string topic = topic_property_->getStdString();
+  if (topic.empty()) {
+    pub_.shutdown();
+    ROS_WARN("Goal topic is empty");
+    return;
+  }
+  try {
+    pub_ = nh_.advertise<geometry_msgs::PointStamped>(topic, 5);
+  } catch (const std::exception & error) {
+    pub_.shutdown();
+    ROS_ERROR("Cannot publish goal on '%s': %s", topic.c_str(), error.what());
+  }
 }
 
 void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr & odom)
@@ -43,6 +55,9 @@ void GoalPointTool::odomHandler(const nav_msgs::Odometry::ConstPtr & odom)
 
 void GoalPointTool::onPoseSet(double x, double y, double /* theta */)
 {
+  if (!pub_) {
+    return;
+  }
   const std::string fixed_frame = context_->getFixedFrame().toStdString();
   if (fixed_frame.empty()) {
     ROS_WARN("Cannot set a goal without an RViz fixed frame");
