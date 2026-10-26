@@ -388,6 +388,7 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
 void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointStack& occupancy_centers,
                                const float& ceil_length, const float& ceil_height)
 {
+    if (!this->HasMapGridSubscribers()) return;
     visualization_msgs::msg::MarkerArray map_grid_marker_array;
     visualization_msgs::msg::Marker neighbor_marker, occupancy_marker;
     neighbor_marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
@@ -439,6 +440,7 @@ void DPVisualizer::SetMarker(const rclcpp::Node::SharedPtr nh,
 void DPVisualizer::VizPointCloud(const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr viz_pub, 
                                  const PointCloudPtr& pc) 
 {
+    if (!viz_pub || viz_pub->get_subscription_count() == 0) return;
     sensor_msgs::msg::PointCloud2 msg_pc;
     pcl::toROSMsg(*pc, msg_pc);
     msg_pc.header.frame_id = FARUtil::worldFrameId;
