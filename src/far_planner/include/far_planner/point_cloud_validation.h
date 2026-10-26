@@ -3,6 +3,8 @@
 #ifndef FAR_PLANNER_POINT_CLOUD_VALIDATION_H
 #define FAR_PLANNER_POINT_CLOUD_VALIDATION_H
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
@@ -25,20 +27,28 @@ bool ValidPointCloudLayout(const PointCloud2& cloud, bool require_intensity) {
     if (cloud.is_bigendian != native_big_endian) return false;
 
     using Field = std::decay_t<decltype(cloud.fields.front())>;
-    bool has_x = false, has_y = false, has_z = false, has_intensity = false;
+    std::array<bool, 4> seen{};
+    std::array<std::uint32_t, 4> offsets{};
     for (const auto& field : cloud.fields) {
-        if (field.name != "x" && field.name != "y" && field.name != "z" &&
-            field.name != "intensity") continue;
+        std::size_t index;
+        if (field.name == "x") index = 0;
+        else if (field.name == "y") index = 1;
+        else if (field.name == "z") index = 2;
+        else if (field.name == "intensity") index = 3;
+        else continue;
         if (field.datatype != Field::FLOAT32 || field.count != 1 ||
-            static_cast<std::uint64_t>(field.offset) + sizeof(float) > cloud.point_step) {
+            static_cast<std::uint64_t>(field.offset) + sizeof(float) > cloud.point_step ||
+            seen[index]) {
             return false;
         }
-        if (field.name == "x") has_x = true;
-        else if (field.name == "y") has_y = true;
-        else if (field.name == "z") has_z = true;
-        else has_intensity = true;
+        for (std::size_t i = 0; i < seen.size(); ++i) {
+            if (seen[i] && field.offset < static_cast<std::uint64_t>(offsets[i]) + sizeof(float) &&
+                offsets[i] < static_cast<std::uint64_t>(field.offset) + sizeof(float)) return false;
+        }
+        seen[index] = true;
+        offsets[index] = field.offset;
     }
-    return has_x && has_y && has_z && (!require_intensity || has_intensity);
+    return seen[0] && seen[1] && seen[2] && (!require_intensity || seen[3]);
 }
 
 }  // namespace far_planner
