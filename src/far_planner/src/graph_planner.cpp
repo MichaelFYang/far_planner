@@ -370,6 +370,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
     if (is_origin_free) {
         goal_ptr->position = ori_pos_height;
     } else { // reproject to nearby free space
+        if (!free_terrain_grid_->InRange(ori_sub)) return;
         std::array<int, 4> dx = {-1, 0, 1, 0};
         std::array<int, 4> dy = { 0, 1, 0,-1};
         std::deque<int> q;

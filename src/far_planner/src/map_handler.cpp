@@ -27,9 +27,9 @@ void MapHandler::Init(const MapHandlerParams& params) {
     const int col_num = row_num;
     const int level_num = far_planner::CheckedDimension(
         map_params_.grid_max_height, map_params_.cell_height, "world map height", 0, true);
-    neighbor_Lnum_ = far_planner::CheckedDimension(
+    neighbor_Lnum_ = std::min(row_num, far_planner::CheckedDimension(
         static_cast<double>(map_params_.sensor_range) * 2.0, map_params_.cell_length,
-        "map neighborhood width", 1, true);
+        "map neighborhood width", 1, true));
     neighbor_Hnum_ = 5; 
 
     // inlitialize grid 
@@ -78,6 +78,7 @@ void MapHandler::ResetGripMapCloud() {
 }
 
 void MapHandler::ClearObsCellThroughPosition(const Point3D& point) {
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) return;
     const Eigen::Vector3i psub = world_obs_cloud_grid_->Pos2Sub(point.x, point.y, point.z);
     std::vector<Eigen::Vector3i> ray_subs;
     world_obs_cloud_grid_->RayTraceSubs(robot_cell_sub_, psub, ray_subs);
@@ -86,8 +87,9 @@ void MapHandler::ClearObsCellThroughPosition(const Point3D& point) {
         for (int k = -H; k <= H; k++) {
             Eigen::Vector3i csub = sub;
             csub.z() += k;
+            if (!world_obs_cloud_grid_->InRange(csub)) continue;
             const int ind = world_obs_cloud_grid_->Sub2Ind(csub);
-            if (!world_obs_cloud_grid_->InRange(csub) || neighbor_obs_indices_.find(ind) == neighbor_obs_indices_.end()) continue; 
+            if (neighbor_obs_indices_.find(ind) == neighbor_obs_indices_.end()) continue;
             world_obs_cloud_grid_->EraseCell(ind);
             const auto free_cloud = world_free_cloud_grid_->GetCellValue(ind);
             if (!free_cloud || free_cloud->empty()) {
