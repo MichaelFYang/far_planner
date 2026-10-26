@@ -21,6 +21,12 @@ inline void RequireNonNegativeFinite(double value, const std::string& name) {
         throw std::invalid_argument(name + " must be nonnegative and finite");
 }
 
+inline std::uint16_t CheckedRobotId(int value) {
+    if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+        throw std::invalid_argument("graph_msger/robot_id must be between 0 and 65535");
+    return static_cast<std::uint16_t>(value);
+}
+
 inline int CheckedDimension(double span, double resolution, const std::string& name,
                             int extra = 0, bool odd = false) {
     RequirePositiveFinite(span, name + " span");

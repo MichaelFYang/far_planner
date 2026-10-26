@@ -141,6 +141,8 @@ The graph decoder preserves all three coordinates of both surface directions whe
 
 Before encoding a graph snapshot, the planner selects eligible nodes with at least one visibility, polygon, contour, or trajectory edge. It then emits connections only when their target is in that selection. This preserves nodes connected only by non-visibility edges and keeps every edge list consistent when a neighbor is isolated, unfinished, excluded by type, or absent from the supplied graph. Graph-message regressions check both cases and receiver validation.
 
+The graph wire format uses 32-bit node IDs and counts and a 16-bit robot ID. Startup rejects a robot ID outside 0–65535. Before publication, encoding rejects duplicate or unrepresentable selected node IDs and leaves the outgoing snapshot empty; the publisher skips that snapshot instead of silently narrowing IDs. Boundary tests cover the largest valid node ID, oversized IDs, duplicate IDs, and robot ID limits.
+
 ## Scan sensor origin stage
 
 When a scan arrives in a sensor frame, the cloud transform also supplies the sensor's world-frame translation at that same scan timestamp. Scan ray tracing starts from that translation, accounting for the scanner's offset from the odometry body. A scan already in the world frame still uses the interpolated odometry position because its original sensor frame is unavailable. Failed TF leaves both the accepted cloud and ray origin unchanged. Moving-TF regression tests cover the returned origin, interpolation, identity fallback, failure, and rotation while preserving intensity and cloud metadata.
