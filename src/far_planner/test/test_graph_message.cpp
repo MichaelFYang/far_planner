@@ -139,3 +139,38 @@ TEST(GraphMessage, EncodesOnlyEdgesToPublishedNodes) {
     std::string error;
     EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error)) << error;
 }
+
+TEST(GraphMessage, RetainsNodesWithOnlyNonVisibilityEdges) {
+    const auto trajectory_a = EncodeNode(11);
+    const auto trajectory_b = EncodeNode(12);
+    const auto contour_a = EncodeNode(21);
+    const auto contour_b = EncodeNode(22);
+    const auto polygon_a = EncodeNode(31);
+    const auto polygon_b = EncodeNode(32);
+    trajectory_a->trajectory_connects = {trajectory_b};
+    trajectory_b->trajectory_connects = {trajectory_a};
+    contour_a->contour_connects = {contour_b};
+    contour_b->contour_connects = {contour_a};
+    polygon_a->poly_connects = {polygon_b};
+    polygon_b->poly_connects = {polygon_a};
+
+    const auto graph = GraphEncodingTestAccess::Encode(
+        {trajectory_a, trajectory_b, contour_a, contour_b, polygon_a, polygon_b});
+    trajectory_a->trajectory_connects.clear();
+    trajectory_b->trajectory_connects.clear();
+    contour_a->contour_connects.clear();
+    contour_b->contour_connects.clear();
+    polygon_a->poly_connects.clear();
+    polygon_b->poly_connects.clear();
+
+    ASSERT_EQ(graph.nodes.size(), 6U);
+    EXPECT_EQ(graph.size, 6U);
+    EXPECT_EQ(graph.nodes[0].trajectory_connects, std::vector<std::uint32_t>({12}));
+    EXPECT_EQ(graph.nodes[1].trajectory_connects, std::vector<std::uint32_t>({11}));
+    EXPECT_EQ(graph.nodes[2].contour_connects, std::vector<std::uint32_t>({22}));
+    EXPECT_EQ(graph.nodes[3].contour_connects, std::vector<std::uint32_t>({21}));
+    EXPECT_EQ(graph.nodes[4].poly_connects, std::vector<std::uint32_t>({32}));
+    EXPECT_EQ(graph.nodes[5].poly_connects, std::vector<std::uint32_t>({31}));
+    std::string error;
+    EXPECT_TRUE(GraphMsger::ValidateGraphMessage(graph, "map", error)) << error;
+}
