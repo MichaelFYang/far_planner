@@ -65,6 +65,23 @@ std::size_t CellSize(MapHandler& map, float x, CloudType type) {
 
 }  // namespace
 
+TEST(MapHandler, RejectsInvalidDerivedGridDimensions) {
+    RestoreMapParameters restore;
+    FARUtil::robot_dim = 0.8f;
+    MapHandlerParams params{};
+    params.sensor_range = 6.0f;
+    params.cell_length = 0.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 20.0f;
+    params.grid_max_height = 6.0f;
+    MapHandler map;
+    EXPECT_THROW(map.Init(params), std::invalid_argument);
+
+    params.cell_length = 1.0f;
+    params.grid_max_length = 1e30f;
+    EXPECT_THROW(map.Init(params), std::invalid_argument);
+}
+
 TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     RestoreMapParameters restore;
     FARUtil::kLeafSize = 0.2f;

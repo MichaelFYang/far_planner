@@ -125,7 +125,7 @@ private:
                               const bool& is_resized_img=false,
                               const bool& is_crop_idx=true) 
     {
-        const float ratio = is_resized_img ? cd_params_.kRatio : 1.0f;
+        const float ratio = is_resized_img ? static_cast<float>(MAT_RESIZE) / MAT_SIZE : 1.0f;
         const int c_idx = is_resized_img ? CMAT_RESIZE : CMAT;
         row_idx = c_idx + (int)std::round((posIn.x - c_posIn.x) * VOXEL_DIM_INV * ratio);
         col_idx = c_idx + (int)std::round((posIn.y - c_posIn.y) * VOXEL_DIM_INV * ratio);
@@ -157,7 +157,7 @@ private:
                                            const Point3D& c_pos,
                                            const bool& is_resized_img=false) {
         const int c_idx = is_resized_img ? CMAT_RESIZE : CMAT;
-        const float ratio = is_resized_img ? cd_params_.kRatio : 1.0f;
+        const float ratio = is_resized_img ? static_cast<float>(MAT_RESIZE) / MAT_SIZE : 1.0f;
         return Point3D((cv_p.y - c_idx) * cd_params_.voxel_dim / ratio + c_pos.x,
                        (cv_p.x - c_idx) * cd_params_.voxel_dim / ratio + c_pos.y,
                        odom_pos_.z);
