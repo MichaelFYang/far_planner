@@ -123,7 +123,9 @@ Default planner `Point3D` values initialize XYZ and intensity to zero. Polygon, 
 
 Trajectory sampling runs on every enabled graph-extraction call, even when the contour matcher has no new vertices. The previous empty-contour return skipped both initial trajectory creation and a bridge point requested by `IsInterNavpointNecessary`. Sampling uses that existing distance/connectivity policy and its recorded free-odometry position. Extraction clears its output each time, and graph-update freezing skips extraction at the caller.
 
-Unit regressions cover initial sampling, a requested bridge position, and no repeated sample while stationary. A live ROS 2 test suppresses all obstacle vertices with the image threshold and checks that one trajectory node is published and remains stable across graph ticks. The ROS 1 callback regression checks trajectory initialization under the same empty-vertex condition.
+Terrain initialization accepts nonempty nearby free or obstacle observations after frame/time validation and map processing. The previous obstacle-only gate kept the planner idle in observed, obstacle-free space. Empty terrain alone still does not initialize planning.
+
+Unit regressions cover initial sampling, a requested bridge position, and no repeated sample while stationary. Live ROS 2 tests cover free-only terrain and terrain with an obstacle below the contour threshold. They check accepted free observations, one stable trajectory node across graph ticks, and a direct goal waypoint. ROS 1 also checks free-only startup through graph and waypoint publication.
 
 ## Boundary input stage
 
