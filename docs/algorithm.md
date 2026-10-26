@@ -69,6 +69,7 @@ The timestamped-transform stage fixes the following confirmed defects:
 - Empty frame IDs are rejected; leading slashes are normalized consistently. Zero-stamped sensor clouds and odometry are rejected. Zero remains an explicit latest-transform request for operator goals.
 - RViz goal clicks use the current fixed frame for their XY coordinates. The tool transforms its latest stamped odometry pose into that frame before copying the robot height; if the transform is unavailable, it does not publish the goal. Before any odometry arrives, the goal height defaults to zero.
 - TF queries do not block the planner executor. Bounded odometry, scan, local-terrain, and terrain queues wait for their stamped TF and, where needed, matching odometry without silently using the latest transform.
+- Before PCL conversion, PointCloud2 inputs require a complete native-endian binary layout with float32 XYZ fields. Terrain and local-terrain clouds also require float32 intensity for free/obstacle classification; scans may omit it. Malformed inputs are rejected before entering the TF queues. A zero-width, zero-row-step local cloud with no data remains an explicit clear measurement.
 
 The cross-stream timing stage adds the following policies:
 

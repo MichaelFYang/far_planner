@@ -9,6 +9,7 @@
 
 #include "far_planner/far_planner.h"
 #include "far_planner/parameter_validation.h"
+#include "far_planner/point_cloud_validation.h"
 
 #include <stdexcept>
 
@@ -695,12 +696,14 @@ void FARMaster::ProcessPendingOdometry() {
 }
 
 FARMaster::CloudProcessResult FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
-                                                       const PointCloudPtr& cloudOut, Point3D* sensor_origin) {
+                                                       const PointCloudPtr& cloudOut, bool require_intensity,
+                                                       Point3D* sensor_origin) {
   if (!this->ValidMeasurementTime(MeasurementStamp(pc->header.stamp))) {
     ROS_WARN_THROTTLE(1.0, "Dropping point cloud without a valid measurement timestamp");
     return CloudProcessResult::INVALID;
   }
   if (FARUtil::NormalizeFrameID(pc->header.frame_id).empty()) return CloudProcessResult::INVALID;
+  if (!far_planner::ValidPointCloudLayout(*pc, require_intensity)) return CloudProcessResult::INVALID;
   PointCloudPtr candidate(new PointCloud);
   pcl::fromROSMsg(*pc, *candidate);
   FARUtil::RemoveNanInfPoints(candidate);
@@ -739,7 +742,7 @@ void FARMaster::ProcessPendingScans() {
         !tf_listener_->canTransform(master_params_.world_frame, source,
                                     scan.message->header.stamp)) break;
     Point3D sensor_origin(scan_position[0], scan_position[1], scan_position[2]);
-    const auto result = this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, &sensor_origin);
+    const auto result = this->ProcessCloud(scan.message, FARUtil::cur_scan_cloud_, false, &sensor_origin);
     if (result == CloudProcessResult::TF_UNAVAILABLE) break;
     if (result == CloudProcessResult::INVALID) {
       pending_scans_.PopReady();
@@ -756,6 +759,7 @@ void FARMaster::ScanCallBack(const sensor_msgs::PointCloud2ConstPtr& scan_pc) {
   if (master_params_.is_static_env) return;
   const auto stamp = MeasurementStamp(scan_pc->header.stamp);
   if (!this->ValidMeasurementTime(stamp) ||
+      !far_planner::ValidPointCloudLayout(*scan_pc, false) ||
       !pending_scans_.Push(stamp, scan_pc, last_scan_stamp_, far_planner::SteadyNowNs())) {
     ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order scan");
     return;
@@ -767,7 +771,9 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
   this->CheckClockEpoch();
   if (master_params_.is_static_env) return;
   const auto stamp = MeasurementStamp(pc->header.stamp);
+  const bool explicit_empty = pc->width == 0 && pc->row_step == 0 && pc->data.empty();
   if (!this->ValidMeasurementTime(stamp) ||
+      (!explicit_empty && !far_planner::ValidPointCloudLayout(*pc, true)) ||
       !pending_local_terrains_.Push(stamp, pc, last_local_terrain_stamp_,
                                     far_planner::SteadyNowNs())) {
     ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order local terrain");
@@ -798,10 +804,10 @@ void FARMaster::ProcessPendingLocalTerrain() {
         !tf_listener_->canTransform(master_params_.world_frame, source,
                                     pc->header.stamp)) break;
     // Only an explicitly empty measurement may clear the local obstacle view.
-    if (pc->width == 0 && pc->data.empty()) {
+    if (pc->width == 0 && pc->row_step == 0 && pc->data.empty()) {
       local_terrain_ptr_->clear();
     } else {
-      const auto result = this->ProcessCloud(pc, local_terrain_ptr_);
+      const auto result = this->ProcessCloud(pc, local_terrain_ptr_, true);
       if (result == CloudProcessResult::TF_UNAVAILABLE) break;
       if (result == CloudProcessResult::INVALID) {
         pending_local_terrains_.PopReady();
@@ -819,6 +825,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {
   this->CheckClockEpoch();
   const auto stamp = MeasurementStamp(pc->header.stamp);
   if (!this->ValidMeasurementTime(stamp) ||
+      !far_planner::ValidPointCloudLayout(*pc, true) ||
       !pending_terrains_.Push(stamp, pc, last_terrain_stamp_, far_planner::SteadyNowNs())) {
     ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order terrain");
     return;
@@ -851,7 +858,7 @@ void FARMaster::ProcessPendingTerrain() {
       if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
           !tf_listener_->canTransform(master_params_.world_frame, source,
                                       pc->header.stamp)) break;
-      const auto result = this->ProcessCloud(pc, temp_cloud_ptr_);
+      const auto result = this->ProcessCloud(pc, temp_cloud_ptr_, true);
       if (result == CloudProcessResult::TF_UNAVAILABLE) break;
       if (result == CloudProcessResult::INVALID) {
         pending_terrains_.PopReady();
