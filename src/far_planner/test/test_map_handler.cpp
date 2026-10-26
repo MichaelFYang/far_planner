@@ -336,6 +336,9 @@ TEST(MapHandler, FindsConnectedGroundAfterSearchingFromEmptyRobotCell) {
     PointCloudPtr heights(new PointCloud);
     map.UpdateTerrainHeightGrid(ground, heights);
     EXPECT_EQ(heights->size(), 2U);
+    ASSERT_EQ(ground->size(), 2U);
+    EXPECT_FLOAT_EQ(ground->points[0].x, 1.0f);
+    EXPECT_FLOAT_EQ(ground->points[1].y, 1.0f);
 }
 
 TEST(MapHandler, EmptyTerrainAndResetDiscardOldHeightSamples) {
