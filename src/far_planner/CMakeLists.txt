@@ -81,7 +81,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 
 if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
-  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp)
+  catkin_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_overlap_cloud.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp)
   if(TARGET test_frame_transforms)
     target_compile_definitions(test_frame_transforms PRIVATE FAR_PLANNER_ROS1)
     target_link_libraries(test_frame_transforms far_planner_core)

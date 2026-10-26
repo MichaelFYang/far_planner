@@ -9,6 +9,19 @@
 
 #include "far_planner/utility.h"
 
+namespace {
+PointCloudPtr TaggedMergedCloud(const PointCloudPtr& first, float first_tag,
+                                const PointCloudPtr& second, float second_tag) {
+  PointCloudPtr merged(new PointCloud);
+  *merged = *first + *second;
+  const std::size_t split = first->size();
+  for (std::size_t i = 0; i < merged->size(); ++i) {
+    merged->points[i].intensity = i < split ? first_tag : second_tag;
+  }
+  return merged;
+}
+}  // namespace
+
 /***************************************************************************************/
 
 void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size) {
@@ -55,15 +68,12 @@ void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
                                       const PointCloudPtr& cloudRefer,
                                       const PointCloudPtr& cloudNew)
 {
-  PointCloudPtr temp_new_cloud(new pcl::PointCloud<PCLPoint>());
-  FARUtil::ResetCloudIntensity(cloudIn, false);
-  FARUtil::ResetCloudIntensity(cloudRefer, true);
-  cloudNew->clear(), temp_new_cloud->clear();
-  *temp_new_cloud = *cloudIn + *cloudRefer;
+  PointCloudPtr temp_new_cloud = TaggedMergedCloud(cloudIn, 0.0f, cloudRefer, 255.0f);
+  cloudNew->clear();
   FARUtil::FilterCloud(temp_new_cloud, FARUtil::kLeafSize * 2.0);
   for (const auto& p : temp_new_cloud->points) {
     if (p.intensity < FARUtil::kNewPIThred) {
-      cloudNew->points.push_back(p);
+      cloudNew->push_back(p);
     } 
   }
 }
@@ -492,11 +502,8 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
                                  const PointCloudPtr& cloudOverlapOut,
                                  const float& margin_ratio)
 {
-  PointCloudPtr temp_cloud(new pcl::PointCloud<PCLPoint>());
-  FARUtil::ResetCloudIntensity(cloudIn, true);
-  FARUtil::ResetCloudIntensity(cloudRef, false);
-  *temp_cloud = *cloudIn + *cloudRef;
-  const float leaf_size = margin_ratio * FARUtil::kLeafSize;;
+  PointCloudPtr temp_cloud = TaggedMergedCloud(cloudIn, 255.0f, cloudRef, 0.0f);
+  const float leaf_size = margin_ratio * FARUtil::kLeafSize;
   FARUtil::FilterCloud(temp_cloud, leaf_size);
   cloudOverlapOut->clear(), cloudOverlapOut->resize(temp_cloud->size());
   std::size_t idx = 0;
@@ -511,19 +518,10 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
 
 void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                  const PointCloudPtr& cloudRef,
-                                 const bool& is_copy_cloud) 
+                                 const bool&)
 {
   if (cloudRef->empty() || cloudInOut->empty()) return;
-  PointCloudPtr temp_cloud(new pcl::PointCloud<PCLPoint>());
-  PointCloudPtr ref_cloud = cloudRef;
-  if (is_copy_cloud) {
-    PointCloudPtr copyRefCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*cloudRef, *copyRefCloud);
-    ref_cloud = copyRefCloud;
-  }
-  FARUtil::ResetCloudIntensity(cloudInOut, true);
-  FARUtil::ResetCloudIntensity(ref_cloud, false);
-  *temp_cloud = *cloudInOut + *ref_cloud;
+  PointCloudPtr temp_cloud = TaggedMergedCloud(cloudInOut, 255.0f, cloudRef, 0.0f);
   const float leaf_size = FARUtil::kLeafSize * 1.2;
   FARUtil::FilterCloud(temp_cloud, leaf_size);
   cloudInOut->clear(), cloudInOut->resize(temp_cloud->size());

@@ -110,6 +110,8 @@ TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
     PointCloudPtr baseline(new PointCloud);
     scan.GridVisualCloud(baseline, GridStatus::SCAN);
     ASSERT_FALSE(baseline->empty());
+    EXPECT_EQ(baseline->width, baseline->size());
+    EXPECT_EQ(baseline->height, 1U);
 
     scan.ReInitGrids();
     auto mixed_cloud = CloudAt(1.0f);
@@ -118,6 +120,7 @@ TEST(ScanHandler, DistantCorruptPointDoesNotInflateLocalGrid) {
     PointCloudPtr actual(new PointCloud);
     scan.GridVisualCloud(actual, GridStatus::SCAN);
     EXPECT_EQ(actual->size(), baseline->size());
+    EXPECT_EQ(actual->width, actual->size());
 }
 
 TEST(MapHandler, RejectsInvalidDerivedGridDimensions) {
@@ -158,6 +161,8 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     auto obstacles = CloudAt(1.0f);
     obstacles->push_back(FARUtil::Point3DToPCLPoint(Point3D(5.0f, 0.0f, 0.0f)));
     map.UpdateObsCloudGrid(obstacles);
+    EXPECT_EQ(obstacles->width, obstacles->size());
+    EXPECT_EQ(obstacles->height, 1U);
     EXPECT_EQ(CellSize(map, 1.0f, OBS_CLOUD), 1U);
     EXPECT_EQ(CellSize(map, 5.0f, OBS_CLOUD), 1U);
 
@@ -198,6 +203,8 @@ TEST(MapHandler, UpdatesAndRemovesOnlyAffectedCells) {
     PointCloudPtr terrain_height(new PointCloud);
     map.UpdateTerrainHeightGrid(ground, terrain_height);
     EXPECT_FALSE(terrain_height->empty());
+    EXPECT_EQ(terrain_height->width, terrain_height->size());
+    EXPECT_EQ(terrain_height->height, 1U);
 
     // When the next terrain analysis yields no traversable cells, the old
     // index must not become a synthetic height sample at the world origin.

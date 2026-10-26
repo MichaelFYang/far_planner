@@ -282,6 +282,7 @@ public:
                                     const PointCloudPtr& cloudOverlapOut,
                                     const float& margin_ratio=1.0);
 
+    // The copy flag remains for source compatibility; the reference is always preserved.
     static void RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                    const PointCloudPtr& cloudRef,
                                    const bool& is_copy_cloud=false);
