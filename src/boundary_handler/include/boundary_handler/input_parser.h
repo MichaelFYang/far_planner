@@ -16,7 +16,8 @@
 namespace boundary_handler {
 
 struct BoundaryVertex {
-    float x, y, z, polygon_index;
+    float x, y, z;
+    int polygon_index;
 };
 
 inline std::vector<BoundaryVertex> ReadAsciiPly(std::istream& input) {
@@ -63,13 +64,16 @@ inline std::vector<BoundaryVertex> ReadAsciiPly(std::istream& input) {
         if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
         std::istringstream fields(line);
         BoundaryVertex vertex{};
-        if (!(fields >> vertex.x >> vertex.y >> vertex.z >> vertex.polygon_index) ||
+        double polygon_index = 0.0;
+        if (!(fields >> vertex.x >> vertex.y >> vertex.z >> polygon_index) ||
             !std::isfinite(vertex.x) || !std::isfinite(vertex.y) ||
-            !std::isfinite(vertex.z) || !std::isfinite(vertex.polygon_index) ||
-            vertex.polygon_index < static_cast<float>(std::numeric_limits<int>::min()) ||
-            vertex.polygon_index >= static_cast<float>(std::numeric_limits<int>::max())) {
+            !std::isfinite(vertex.z) || !std::isfinite(polygon_index) ||
+            std::trunc(polygon_index) != polygon_index ||
+            polygon_index < static_cast<double>(std::numeric_limits<int>::min()) ||
+            polygon_index > static_cast<double>(std::numeric_limits<int>::max())) {
             throw std::runtime_error("Invalid boundary vertex values");
         }
+        vertex.polygon_index = static_cast<int>(polygon_index);
         vertices.push_back(vertex);
     }
     if (vertices.size() != count) throw std::runtime_error("Truncated boundary vertex data");
