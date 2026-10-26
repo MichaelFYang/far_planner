@@ -115,7 +115,6 @@ private:
     ContourGraphParams ctgraph_params_;
     float ALIGN_ANGLE_COS;
     NavNodePtr odom_node_ptr_ = NULL;
-    bool is_robot_inside_poly_ = false;
 
     // global contour set
     static std::unordered_set<NavEdge, navedge_hash> global_contour_set_;
