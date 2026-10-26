@@ -4,6 +4,7 @@
     <param name="is_opencv_visual" value="false"/>
     <param name="is_pub_boundary" value="false"/>
     <param name="main_run_freq" value="10.0"/>
+    <param name="CDetector/filter_count_value" value="100"/>
     <param name="MapHandler/map_grid_max_length" value="100.0"/>
     <param name="MapHandler/map_grad_max_height" value="10.0"/>
   </node>

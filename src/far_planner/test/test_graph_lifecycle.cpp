@@ -49,6 +49,16 @@ public:
     static void ClearMerged(DynamicGraph& graph) {
         graph.ClearMergedNodesInGraph();
     }
+
+    static void SetTrajectoryState(DynamicGraph& graph, const NavNodePtr& odom,
+                                   const NavNodePtr& current, const NodePtrStack& nearby,
+                                   const Point3D& last_position, bool bridge) {
+        graph.odom_node_ptr_ = odom;
+        graph.cur_internav_ptr_ = current;
+        graph.internav_near_nodes_ = nearby;
+        graph.last_connect_pos_ = last_position;
+        graph.is_bridge_internav_ = bridge;
+    }
 };
 
 TEST(GraphNodes, DirectDefaultConstructionHasNeutralState)
@@ -385,4 +395,73 @@ TEST_F(TerrainVoteLifecycle, GoalReplacementDoesNotAccumulateTerrainHistory) {
         EXPECT_TRUE(goal->terrain_votes.empty());
         EXPECT_TRUE(neighbor->terrain_votes.empty());
     }
+}
+
+class TrajectoryExtraction : public ::testing::Test {
+protected:
+    void SetUp() override {
+#ifdef FAR_PLANNER_ROS1
+        if (!ros::isInitialized()) {
+            int argc = 0;
+            char** argv = nullptr;
+            ros::init(argc, argv, "trajectory_extraction_test");
+        }
+#endif
+        saved_free_position_ = FARUtil::free_odom_p;
+        saved_clearance_ = FARUtil::kNavClearDist;
+        saved_near_distance_ = FARUtil::kNearDist;
+        saved_debug_ = FARUtil::IsDebug;
+        FARUtil::free_odom_p = Point3D(1.0f, 2.0f, 0.75f);
+        FARUtil::kNavClearDist = 0.6f;
+        FARUtil::kNearDist = 0.8f;
+        FARUtil::IsDebug = false;
+        graph_ = std::make_unique<DynamicGraph>();
+        graph_->ResetCurrentGraph();
+        DynamicGraph::CreateNavNodeFromPoint(FARUtil::free_odom_p, odom_, true);
+        DynamicGraph::AddNodeToGraph(odom_);
+        GraphVoteTestAccess::SetTrajectoryState(*graph_, odom_, nullptr, {},
+                                               FARUtil::free_odom_p, false);
+    }
+
+    void TearDown() override {
+        graph_->ResetCurrentGraph();
+        FARUtil::free_odom_p = saved_free_position_;
+        FARUtil::kNavClearDist = saved_clearance_;
+        FARUtil::kNearDist = saved_near_distance_;
+        FARUtil::IsDebug = saved_debug_;
+    }
+
+    std::unique_ptr<DynamicGraph> graph_;
+    NavNodePtr odom_;
+    Point3D saved_free_position_;
+    float saved_clearance_, saved_near_distance_;
+    bool saved_debug_;
+};
+
+TEST_F(TrajectoryExtraction, EmptyContourInputCanInitializeTrajectoryWithoutRepeatingIt) {
+    ASSERT_TRUE(graph_->ExtractGraphNodes({}));
+    ASSERT_EQ(graph_->GetNewNodes().size(), 1U);
+    const auto trajectory = graph_->GetNewNodes().front();
+    EXPECT_TRUE(trajectory->is_navpoint);
+    EXPECT_FALSE(trajectory->is_odom);
+    EXPECT_EQ(trajectory->position, FARUtil::free_odom_p);
+    DynamicGraph::AddNodeToGraph(trajectory);
+    GraphVoteTestAccess::SetTrajectoryState(*graph_, odom_, trajectory, {trajectory},
+                                           trajectory->position, false);
+    EXPECT_FALSE(graph_->ExtractGraphNodes({}));
+    EXPECT_TRUE(graph_->GetNewNodes().empty());
+}
+
+TEST_F(TrajectoryExtraction, EmptyContourInputCanCreateARequestedBridgePoint) {
+    NavNodePtr current;
+    DynamicGraph::CreateNavNodeFromPoint(Point3D(0.0f, 0.0f, 0.75f), current, false, true);
+    DynamicGraph::AddNodeToGraph(current);
+    const Point3D last_position(3.0f, 0.0f, 0.75f);
+    FARUtil::free_odom_p = Point3D(4.0f, 0.0f, 0.75f);
+    GraphVoteTestAccess::SetTrajectoryState(*graph_, odom_, current, {current},
+                                           last_position, true);
+    ASSERT_TRUE(graph_->ExtractGraphNodes({}));
+    ASSERT_EQ(graph_->GetNewNodes().size(), 1U);
+    EXPECT_TRUE(graph_->GetNewNodes().front()->is_navpoint);
+    EXPECT_EQ(graph_->GetNewNodes().front()->position, last_position);
 }

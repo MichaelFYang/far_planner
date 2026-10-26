@@ -12,6 +12,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 from tf2_msgs.msg import TFMessage
+from visibility_graph_msg.msg import Graph
 
 
 def wait_for(predicate, timeout=12.0):
@@ -44,6 +45,8 @@ class ScanTfRetryTest(unittest.TestCase):
         transforms = rospy.Publisher('/tf', TFMessage, queue_size=10)
         rays = []
         terrain_updates = []
+        graphs = []
+        rospy.Subscriber('/robot_vgraph', Graph, graphs.append, queue_size=10)
         rospy.Subscriber('/FAR_scanGrid_debug', PointCloud2, rays.append, queue_size=10)
         rospy.Subscriber('/FAR_obs_debug', PointCloud2, terrain_updates.append,
                          queue_size=10)
@@ -77,6 +80,9 @@ class ScanTfRetryTest(unittest.TestCase):
         self.assertGreater(rays[-1].width, 0,
                            'Scan was not ray traced after its delayed TF arrived')
         wait_for(lambda: len(terrain_updates) > 0)
+        # The configured image threshold suppresses every obstacle vertex.
+        # Trajectory initialization must still run on the graph update.
+        wait_for(lambda: any(node.is_navpoint for graph in graphs for node in graph.nodes))
 
         # A terrain cloud newer than odometry waits for the matching sample.
         deferred_stamp = rospy.Time.now()
