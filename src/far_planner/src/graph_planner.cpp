@@ -354,7 +354,8 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
     this->ResetFreeTerrainGridOrigin(goal_node_ptr_->position);
 }
 
-void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height)
+void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const Point3D& odom_position,
+                                          const bool& is_adjust_height)
 {
     if (is_use_internav_goal_) return; // return if using an exsiting internav node as goal
     if (is_adjust_height && is_global_path_init_ && recorded_path_.size() > 1) { // use path to adjust goal height
@@ -368,7 +369,7 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
     }
     const Eigen::Vector3i ori_sub = free_terrain_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
     const Point3D ori_pos_height(origin_goal_pos_.x, origin_goal_pos_.y, goal_ptr->position.z);
-    const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_node_ptr_->position) ? true : false;
+    const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_position);
     if (is_origin_free) {
         goal_ptr->position = ori_pos_height;
     } else { // reproject to nearby free space
