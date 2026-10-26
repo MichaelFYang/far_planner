@@ -46,6 +46,30 @@ public:
     }
 };
 
+TEST(GraphNodes, DirectDefaultConstructionHasNeutralState)
+{
+    Polygon polygon;
+    EXPECT_EQ(polygon.N, 0U);
+    EXPECT_FALSE(polygon.is_robot_inside);
+    EXPECT_FALSE(polygon.is_pillar);
+    EXPECT_FLOAT_EQ(polygon.perimeter, 0.0f);
+
+    CTNode contour;
+    EXPECT_FALSE(contour.is_global_match);
+    EXPECT_EQ(contour.free_direct, NodeFreeDirect::UNKNOW);
+    EXPECT_EQ(contour.front, nullptr);
+    EXPECT_EQ(contour.back, nullptr);
+
+    NavNode nav;
+    EXPECT_EQ(nav.id, 0U);
+    EXPECT_FALSE(nav.is_active);
+    EXPECT_FALSE(nav.is_goal);
+    EXPECT_EQ(nav.node_type, NodeType::NOT_DEFINED);
+    EXPECT_EQ(nav.free_direct, NodeFreeDirect::UNKNOW);
+    EXPECT_EQ(nav.parent, nullptr);
+    EXPECT_TRUE(nav.connect_nodes.empty());
+}
+
 TEST(GraphVotes, TopTwoSelectionPreservesStrictRankAndTies)
 {
     far_planner::TopTwoScores empty;

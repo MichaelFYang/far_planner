@@ -115,7 +115,7 @@ Normal contour replacement now clears reciprocal front/back and connection links
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
-Default planner `Point3D` values initialize XYZ and intensity to zero. The boundary extractor and graph decoder use coordinate-only points with zero-initialized XYZ. Contour pixels construct a complete point directly, so their intensity is defined before PCL conversion. `Point3D::operator!=` is the complement of its tolerant equality, including at the tolerance boundary and for nonfinite coordinates. The unused `point_hash` and `point_comp` helpers were removed because exact float hashing was inconsistent with tolerant equality; remaining Boost hash users include their header directly.
+Default planner `Point3D` values initialize XYZ and intensity to zero. Polygon, contour-node, and navigation-node scalar fields also have explicit neutral defaults; their factories no longer clear newly empty containers or restate neutral flags. The boundary extractor and graph decoder use coordinate-only points with zero-initialized XYZ. Contour pixels construct a complete point directly, so their intensity is defined before PCL conversion. `Point3D::operator!=` is the complement of its tolerant equality, including at the tolerance boundary and for nonfinite coordinates. The unused `point_hash` and `point_comp` helpers were removed because exact float hashing was inconsistent with tolerant equality; remaining Boost hash users include their header directly.
 
 ## Boundary input stage
 
