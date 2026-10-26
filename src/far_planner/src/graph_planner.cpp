@@ -421,6 +421,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     free_terrain_grid_->ReInitGrid(INIT_BIT);
     // evaluate goal freespace status
     is_goal_in_freespace_ = false;
+    bool has_terrain_cell = false;
     if (!freeCloudIn->empty() || !obsCloudIn->empty()) { // process terrain cloud
         const int C_IF = FARUtil::kObsInflate;
         for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
@@ -430,6 +431,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
                     Eigen::Vector3i sub = c_sub;
                     sub.x() += i, sub.y() += j, sub.z() = 0;
                     if (free_terrain_grid_->InRange(sub)) {
+                        has_terrain_cell = true;
                         const int ind = free_terrain_grid_->Sub2Ind(sub);
                         free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
                     }
@@ -443,6 +445,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
                     Eigen::Vector3i sub = c_sub;
                     sub.x() += i, sub.y() += j, sub.z() = 0;
                     if (free_terrain_grid_->InRange(sub)) {
+                        has_terrain_cell = true;
                         const int ind = free_terrain_grid_->Sub2Ind(sub);
                         auto& cell = free_terrain_grid_->GetCell(ind);
                         cell |= FREE_BIT;
@@ -452,7 +455,7 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
             }
         }
     }
-    if (!is_goal_in_freespace_) { // check for freespace status if no terrain clouds around
+    if (!is_goal_in_freespace_ && !has_terrain_cell) { // fallback only without local terrain evidence
         float min_dist = FARUtil::kINF;
         for (const auto& node_ptr : current_graph_) {
             if (!node_ptr->is_navpoint) continue;
