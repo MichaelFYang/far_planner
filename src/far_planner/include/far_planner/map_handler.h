@@ -175,17 +175,6 @@ private:
         }
     }
 
-    inline void Expansion2D(const Eigen::Vector3i& csub, std::vector<Eigen::Vector3i>& subs, const int& n) {
-        subs.clear();
-        for (int ix=-n; ix<=n; ix++) {
-            for (int iy=-n; iy<=n; iy++) {
-                Eigen::Vector3i sub = csub;
-                sub.x() += ix, sub.y() += iy;
-                subs.push_back(sub); 
-            }
-        }
-    }
-
     void ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs,
                                      std::unordered_set<int>& extend_terrain_obs);
 
