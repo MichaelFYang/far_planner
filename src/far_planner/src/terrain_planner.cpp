@@ -71,20 +71,14 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, st
     const int N_IF = tp_params_.inflate_size;
     for (const auto& point : obsCloudIn->points) {
         Eigen::Vector3i c_sub = terrain_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, center_pos_.z));
-        for (int i = -N_IF; i <= N_IF; i++) {
-            for (int j = -N_IF; j <= N_IF; j++) {
-                Eigen::Vector3i sub;
-                sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = 0;
-                if (terrain_grids_->InRange(sub)) {
-                    const int ind = terrain_grids_->Sub2Ind(sub);
-                    auto& cell = terrain_grids_->GetCell(ind);
-                    if (!cell->is_occupied) {
-                        cell->is_occupied = true;
-                        occupied_cells_.push_back(ind);
-                    }
-                }
+        c_sub.z() = 0;
+        terrain_grids_->ForEachXYCellInRadius(c_sub, N_IF, [&](int ind) {
+            auto& cell = terrain_grids_->GetCell(ind);
+            if (!cell->is_occupied) {
+                cell->is_occupied = true;
+                occupied_cells_.push_back(ind);
             }
-        }
+        });
     }
     last_projected_revision_ = revision;
     needs_projection_ = false;
