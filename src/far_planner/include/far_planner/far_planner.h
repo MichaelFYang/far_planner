@@ -42,6 +42,7 @@ public:
     void Loop(); // Main Loop Function
 
 private:
+    friend class LocalTerrainCallbackTestAccess;
     ros::NodeHandle nh;
     ros::Subscriber reset_graph_sub_, joy_command_sub_, update_command_sub_;
     ros::Subscriber odom_sub_, terrain_sub_, terrain_local_sub_, scan_sub_, waypoint_sub_;

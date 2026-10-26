@@ -691,6 +691,7 @@ void FARMaster::ProcessPendingOdometry() {
     is_odom_init_ = true;
     pending_odometry_.PopReady();
     this->ProcessPendingScans();
+    this->ProcessPendingLocalTerrain();
     this->ProcessPendingTerrain();
   }
 }
@@ -786,25 +787,29 @@ void FARMaster::ProcessPendingLocalTerrain() {
   const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
   const auto expired = pending_local_terrains_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
   if (expired != 0) {
-    ROS_WARN_THROTTLE(1.0, "Expired %zu local terrain clouds waiting for TF", expired);
+    ROS_WARN_THROTTLE(1.0, "Expired %zu local terrain clouds waiting for odometry or TF", expired);
   }
-  while (pending_local_terrains_.Size() != 0) {
+  const auto latest_odometry = odometry_history_.LatestStamp();
+  while (pending_local_terrains_.HasReady(latest_odometry)) {
     const auto& entry = pending_local_terrains_.Front();
-    if (entry.stamp <= last_local_terrain_stamp_) {
+    if (entry.stamp <= last_local_terrain_stamp_ ||
+        !far_planner::WithinSensorSkew(entry.stamp, latest_odometry, sensor_time_tolerance_ns_)) {
+      ROS_WARN_THROTTLE(1.0, "Dropping local terrain without nearby odometry");
       pending_local_terrains_.PopReady();
       continue;
     }
     const auto pc = entry.message;
+    const bool explicit_empty = pc->width == 0 && pc->row_step == 0 && pc->data.empty();
     const std::string source = FARUtil::NormalizeFrameID(pc->header.frame_id);
     if (source.empty()) {
       pending_local_terrains_.PopReady();
       continue;
     }
-    if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
+    if (!explicit_empty && !FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
         !tf_listener_->canTransform(master_params_.world_frame, source,
                                     pc->header.stamp)) break;
     // Only an explicitly empty measurement may clear the local obstacle view.
-    if (pc->width == 0 && pc->row_step == 0 && pc->data.empty()) {
+    if (explicit_empty) {
       local_terrain_ptr_->clear();
     } else {
       const auto result = this->ProcessCloud(pc, local_terrain_ptr_, true);
