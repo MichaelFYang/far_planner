@@ -100,7 +100,9 @@ void ContourDetector::ConvertContoursToRealWorld(const std::vector<CVPointStack>
 
 void ContourDetector::ShowCornerImage(const cv::Mat& img_mat,
                                      const PointCloudPtr& pc) {
-    cv::Mat dst = cv::Mat::zeros(MAT_RESIZE, MAT_RESIZE, CV_8UC3);
+    cv::Mat resized_img, dst;
+    this->ResizeAndBlurImg(img_mat, resized_img);
+    cv::cvtColor(resized_img, dst, cv::COLOR_GRAY2BGR);
     const int circle_size = std::max(1, static_cast<int>(static_cast<float>(MAT_RESIZE) / MAT_SIZE * 1.5f));
     for (std::size_t i=0; i<pc->size(); i++) {
         cv::Point2f cv_p = this->ConvertPoint3DToCVPoint(pc->points[i], odom_pos_, true);
