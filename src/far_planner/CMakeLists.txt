@@ -20,33 +20,13 @@ find_package(nav_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(jsoncpp REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui imgcodecs)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(visibility_graph_msg REQUIRED)
-
-# Directories
-include_directories(
-  include
-  ${rclcpp_INCLUDE_DIRS}
-  ${std_msgs_INCLUDE_DIRS}
-  ${sensor_msgs_INCLUDE_DIRS}
-  ${nav_msgs_INCLUDE_DIRS}
-  ${PCL_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
-  ${OpenCV_INCLUDE_DIRS}
-)
-
-link_directories(
-  ${PCL_LIBRARY_DIRS}
-  ${OpenCV_LIBRARY_DIRS}
-)
-
-add_definitions(${PCL_DEFINITIONS})
 
 # Build
 set(SOURCES
@@ -63,6 +43,12 @@ set(SOURCES
 )
 
 add_library(far_planner_core STATIC src/far_planner.cpp ${SOURCES})
+target_include_directories(far_planner_core PUBLIC
+  include
+  ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+)
+target_compile_options(far_planner_core PUBLIC ${PCL_DEFINITIONS})
 
 target_link_libraries(far_planner_core
   rclcpp::rclcpp
@@ -80,7 +66,7 @@ target_link_libraries(far_planner_core
   tf2_sensor_msgs::tf2_sensor_msgs
 )
 
-target_link_libraries(far_planner_core ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(far_planner_core Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} far_planner_core)
