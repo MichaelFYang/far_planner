@@ -605,7 +605,7 @@ void FARMaster::LoadROSParams() {
   nh_->declare_parameter<float>(utility_prefix + "/terrain_free_Z", 0.1);
   nh_->declare_parameter<int>(utility_prefix   + "/dyosb_update_thred", 4);
   nh_->declare_parameter<int>(utility_prefix   + "/new_point_counter", 10);
-  nh_->declare_parameter<float>(utility_prefix + "/dynamic_obs_dacay_time", 10.0);
+  nh_->declare_parameter<float>(utility_prefix + "/dynamic_obs_dacay_time", 15.0);
   nh_->declare_parameter<float>(utility_prefix + "/new_points_decay_time", 2.0);
   nh_->declare_parameter<int>(utility_prefix   + "/obs_inflate_size", 2);
 
