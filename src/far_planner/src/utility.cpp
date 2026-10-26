@@ -135,6 +135,7 @@ void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
     if (cloudInOut->empty()) return;
     if (source == target) {
         cloudInOut->header.frame_id = target;
+        cloudInOut->header.stamp = stamp.toNSec() / 1000ULL;
         return;
     }
 
