@@ -46,6 +46,7 @@ public:
     }
 
 private:
+    friend class ScanHandlerTestAccess;
     ScanHandlerParams scan_params_;
     Eigen::Vector3i center_sub_;
     int row_num_, col_num_, level_num_;

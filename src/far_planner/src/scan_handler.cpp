@@ -116,12 +116,19 @@ void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointClo
 }
 
 void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
-    Eigen::Vector3i dir_sub = point_sub - center_sub_; 
-    if (dir_sub.squaredNorm() < 1.0) return;
+    const Eigen::Vector3i dir_sub = point_sub - center_sub_;
+    if (dir_sub.x() == 0 && dir_sub.y() == 0 && dir_sub.z() == 0) return;
     Eigen::Vector3i steps_sub;
     steps_sub.x() = abs(dir_sub.x()), steps_sub.y() = abs(dir_sub.y()), steps_sub.z() = abs(dir_sub.z());
     Eigen::Vector3i sign_sub;
     sign_sub.x() = FARUtil::Signum(dir_sub.x()), sign_sub.y() = FARUtil::Signum(dir_sub.y()), sign_sub.z() = FARUtil::Signum(dir_sub.z());
+    const auto mark_ray_cell = [this](const Eigen::Vector3i& sub) {
+        if (!voxel_grids_->InRange(sub)) return false;
+        char& cell = voxel_grids_->GetCell(voxel_grids_->Sub2Ind(sub));
+        if ((cell | SCAN_BIT) == cell) return false; // hit scan point cell
+        cell = cell | RAY_BIT;
+        return true;
+    };
     if (steps_sub.x() >= std::max(steps_sub.y(), steps_sub.z())) {
         const int N = steps_sub.x();
         const float rx2y = (float)steps_sub.y() / (float)steps_sub.x();
@@ -131,11 +138,7 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += i * sign_sub.x();
             csub.y() += (int)std::floor(i*rx2y) * sign_sub.y();
             csub.z() += (int)std::floor(i*rx2z) * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind); 
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     } else if (steps_sub.y() >= std::max(steps_sub.x(), steps_sub.z())) {
         const int N = steps_sub.y();
@@ -146,11 +149,7 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += (int)std::floor(i*ry2x) * sign_sub.x();
             csub.y() += i * sign_sub.y();
             csub.z() += (int)std::floor(i*ry2z) * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind);
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     } else {
         const int N = steps_sub.z();
@@ -161,11 +160,7 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += (int)std::floor(i*rz2x) * sign_sub.x();
             csub.y() += (int)std::floor(i*rz2y) * sign_sub.y();
             csub.z() += i * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind);
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     }
 }
