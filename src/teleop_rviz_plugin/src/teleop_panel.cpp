@@ -68,7 +68,7 @@ TeleopPanel::TeleopPanel(QWidget * parent)
 
 void TeleopPanel::pressButton1()
 {
-  if (rclcpp::ok() && velocity_publisher_->get_subscription_count() > 0) {
+  if (rclcpp::ok() && reset_publisher_->get_subscription_count() > 0) {
     std_msgs::msg::Empty msg;
     reset_publisher_->publish(msg);
   }
@@ -112,6 +112,7 @@ void TeleopPanel::pressButton3()
     QString qFilename = QFileDialog::getOpenFileName(this, tr("Read File"), "/",
         tr("VGH - Visibility Graph Files (*.vgh)"));
     std::string filename = qFilename.toStdString();
+    if (filename.empty()) {return;}
     std_msgs::msg::String msg;
     msg.data = filename;
     read_publisher_->publish(msg);
@@ -125,9 +126,8 @@ void TeleopPanel::pressButton4()
         tr("VGH - Visibility Graph Files (*.vgh)"));
 
     std::string filename = qFilename.toStdString();
-    if (!filename.empty() &&
-      (filename.size() < 4 || filename.compare(filename.size() - 4, 4, ".vgh") != 0))
-    {
+    if (filename.empty()) {return;}
+    if (filename.size() < 4 || filename.compare(filename.size() - 4, 4, ".vgh") != 0) {
       filename += ".vgh";
     }
     std_msgs::msg::String msg;
