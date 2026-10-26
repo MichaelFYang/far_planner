@@ -10,6 +10,7 @@
 #include "graph_decoder/decoder_node.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 #include <visibility_graph_msg/graph_validation.h>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -56,6 +57,9 @@ void GraphDecoder::Init() {
 
     robot_id_ = 0;
     this->ResetGraph(received_graph_);
+    graph_viz_timer_ = nh_->create_wall_timer(
+        std::chrono::milliseconds(250),
+        std::bind(&GraphDecoder::VisualizeForNewSubscribers, this));
 
     // print init complete
     RCLCPP_INFO(nh_->get_logger(), "Graph Decoder Node Initialized");
@@ -101,6 +105,19 @@ void GraphDecoder::GraphCallBack(const visibility_graph_msg::msg::Graph::SharedP
     received_graph_.swap(next_graph);
     robot_id_ = msg->robot_id;
     this->VisualizeGraph(received_graph_);
+    graph_viz_subscriber_count_ = graph_viz_pub_->get_subscription_count();
+    graph_viz_refresh_ticks_ = 0;
+}
+
+void GraphDecoder::VisualizeForNewSubscribers() {
+    const auto count = graph_viz_pub_->get_subscription_count();
+    if (count == 0 || received_graph_.empty()) {
+        graph_viz_refresh_ticks_ = 0;
+    } else if (count > graph_viz_subscriber_count_ || ++graph_viz_refresh_ticks_ >= 8) {
+        this->VisualizeGraph(received_graph_);
+        graph_viz_refresh_ticks_ = 0;
+    }
+    graph_viz_subscriber_count_ = count;
 }
 
 void GraphDecoder::AssignConnectNodes(const std::unordered_map<std::size_t, std::size_t>& idxs_map,
@@ -319,11 +336,16 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::msg::String::SharedPtr msg)
         AssignConnectNodes(nodeIdx_idx_map, loaded_graph, node_ptr->contour_idxs, node_ptr->contour_connects);
         AssignConnectNodes(nodeIdx_idx_map, loaded_graph, node_ptr->traj_idxs, node_ptr->traj_connects);
     }
-    this->VisualizeGraph(loaded_graph);
     visibility_graph_msg::msg::Graph graph_msg;
     ConvertGraphToMsg(loaded_graph, graph_msg);
+    graph_msg.robot_id = 0;  // The file format has no robot ID.
+    ResetGraph(received_graph_);
+    received_graph_.swap(loaded_graph);
+    robot_id_ = 0;
     graph_pub_->publish(graph_msg);
-    ResetGraph(loaded_graph);
+    this->VisualizeGraph(received_graph_);
+    graph_viz_subscriber_count_ = graph_viz_pub_->get_subscription_count();
+    graph_viz_refresh_ticks_ = 0;
 }
 
 void GraphDecoder::SaveGraphCallBack(const std_msgs::msg::String::SharedPtr msg) {
