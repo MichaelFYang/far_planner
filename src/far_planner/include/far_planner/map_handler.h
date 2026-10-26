@@ -41,6 +41,8 @@ public:
 
     static bool IsNavPointOnTerrainNeighbor(const Point3D& p, const bool& is_extend);
 
+    // Choose the closest vertical-cell mean in this XY column. Input Z includes
+    // vehicle height; return ground height, or input Z minus vehicle height if unmatched.
     static float NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_associated);
 
     /**

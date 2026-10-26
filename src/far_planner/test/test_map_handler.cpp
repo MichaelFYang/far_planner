@@ -3,8 +3,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <limits>
+#include <random>
 #include <vector>
 
 #include "far_planner/map_handler.h"
@@ -396,6 +398,103 @@ TEST(MapHandler, FindsConnectedGroundAfterSearchingFromEmptyRobotCell) {
     ASSERT_EQ(ground->size(), 2U);
     EXPECT_FLOAT_EQ(ground->points[0].x, 1.0f);
     EXPECT_FLOAT_EQ(ground->points[1].y, 1.0f);
+}
+
+TEST(MapHandler, GoalHeightSelectsThePhysicallyClosestVerticalCell) {
+    RestoreMapParameters restore;
+    FARUtil::kLeafSize = 0.2f;
+    FARUtil::robot_dim = 1.0f;
+    FARUtil::vehicle_height = 0.75f;
+    MapHandlerParams params{};
+    params.sensor_range = 3.0f;
+    params.floor_height = 2.5f;
+    params.cell_length = 1.0f;
+    params.cell_height = 1.0f;
+    params.grid_max_length = 10.0f;
+    params.grid_max_height = 6.0f;
+    params.height_voxel_dim = 0.2f;
+    MapHandler map;
+    map.Init(params);
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    PointCloudPtr ground(new PointCloud);
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, -0.7f)));
+    ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, 1.3f)));
+    map.UpdateFreeCloudGrid(ground);
+    bool matched = false;
+    // The query ground height is 0.5 m. Both occupied cells are one index
+    // away, but their mean heights are 1.2 m below and 0.8 m above it.
+    EXPECT_FLOAT_EQ(MapHandler::NearestTerrainHeightofNavPoint(
+        Point3D(0.0f, 0.0f, 1.25f), matched), 1.3f);
+    EXPECT_TRUE(matched);
+
+    map.ResetGripMapCloud();
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    ground->front().z = -0.2f;
+    ground->back().z = 0.8f;
+    map.UpdateFreeCloudGrid(ground);
+    // Even an occupied query cell need not contain the closest surface.
+    // Its -0.2 m sample is farther from 0.7 m than the next cell's 0.8 m.
+    EXPECT_FLOAT_EQ(MapHandler::NearestTerrainHeightofNavPoint(
+        Point3D(0.0f, 0.0f, 1.45f), matched), 0.8f);
+    EXPECT_TRUE(matched);
+
+    map.ResetGripMapCloud();
+    map.UpdateRobotPosition(Point3D(0.0f, 0.0f, 0.0f));
+    ground->front().z = -0.75f;
+    ground->back().z = 1.25f;
+    map.UpdateFreeCloudGrid(ground);
+    EXPECT_FLOAT_EQ(MapHandler::NearestTerrainHeightofNavPoint(
+        Point3D(0.0f, 0.0f, 1.0f), matched), -0.75f); // Equal distances prefer below.
+    EXPECT_TRUE(matched);
+
+    // Compare against every occupied cell's mean, without directional search
+    // or early stopping. Dyadic samples stay distinct under voxel filtering.
+    FARUtil::kLeafSize = 0.01f;
+    std::mt19937 random(141421);
+    for (int column = 0; column < 40; ++column) {
+        const float offset = column % 2 ? 1000.0f : -1000.0f;
+        map.ResetGripMapCloud();
+        map.UpdateRobotPosition(Point3D(0.0f, 0.0f, offset));
+        ground->clear();
+        std::vector<float> means;
+        for (int level = 0; level < 7; ++level) {
+            if (column == 0 || random() % 3 == 0) continue;
+            const int count = 1 + random() % 4;
+            double sum = 0.0;
+            for (int sample = 0; sample < count; ++sample) {
+                const float height = offset - 3.75f + level +
+                    (sample - 1) * 0.125f + (random() % 2) * 0.0625f;
+                ground->push_back(FARUtil::Point3DToPCLPoint(Point3D(0.0f, 0.0f, height)));
+                sum += height;
+            }
+            means.push_back(static_cast<float>(sum / count));
+        }
+        map.UpdateFreeCloudGrid(ground);
+        for (int query = 0; query < 24; ++query) {
+            const float ground_z = offset - 4.25f +
+                (query < 8 ? static_cast<float>(query) : (random() % 448) / 64.0f);
+            const bool in_range = ground_z >= offset - 4.25f && ground_z < offset + 2.75f;
+            const float result = MapHandler::NearestTerrainHeightofNavPoint(
+                Point3D(0.0f, 0.0f, ground_z + FARUtil::vehicle_height), matched);
+            ASSERT_EQ(matched, in_range && !means.empty()) << column << ':' << query;
+            if (!matched) {
+                EXPECT_FLOAT_EQ(result, ground_z);
+                continue;
+            }
+            EXPECT_NE(std::find(means.begin(), means.end(), result), means.end());
+            double expected_distance = std::numeric_limits<double>::infinity();
+            for (const float height : means) {
+                expected_distance = std::min(expected_distance,
+                    std::abs(static_cast<double>(height) - ground_z));
+            }
+            EXPECT_NEAR(std::abs(static_cast<double>(result) - ground_z),
+                        expected_distance, 1e-5) << column << ':' << query;
+        }
+        // An observed surface in a different XY column is not an association.
+        const Point3D outside(1000000.0f, 0.0f, offset + FARUtil::vehicle_height);
+        EXPECT_FLOAT_EQ(MapHandler::NearestTerrainHeightofNavPoint(outside, matched), offset);
+        EXPECT_FALSE(matched);
+    }
 }
 
 TEST(MapHandler, EmptyTerrainAndResetDiscardOldHeightSamples) {

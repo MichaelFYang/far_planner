@@ -10,6 +10,8 @@
 #include "far_planner/map_handler.h"
 #include "far_planner/parameter_validation.h"
 
+#include <limits>
+
 namespace {
 PointCloudPtr& EnsureCloud(grid_ns::Grid<PointCloudPtr, true>& grid, int index) {
     auto& cloud = grid.GetCell(index);
@@ -271,52 +273,43 @@ float MapHandler::NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_
     const float p_th = point.z-FARUtil::vehicle_height;
     const Eigen::Vector3i ori_sub = world_free_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, p_th));
     is_associated = false;
-    if (world_free_cloud_grid_->InRange(ori_sub)) {
-        // downward seach
-        bool is_dw_associated = false;
-        Eigen::Vector3i dw_near_sub = ori_sub;
-        float dw_terrain_h = p_th;
-        while (world_free_cloud_grid_->InRange(dw_near_sub)) {
-            const auto cell = world_free_cloud_grid_->GetCellValue(dw_near_sub);
-            if (cell && !cell->empty()) {
-                int counter = 0;
-                dw_terrain_h = 0.0f;
-                for (const auto& pcl_p : cell->points) {
-                    dw_terrain_h += pcl_p.z, counter ++;
-                }
-                dw_terrain_h /= (float)counter;
-                is_dw_associated = true;
-                break;
-            }
-            dw_near_sub.z() --;
+    if (!world_free_cloud_grid_->InRange(ori_sub)) return p_th;
+
+    float nearest_height = p_th;
+    double nearest_distance = std::numeric_limits<double>::infinity();
+    const auto ConsiderCell = [&](const Eigen::Vector3i& sub) {
+        const auto cell = world_free_cloud_grid_->GetCellValue(sub);
+        if (!cell || cell->empty()) return false;
+        double sum = 0.0;
+        for (const auto& p : cell->points) sum += p.z;
+        const float height = static_cast<float>(sum / cell->size());
+        const double distance = std::abs(static_cast<double>(height) - p_th);
+        if (distance < nearest_distance) {
+            nearest_distance = distance;
+            nearest_height = height;
+            is_associated = true;
         }
-        // upward search
-        bool is_up_associated = false;
-        Eigen::Vector3i up_near_sub = ori_sub;
-        float up_terrain_h = p_th;
-        while (world_free_cloud_grid_->InRange(up_near_sub)) {
-            const auto cell = world_free_cloud_grid_->GetCellValue(up_near_sub);
-            if (cell && !cell->empty()) {
-                int counter = 0;
-                up_terrain_h = 0.0f;
-                for (const auto& pcl_p : cell->points) {
-                    up_terrain_h += pcl_p.z, counter ++;
-                }
-                up_terrain_h /= (float)counter;
-                is_up_associated = true;
-                break;
-            }
-            up_near_sub.z() ++;
-            
+        return true;
+    };
+    ConsiderCell(ori_sub);
+    const double origin_z = world_free_cloud_grid_->GetOrigin().z();
+    const double cell_height = world_free_cloud_grid_->GetResolution().z();
+    for (const int direction : {-1, 1}) {
+        Eigen::Vector3i sub = ori_sub;
+        sub.z() += direction;
+        while (world_free_cloud_grid_->InRange(sub)) {
+            const double near_edge = origin_z +
+                (sub.z() + (direction < 0 ? 1 : 0)) * cell_height;
+            // Stop when even the nearest cell face cannot improve the result.
+            // Allow for float coordinates and means rounded at a cell face.
+            const double roundoff = 8.0 * std::numeric_limits<float>::epsilon() *
+                std::max({1.0, std::abs(near_edge), std::abs(static_cast<double>(p_th))});
+            if (std::abs(near_edge - p_th) > nearest_distance + roundoff) break;
+            if (ConsiderCell(sub)) break; // Farther cells in this direction cannot be closer.
+            sub.z() += direction;
         }
-        is_associated = (is_up_associated || is_dw_associated) ? true : false;
-        if (is_up_associated && is_dw_associated) { // compare nearest
-            if (up_near_sub.z() - ori_sub.z() < ori_sub.z() - dw_near_sub.z()) return up_terrain_h;
-            else return dw_terrain_h;
-        } else if (is_up_associated) return up_terrain_h;
-        else return dw_terrain_h;
     }
-    return p_th;
+    return nearest_height;
 }
 
 
