@@ -542,43 +542,21 @@ public:
                                               const bool& is_navpoint=false, const bool& is_goal=false, const bool& is_boundary=false) 
     {
         node_ptr = std::make_shared<NavNode>();
-        node_ptr->pos_filter_vec.clear();
-        node_ptr->surf_dirs_vec.clear();
-        node_ptr->ctnode = NULL;
         node_ptr->is_active = true;
-        node_ptr->is_block_frontier = false;
-        node_ptr->is_contour_match = false;
         node_ptr->is_odom = is_odom;  
         node_ptr->is_near_nodes = true;
         node_ptr->is_wide_near = true;
-        node_ptr->is_merged = false;
-        node_ptr->is_covered  = (is_odom || is_navpoint || is_goal) ? true : false;
-        node_ptr->is_frontier = false;
-        node_ptr->is_finalized = is_navpoint ? true : false;
-        node_ptr->is_traversable = is_odom;
+        node_ptr->is_covered  = is_odom || is_navpoint || is_goal;
+        node_ptr->is_finalized = is_navpoint;
         node_ptr->is_navpoint = is_navpoint;
         node_ptr->is_boundary = is_boundary;
         node_ptr->is_goal = is_goal;
-        node_ptr->clear_dumper_count = 0;
-        node_ptr->frontier_votes.clear();
-        node_ptr->invalid_boundary.clear();
-        node_ptr->connect_nodes.clear();
-        node_ptr->poly_connects.clear();
-        node_ptr->contour_connects.clear();
-        node_ptr->contour_votes.clear();
-        node_ptr->potential_contours.clear();
-        node_ptr->trajectory_connects.clear();
-        node_ptr->trajectory_votes.clear();
-        node_ptr->terrain_votes.clear();
         node_ptr->free_direct = (is_odom || is_navpoint) ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
         // planner members
-        node_ptr->is_block_to_goal    = false;
         node_ptr->gscore              = FARUtil::kINF;
         node_ptr->fgscore             = FARUtil::kINF;
         node_ptr->is_traversable      = true;
         node_ptr->is_free_traversable = true;
-        node_ptr->parent              = NULL;
-        node_ptr->free_parent         = NULL;
         InitNodePosition(node_ptr, point);
         // Assign Global Unique ID
         AssignGlobalNodeID(node_ptr);
