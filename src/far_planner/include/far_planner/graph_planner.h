@@ -214,20 +214,18 @@ void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_he
  * @brief Reset internal values and containers
  */
 inline void ResetPlannerInternalValues() {
-    goal_node_ptr_ = NULL; 
+    this->GoalReset();
     odom_node_ptr_ = NULL;
     
     is_goal_init_         = false;
     is_use_internav_goal_ = false;
     is_global_path_init_  = false;
     is_free_nav_goal_     = false;
-    is_goal_in_freespace_ = false;
     
     current_graph_.clear(); 
     recorded_path_.clear();
     path_momentum_counter_ = 0;
     last_waypoint_dist_    = 0.0;
-    origin_goal_pos_    = Point3D(0,0,0);
     next_waypoint_      = Point3D(0,0,0);
     last_planning_odom_ = Point3D(0,0,0);
 }
