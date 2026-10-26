@@ -152,6 +152,26 @@ class ScanTfRetryTest(unittest.TestCase):
         self.assertGreater(rays[-1].width, 0,
                            'Late scan TF was not used by the terrain update')
 
+        # Terrain may arrive before its matching scan. Its short wait must
+        # allow that later scan callback to affect the same map update.
+        time.sleep(0.25)
+        late_scan_stamp = rospy.Time.now()
+        late_scan_pose = Odometry()
+        late_scan_pose.header = Header(stamp=late_scan_stamp, frame_id='map')
+        late_scan_pose.pose.pose.orientation.w = 1.0
+        odometry.publish(late_scan_pose)
+        time.sleep(0.15)
+        before = len(terrain_updates)
+        rays_before = len(rays)
+        terrain.publish(cloud('map', late_scan_stamp))
+        time.sleep(0.1)
+        self.assertEqual(len(terrain_updates), before,
+                         'Terrain ran before its scan arrived')
+        scans.publish(cloud('map', late_scan_stamp))
+        wait_for(lambda: len(terrain_updates) > before and len(rays) > rays_before)
+        self.assertGreater(rays[-1].width, 0,
+                           'Scan arriving after terrain was not ray traced')
+
 
 if __name__ == '__main__':
     rospy.init_node('test_scan_tf_ros1', anonymous=True)

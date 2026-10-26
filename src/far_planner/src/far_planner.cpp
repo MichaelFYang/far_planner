@@ -882,12 +882,14 @@ void FARMaster::ProcessPendingTerrain() {
       if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
           !tf_listener_->canTransform(master_params_.world_frame, source,
                                       pc->header.stamp)) break;
-      // Give an already queued, timestamp-compatible scan a short chance to
-      // obtain its TF before this terrain update chooses its scan.
-      if (!master_params_.is_static_env &&
-          pending_scans_.HasStampWithin(terrain.stamp, sensor_time_tolerance_ns_) &&
-          now_steady >= terrain.arrived_ns &&
-          now_steady - terrain.arrived_ns < 250000000ULL) break;
+      // A matching scan may still arrive or be waiting for its TF. Release
+      // the older terrain when the two-entry queue fills to avoid starvation.
+      const auto scan_wait_now = far_planner::SteadyNowNs();
+      if (!master_params_.is_static_env && pending_terrains_.Size() < 2 &&
+          scan_wait_now >= terrain.arrived_ns &&
+          scan_wait_now - terrain.arrived_ns < 250000000ULL &&
+          (pending_scans_.HasStampWithin(terrain.stamp, sensor_time_tolerance_ns_) ||
+           recent_scans_.Nearest(terrain.stamp, sensor_time_tolerance_ns_) == nullptr)) break;
       const auto result = this->ProcessCloud(pc, temp_cloud_ptr_, true);
       if (result == CloudProcessResult::TF_UNAVAILABLE) break;
       if (result == CloudProcessResult::INVALID) {
