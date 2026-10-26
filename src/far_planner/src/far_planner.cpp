@@ -499,13 +499,10 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
 
 void FARMaster::LoadROSParams() {
   const std::string map_prefix      = "map_handler";
-  const std::string scan_prefix     = "scan_handler";
   const std::string cdetect_prefix  = "c_detector";
   const std::string graph_prefix    = "graph";
-  const std::string viz_prefix      = "viz";
   const std::string utility_prefix  = "util";
   const std::string planner_prefix  = "g_planner";
-  const std::string contour_prefix  = "contour_graph";
   const std::string msger_prefix    = "graph_msger";
 
   const double sensor_time_tolerance = nh_->declare_parameter<double>("sensor_time_tolerance", 0.2);
@@ -589,7 +586,6 @@ void FARMaster::LoadROSParams() {
   nh_->declare_parameter<float>(utility_prefix + "/angle_noise", 15.0);
   nh_->declare_parameter<float>(utility_prefix + "/accept_max_align_angle", 15.0);
   nh_->declare_parameter<float>(utility_prefix + "/new_intensity_thred", 2.0);
-  nh_->declare_parameter<float>(utility_prefix + "/nav_clear_dist", 0.5);
   nh_->declare_parameter<float>(utility_prefix + "/terrain_free_Z", 0.1);
   nh_->declare_parameter<int>(utility_prefix   + "/dyosb_update_thred", 4);
   nh_->declare_parameter<int>(utility_prefix   + "/new_point_counter", 10);
@@ -601,7 +597,6 @@ void FARMaster::LoadROSParams() {
   nh_->get_parameter(utility_prefix + "/angle_noise", FARUtil::kAngleNoise);
   nh_->get_parameter(utility_prefix + "/accept_max_align_angle", FARUtil::kAcceptAlign);
   nh_->get_parameter(utility_prefix + "/new_intensity_thred", FARUtil::kNewPIThred);
-  nh_->get_parameter(utility_prefix + "/nav_clear_dist", FARUtil::kNavClearDist);
   nh_->get_parameter(utility_prefix + "/terrain_free_Z", FARUtil::kFreeZ);
   nh_->get_parameter(utility_prefix + "/dyosb_update_thred", FARUtil::kDyObsThred);
   nh_->get_parameter(utility_prefix + "/new_point_counter", FARUtil::KNewPointC);
@@ -640,13 +635,11 @@ void FARMaster::LoadROSParams() {
   // graph planner params
   nh_->declare_parameter<float>(planner_prefix + "/converge_distance", 1.0);
   nh_->declare_parameter<float>(planner_prefix + "/goal_adjust_radius", 10.0);
-  nh_->declare_parameter<int>(planner_prefix   + "/free_counter_thred", 5);
   nh_->declare_parameter<int>(planner_prefix   + "/reach_goal_vote_size", 5);
   nh_->declare_parameter<int>(planner_prefix   + "/path_momentum_thred", 5);
   
   nh_->get_parameter(planner_prefix + "/converge_distance", gp_params_.converge_dist);
   nh_->get_parameter(planner_prefix + "/goal_adjust_radius", gp_params_.adjust_radius);
-  nh_->get_parameter(planner_prefix + "/free_counter_thred", gp_params_.free_thred);
   nh_->get_parameter(planner_prefix + "/reach_goal_vote_size", gp_params_.votes_size);
   nh_->get_parameter(planner_prefix + "/path_momentum_thred", gp_params_.momentum_thred);
 
@@ -662,15 +655,11 @@ void FARMaster::LoadROSParams() {
   nh_->declare_parameter<int>(graph_prefix   + "/clear_dumper_thred", 3);
   nh_->declare_parameter<int>(graph_prefix   + "/node_finalize_thred", 3);
   nh_->declare_parameter<int>(graph_prefix   + "/filter_pool_size", 12);
-  nh_->declare_parameter<float>(graph_prefix + "/connect_angle_thred", 10.0);
-  nh_->declare_parameter<float>(graph_prefix + "/dirs_filter_margin", 10.0);
 
   nh_->get_parameter(graph_prefix + "/connect_votes_size", graph_params_.votes_size);
   nh_->get_parameter(graph_prefix + "/clear_dumper_thred", graph_params_.dumper_thred);
   nh_->get_parameter(graph_prefix + "/node_finalize_thred", graph_params_.finalize_thred);
   nh_->get_parameter(graph_prefix + "/filter_pool_size", graph_params_.pool_size);
-  nh_->get_parameter(graph_prefix + "/connect_angle_thred", graph_params_.kConnectAngleThred);
-  nh_->get_parameter(graph_prefix + "/dirs_filter_margin", graph_params_.filter_dirs_margin);
 
   graph_params_.filter_pos_margin        = FARUtil::kNavClearDist;
   graph_params_.filter_dirs_margin       = FARUtil::kAngleNoise;
