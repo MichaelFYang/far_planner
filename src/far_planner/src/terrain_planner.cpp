@@ -16,6 +16,8 @@
 void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlannerParams& params) {
     nh_ = nh;
     tp_params_ = params;
+    is_grids_init_ = false;
+    occupied_cells_.clear();
     row_num_ = far_planner::CheckedDimension(
         (static_cast<double>(FARUtil::kLocalPlanRange) + tp_params_.radius) * 2.0,
         tp_params_.voxel_size, "local terrain grid width");
@@ -46,7 +48,8 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
 }
 
 void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
-    if (!is_grids_init_ || obsCloudIn->empty()) return;
+    if (!is_grids_init_) return;
+    this->ResetGridsOccupancy();
     const int N_IF = tp_params_.inflate_size;
     for (const auto& point : obsCloudIn->points) {
         Eigen::Vector3i c_sub = terrain_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, center_pos_.z));
@@ -56,7 +59,11 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
                 sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = 0;
                 if (terrain_grids_->InRange(sub)) {
                     const int ind = terrain_grids_->Sub2Ind(sub);
-                    terrain_grids_->GetCell(ind)->is_occupied = true;
+                    auto& cell = terrain_grids_->GetCell(ind);
+                    if (!cell->is_occupied) {
+                        cell->is_occupied = true;
+                        occupied_cells_.push_back(ind);
+                    }
                 }
             }
         }
@@ -66,7 +73,7 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
 }
 
 void TerrainPlanner::GridVisualCloud() {
-    if (!is_grids_init_) return;
+    if (!is_grids_init_ || terrain_map_pub_->get_subscription_count() == 0) return;
     PointCloudPtr temp_cloud_ptr(new pcl::PointCloud<PCLPoint>());
     const int N = terrain_grids_->GetCellNumber();
     for (int ind=0; ind<N; ind++) {
