@@ -99,6 +99,8 @@ Terrain intensity must encode traversability height cost, not lidar reflectivity
 
 See [the algorithm and refactor guide](docs/algorithm.md) for the data flow, TF/time contract, invariants, and validation plan.
 
+For rendered Goalpoint and TeleopPanel regression checks, see the optional [RViz interaction test](tests/rviz_interaction/README.md). It builds separately and keeps its logs and screenshots outside the source tree.
+
 The workspace contains six ROS 2 packages under `src/`: the core `far_planner`, `graph_decoder`, `boundary_handler`, `visibility_graph_msg`, and two RViz plugins. Each package owns its CMake configuration and dependency manifest. See [AGENTS.md](AGENTS.md) for contributor conventions.
 
 The ROS 2 packages require CMake 3.16 or newer.
