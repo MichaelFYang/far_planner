@@ -498,8 +498,8 @@ Point3D FARMaster::ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, con
         waypoint.z = nav_node_ptr->position.z;
         free_dist = ray_dist - FARUtil::kNearDist;
       }
-      return waypoint;
     }
+    return waypoint;
   }
   return nav_node_ptr->position;
 }
