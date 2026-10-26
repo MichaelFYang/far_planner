@@ -162,10 +162,19 @@ bool TerrainPlanner::PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p
             break;
         }
         close_set.insert(current->id);
+        const Eigen::Vector3i current_sub = terrain_grids_->Ind2Sub(current->id);
         for (int i=0; i<8; i++) {
-            Eigen::Vector3i csub = terrain_grids_->Ind2Sub(current->id);
+            Eigen::Vector3i csub = current_sub;
             csub.x() += dx[i], csub.y() += dy[i], csub.z() = 0;
             if (!terrain_grids_->InRange(csub)) continue;
+            if (dx[i] != 0 && dy[i] != 0) {
+                Eigen::Vector3i side_sub = current_sub;
+                side_sub.x() += dx[i];
+                if (terrain_grids_->GetCell(side_sub)->is_occupied) continue;
+                side_sub = current_sub;
+                side_sub.y() += dy[i];
+                if (terrain_grids_->GetCell(side_sub)->is_occupied) continue;
+            }
             const TerrainNodePtr neighbor = terrain_grids_->GetCell(terrain_grids_->Sub2Ind(csub));
             if (close_set.count(neighbor->id) || (neighbor->is_occupied && neighbor != end_node_ptr) || !InCylinder(neighbor)) continue;
             const float temp_gscore = current->gscore + this->EulerCost(current, neighbor);

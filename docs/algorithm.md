@@ -97,6 +97,8 @@ A five-node geometric graph demonstrated the old failure: the cost to node 1 set
 
 Goal snapping now marks only the closest navigation point after scanning all candidates. Previously, each improving candidate retained `is_goal`, making a discarded point appear static after later goal resets. The new regression fails on the old behavior and checks selection plus replacement.
 
+Terrain A* now rejects a diagonal step if either adjacent cardinal cell is occupied. A two-obstacle corner regression failed on the old path, and the updated obstacle-grid route has an independently checked shortest length of 6 m under the corner-safe rule.
+
 ## Graph lifecycle stage
 
 `EraseNodeFromStack` now uses stable remove-and-erase for all matching pointers, including the first element and adjacent copies. Merged-node removal uses the iterator returned by `erase`, so removing the first or consecutive nodes does not decrement past `begin()`.
