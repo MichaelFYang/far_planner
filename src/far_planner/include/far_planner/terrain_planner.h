@@ -67,6 +67,8 @@ private:
     std::vector<PointStack> viz_path_stack_;
 
     ros::Publisher local_path_pub_, terrain_map_pub_;
+    sensor_msgs::PointCloud2 terrain_map_msg_;
+    bool terrain_map_dirty_ = true;
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
     std::vector<int> occupied_cells_;
