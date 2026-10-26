@@ -16,6 +16,9 @@
 #include <vector>
 #include <Eigen/Core>
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace grid_ns
 {
@@ -26,26 +29,30 @@ public:
   explicit Grid(const Eigen::Vector3i& size, _T init_value, const Eigen::Vector3d& origin = Eigen::Vector3d(0, 0, 0),
                 const Eigen::Vector3d& resolution = Eigen::Vector3d(1, 1, 1), int dimension = 3)
   {
-    // MY_ASSERT(size.x() > 0);
-    // MY_ASSERT(size.y() > 0);
-    // MY_ASSERT(size.z() > 0);
-
     origin_ = origin;
     size_ = size;
     resolution_ = resolution;
     dimension_ = dimension;
 
+    if (dimension_ < 1 || dimension_ > 3) {
+      throw std::invalid_argument("Grid dimension must be between 1 and 3");
+    }
+    int count = 1;
+    for (int i = 0; i < 3; ++i) {
+      if (size_(i) <= 0 || count > std::numeric_limits<int>::max() / size_(i)) {
+        throw std::length_error("Grid cell count exceeds the supported range");
+      }
+      count *= size_(i);
+    }
     for (int i = 0; i < dimension_; i++)
     {
+      if (!std::isfinite(resolution_(i)) || resolution_(i) <= 0.0) {
+        throw std::invalid_argument("Grid resolution must be positive and finite");
+      }
       resolution_inv_(i) = 1.0 / resolution_(i);
     }
-    cell_number_ = size_.x() * size_.y() * size_.z();
-    cells_.resize(cell_number_), subs_.resize(cell_number_);
-    for (int i = 0; i < cell_number_; i++)
-    {
-      cells_[i] = init_value;
-      subs_[i] = ind2sub_(i);
-    }
+    cell_number_ = count;
+    cells_.assign(cell_number_, init_value);
   }
 
   virtual ~Grid() = default;
@@ -116,8 +123,7 @@ public:
 
   Eigen::Vector3i Ind2Sub(int ind) const
   {
-    // MY_ASSERT(InRange(ind));
-    return subs_[ind];
+    return ind2sub_(ind);
   }
 
   int Sub2Ind(int x, int y, int z) const
@@ -289,7 +295,6 @@ private:
   Eigen::Vector3d resolution_;
   Eigen::Vector3d resolution_inv_;
   std::vector<_T> cells_;
-  std::vector<Eigen::Vector3i> subs_;
   int cell_number_;
   int dimension_;
 

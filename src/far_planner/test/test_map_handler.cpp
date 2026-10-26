@@ -7,6 +7,21 @@
 
 #include "far_planner/map_handler.h"
 
+TEST(GridStorage, IndexCoordinatesRoundTripWithoutCachedSubscripts) {
+    grid_ns::Grid<int> grid(Eigen::Vector3i(7, 5, 3), 0);
+    for (int index = 0; index < grid.GetCellNumber(); ++index) {
+        const auto sub = grid.Ind2Sub(index);
+        EXPECT_EQ(grid.Sub2Ind(sub), index);
+    }
+}
+
+TEST(GridStorage, RejectsInvalidDimensionsBeforeAllocating) {
+    EXPECT_THROW((grid_ns::Grid<int>(Eigen::Vector3i(0, 2, 2), 0)), std::length_error);
+    EXPECT_THROW((grid_ns::Grid<int>(Eigen::Vector3i(std::numeric_limits<int>::max(), 2, 1), 0)), std::length_error);
+    EXPECT_THROW((grid_ns::Grid<int>(Eigen::Vector3i(2, 2, 2), 0,
+                                     Eigen::Vector3d::Zero(), Eigen::Vector3d(1, 0, 1))), std::invalid_argument);
+}
+
 namespace {
 
 struct RestoreMapParameters {
