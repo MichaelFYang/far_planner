@@ -109,8 +109,9 @@ void TeleopPanel::pressButton2()
 void TeleopPanel::pressButton3()
 {
   if (rclcpp::ok() && read_publisher_->get_subscription_count() > 0) {
-    QString qFilename = QFileDialog::getOpenFileName(this, tr("Read File"), "/",
-        tr("VGH - Visibility Graph Files (*.vgh)"));
+    QString qFilename = QFileDialog::getOpenFileName(
+      this, tr("Read File"), "/",
+      tr("VGH - Visibility Graph Files (*.vgh)"));
     std::string filename = qFilename.toStdString();
     if (filename.empty()) {return;}
     std_msgs::msg::String msg;
@@ -122,8 +123,9 @@ void TeleopPanel::pressButton3()
 void TeleopPanel::pressButton4()
 {
   if (rclcpp::ok() && save_publisher_->get_subscription_count() > 0) {
-    QString qFilename = QFileDialog::getSaveFileName(this, tr("Save File"), "/",
-        tr("VGH - Visibility Graph Files (*.vgh)"));
+    QString qFilename = QFileDialog::getSaveFileName(
+      this, tr("Save File"), "/",
+      tr("VGH - Visibility Graph Files (*.vgh)"));
 
     std::string filename = qFilename.toStdString();
     if (filename.empty()) {return;}

@@ -70,12 +70,12 @@ protected:
   // Use shared pointer for the node
   rclcpp::Node::SharedPtr node_;
 
-  QPushButton *push_button_1_;
-  QPushButton *push_button_2_;
-  QPushButton *push_button_3_;
-  QPushButton *push_button_4_;
-  QCheckBox *check_box_1_;
-  QCheckBox *check_box_2_;
+  QPushButton * push_button_1_;
+  QPushButton * push_button_2_;
+  QPushButton * push_button_3_;
+  QPushButton * push_button_4_;
+  QCheckBox * check_box_1_;
+  QCheckBox * check_box_2_;
 
   float linear_velocity_;
   float angular_velocity_;

@@ -25,7 +25,7 @@ void DriveWidget::paintEvent(QPaintEvent * event)
 {
   QColor background;
   QColor crosshair;
-  if(isEnabled() ) {
+  if (isEnabled() ) {
     background = Qt::white;
     crosshair = Qt::black;
   } else {
@@ -48,7 +48,7 @@ void DriveWidget::paintEvent(QPaintEvent * event)
   painter.drawLine(hpad, height() / 2, hpad + size, height() / 2);
   painter.drawLine(width() / 2, vpad, width() / 2, vpad + size);
 
-  if(isEnabled() && (angular_velocity_ != 0 || linear_velocity_ != 0 )) {
+  if (isEnabled() && (angular_velocity_ != 0 || linear_velocity_ != 0 )) {
     QPen pen;
     pen.setWidth(size / 150);
     pen.setColor(Qt::darkRed);

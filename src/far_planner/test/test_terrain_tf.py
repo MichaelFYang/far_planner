@@ -10,7 +10,7 @@ import tempfile
 import time
 
 import rclpy
-from rclpy.parameter_client import AsyncParameterClient
+from rcl_interfaces.srv import GetParameters
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rosgraph_msgs.msg import Clock
@@ -77,9 +77,11 @@ def test_terrain_transform_is_timestamped_and_atomic():
                            and node.count_publishers('/FAR_obs_debug') > 0)
                 # Publishers are created before the planner finishes initializing.
                 # A service response proves its executor is now processing callbacks.
-                client = AsyncParameterClient(node, '/far_planner_node')
-                spin_until(client.services_are_ready)
-                ready = client.get_parameters(['world_frame'])
+                client = node.create_client(GetParameters, '/far_planner_node/get_parameters')
+                spin_until(client.service_is_ready)
+                request = GetParameters.Request()
+                request.names = ['world_frame']
+                ready = client.call_async(request)
                 spin_until(ready.done)
                 assert ready.result().values[0].string_value == 'map'
                 spin_until(lambda: clock.get_subscription_count() > 0
