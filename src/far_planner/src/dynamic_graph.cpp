@@ -178,9 +178,9 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
                     outside_break_nodes.push_back(cnode);
                 } 
             }
-            for (std::size_t j=0; j<near_nav_nodes_.size(); j++) {
+            for (std::size_t j=0; j<i; j++) {
                 const NavNodePtr nav_ptr2 = near_nav_nodes_[j];
-                if (i == j || j > i || nav_ptr2->is_odom) continue;
+                if (nav_ptr2->is_odom) continue;
                 if (this->IsValidConnect(nav_ptr1, nav_ptr2, true)) {
                     this->AddPolyEdge(nav_ptr1, nav_ptr2), this->AddEdge(nav_ptr1, nav_ptr2);
                 } else {
