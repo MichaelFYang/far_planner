@@ -421,22 +421,26 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
     FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution());
     std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0);
     for (const auto& point : copy_free_ptr->points) {
-        Eigen::Vector3i csub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, 0.0f));
-        std::vector<Eigen::Vector3i> subs;
-        this->Expansion2D(csub, subs, INFLATE_N);
-        for (const auto& sub : subs) {
-            if (!terrain_height_grid_->InRange(sub)) continue;
-            const int ind = terrain_height_grid_->Sub2Ind(sub);
-            if (terrain_grid_occupy_list_[ind] == 0) {
-                terrain_height_grid_->GetCell(ind).resize(1);
-                terrain_height_grid_->GetCell(ind)[0] = point.z;
-            } else {
-                terrain_height_grid_->GetCell(ind).push_back(point.z);
+        const Eigen::Vector3i center = terrain_height_grid_->Pos2Sub(
+            Eigen::Vector3d(point.x, point.y, 0.0f));
+        for (int ix = -INFLATE_N; ix <= INFLATE_N; ++ix) {
+            for (int iy = -INFLATE_N; iy <= INFLATE_N; ++iy) {
+                Eigen::Vector3i sub = center;
+                sub.x() += ix;
+                sub.y() += iy;
+                if (!terrain_height_grid_->InRange(sub)) continue;
+                const int ind = terrain_height_grid_->Sub2Ind(sub);
+                auto& heights = terrain_height_grid_->GetCell(ind);
+                if (terrain_grid_occupy_list_[ind] == 0) {
+                    heights.resize(1);
+                    heights[0] = point.z;
+                } else {
+                    heights.push_back(point.z);
+                }
+                terrain_grid_occupy_list_[ind] = 1;
             }
-            terrain_grid_occupy_list_[ind] = 1;
         }
     }
-    const int N = terrain_grid_occupy_list_.size();
     this->TraversableAnalysis(terrainHeightOut);
     if (terrainHeightOut->empty()) { // set terrain height kdtree
         FARUtil::ClearKdTree(flat_terrain_cloud_, kdtree_terrain_clould_);
