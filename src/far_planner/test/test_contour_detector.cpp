@@ -4,9 +4,60 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "far_planner/contour_detector.h"
+
+class ContourDetectorTestAccess {
+public:
+    static std::unordered_set<int> CollectHierarchy(const std::vector<cv::Vec4i>& hierarchy,
+                                                    int first,
+                                                    std::unordered_set<int> indices = {}) {
+        ContourDetector detector;
+        detector.SameAndLowLevelIdxs(hierarchy, first, indices);
+        return indices;
+    }
+
+    static std::size_t CollapseWallRun(std::size_t count) {
+        ContourDetector detector;
+        detector.ALIGN_ANGLE_COS = 0.99f;
+        CVPointStack contour;
+        contour.reserve(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            contour.emplace_back(static_cast<float>(i), 0.0f);
+        }
+        detector.RemoveWallConnection(contour, cv::Point2f(-1.0f, 0.0f), count);
+        return count;
+    }
+
+    static bool DegenerateWallVertex() {
+        ContourDetector detector;
+        return detector.IsPrevWallVertex(cv::Point2f(0.0f, 0.0f),
+                                         cv::Point2f(0.0f, 0.0f),
+                                         cv::Point2f(1.0f, 0.0f));
+    }
+};
+
+TEST(ContourDetector, TraversesDeepHierarchyAndWallRunWithoutRecursion) {
+    constexpr int depth = 100000;
+    std::vector<cv::Vec4i> hierarchy(depth, cv::Vec4i(-1, -1, -1, -1));
+    for (int i = 0; i + 1 < depth; ++i) hierarchy[i][2] = i + 1;
+    const auto descendants = ContourDetectorTestAccess::CollectHierarchy(hierarchy, 0);
+    EXPECT_EQ(descendants.size(), static_cast<std::size_t>(depth));
+    EXPECT_EQ(descendants.count(depth - 1), 1U);
+    EXPECT_EQ(ContourDetectorTestAccess::CollapseWallRun(depth), 1U);
+    EXPECT_FALSE(ContourDetectorTestAccess::DegenerateWallVertex());
+
+    std::vector<cv::Vec4i> siblings(4, cv::Vec4i(-1, -1, -1, -1));
+    siblings[1][0] = 2;
+    siblings[2][2] = 3;
+    const auto branch = ContourDetectorTestAccess::CollectHierarchy(siblings, 1);
+    EXPECT_EQ(branch, (std::unordered_set<int>{1, 2, 3}));
+    const auto premarked = ContourDetectorTestAccess::CollectHierarchy(siblings, 2, {2});
+    EXPECT_EQ(premarked, (std::unordered_set<int>{2, 3}));
+}
 
 TEST(ContourDetector, KeepsInflatedRectangleAfterContourFiltering)
 {
