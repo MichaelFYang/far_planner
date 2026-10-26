@@ -39,7 +39,6 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
             this->AddCTNodeToGraph(new_ctnode_ptr);
         } else {
             CTNodeStack ctnode_stack;
-            ctnode_stack.clear();
             const int N = poly_ptr->vertices.size();
             for (std::size_t idx=0; idx<N; idx++) {
                 this->CreateCTNode(poly_ptr->vertices[idx], new_ctnode_ptr, poly_ptr, false);
@@ -435,13 +434,14 @@ void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_grap
             ctnode_ptr->poly_ptr->is_pillar = true;
             ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         } else {
+            // UpdateContourGraph links every non-pillar polygon into a closed ring.
             CTNodePtr next_ctnode;
             // front direction
             next_ctnode = ctnode_ptr->front;
             Point3D start_p = ctnode_ptr->position;
             Point3D end_p = next_ctnode->position;
             float edist = (end_p - ctnode_ptr->position).norm_flat();
-            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
+            while (next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
                 next_ctnode = next_ctnode->front;
                 start_p = end_p;
                 end_p = next_ctnode->position;
@@ -460,7 +460,7 @@ void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_grap
             start_p = ctnode_ptr->position;
             end_p   = next_ctnode->position;
             edist = (end_p - ctnode_ptr->position).norm_flat();
-            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
+            while (next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
                 next_ctnode = next_ctnode->back;
                 start_p = end_p;
                 end_p = next_ctnode->position;
