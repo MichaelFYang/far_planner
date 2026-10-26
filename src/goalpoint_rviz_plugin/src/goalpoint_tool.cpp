@@ -146,7 +146,6 @@ void GoalpointTool::onPoseSet(double x, double y, double /* theta */)
 
   joy.header.stamp = clock_->now();
   joy.header.frame_id = "goalpoint_tool";
-  pub_joy_->publish(joy);
 
   geometry_msgs::msg::PointStamped goalpoint;
   goalpoint.header.frame_id = fixed_frame;
@@ -156,8 +155,7 @@ void GoalpointTool::onPoseSet(double x, double y, double /* theta */)
   goalpoint.point.z = goal_height;
 
   pub_->publish(goalpoint);
-  usleep(10000);
-  pub_->publish(goalpoint);
+  pub_joy_->publish(joy);
 }
 }  // namespace goalpoint_rviz_plugin
 
