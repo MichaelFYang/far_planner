@@ -10,6 +10,8 @@
 #include "graph_decoder/decoder_node.h"
 #include <visibility_graph_msg/graph_file_writer.h>
 #include <visibility_graph_msg/graph_validation.h>
+#include <cmath>
+#include <stdexcept>
 #include <utility>
 
 
@@ -154,6 +156,17 @@ void GraphDecoder::LoadParams() {
     // Retrieve the parameters
     nh_->get_parameter("world_frame", gd_params_.frame_id);
     nh_->get_parameter("visual_scale_ratio", gd_params_.viz_scale_ratio);
+    const auto frame_begin = gd_params_.frame_id.find_first_not_of('/');
+    if (frame_begin == std::string::npos) {
+        throw std::invalid_argument("world_frame must name a nonempty frame");
+    }
+    gd_params_.frame_id.erase(0, frame_begin);
+    if (gd_params_.frame_id.find_first_of(" \t\n\r") != std::string::npos) {
+        throw std::invalid_argument("world_frame must not contain whitespace");
+    }
+    if (!std::isfinite(gd_params_.viz_scale_ratio) || gd_params_.viz_scale_ratio <= 0.0f) {
+        throw std::invalid_argument("visual_scale_ratio must be finite and positive");
+    }
 }
 
 void GraphDecoder::SetMarker(const VizColor& color, 
@@ -461,7 +474,14 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
   rclcpp::init(argc, argv);
-  auto gd_node = std::make_shared<GraphDecoder>();
+  std::shared_ptr<GraphDecoder> gd_node;
+  try {
+    gd_node = std::make_shared<GraphDecoder>();
+  } catch (const std::exception& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger("graph_decoder_node"), "Decoder startup error: %s", ex.what());
+    rclcpp::shutdown();
+    return 1;
+  }
   
   rclcpp::spin(gd_node->GetNodeHandle());
   rclcpp::shutdown();
