@@ -132,8 +132,10 @@ void FARMaster::CheckClockEpoch() {
 void FARMaster::ResetEnvironmentAndGraph() {
   this->ResetInternalValues();
   odometry_history_.Clear();
+  pending_odometry_.Clear();
   pending_scans_.Clear();
   pending_terrains_.Clear();
+  pending_local_terrains_.Clear();
   last_scan_stamp_ = last_terrain_stamp_ = last_local_terrain_stamp_ = 0;
   is_odom_init_ = is_cloud_init_ = is_scan_init_ = false;
   FARUtil::cur_scan_cloud_->clear();
@@ -176,7 +178,9 @@ void FARMaster::Loop() {
     /* Process callback functions */
     ros::spinOnce();
     this->CheckClockEpoch();
+    if (pending_odometry_.Size() != 0) this->ProcessPendingOdometry();
     if (pending_scans_.Size() != 0) this->ProcessPendingScans();
+    if (pending_local_terrains_.Size() != 0) this->ProcessPendingLocalTerrain();
     if (pending_terrains_.Size() != 0) this->ProcessPendingTerrain();
     if (!this->PreconditionCheck()) {
       loop_rate.sleep();
@@ -599,42 +603,72 @@ void FARMaster::OdomCallBack(const nav_msgs::OdometryConstPtr& msg) {
     ROS_WARN_THROTTLE(1.0, "Dropping odometry with an empty frame or invalid timestamp");
     return;
   }
-  tf::Pose tf_odom_pose;
-  tf::poseMsgToTF(msg->pose.pose, tf_odom_pose);
-  if (!FARUtil::IsSameFrameID(odom_frame, master_params_.world_frame)) {
-    if (FARUtil::IsDebug) ROS_WARN_ONCE("FARMaster: odom frame does NOT match with world frame!");
-    tf::StampedTransform odom_to_world_tf_stamp;
-    try
-    {
-      tf_listener_->lookupTransform(master_params_.world_frame, odom_frame, msg->header.stamp, odom_to_world_tf_stamp);
-      tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
-    }
-    catch (const tf::TransformException& ex){
-      ROS_ERROR("Tracking odom TF lookup: %s",ex.what());
-      return;
-    }
+  if (!pending_odometry_.Push(stamp, msg, odometry_history_.LatestStamp(),
+                              far_planner::SteadyNowNs())) {
+    ROS_WARN_THROTTLE(1.0, "Dropping out-of-order pending odometry");
+    return;
   }
-  const auto& origin = tf_odom_pose.getOrigin();
-  if (!odometry_history_.Add(stamp, {{origin.x(), origin.y(), origin.z()}})) return;
-  robot_pos_.x = tf_odom_pose.getOrigin().getX(); 
-  robot_pos_.y = tf_odom_pose.getOrigin().getY();
-  robot_pos_.z = tf_odom_pose.getOrigin().getZ();
-  // extract robot heading
-  FARUtil::robot_pos = robot_pos_;
-  double roll, pitch, yaw;
-  tf_odom_pose.getBasis().getRPY(roll, pitch, yaw);
-  robot_heading_ = Point3D(cos(yaw), sin(yaw), 0);
+  this->ProcessPendingOdometry();
+}
 
-  if (!is_odom_init_) {
-    // system start time
-    FARUtil::systemStartTime = ros::Time::now().toSec();
-    FARUtil::map_origin = robot_pos_;
-    map_handler_.UpdateRobotPosition(robot_pos_);
+void FARMaster::ProcessPendingOdometry() {
+  const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
+  const auto expired = pending_odometry_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  if (expired != 0) ROS_WARN_THROTTLE(1.0, "Expired %zu odometry samples waiting for TF", expired);
+  while (pending_odometry_.Size() != 0) {
+    const auto& entry = pending_odometry_.Front();
+    if (entry.stamp <= odometry_history_.LatestStamp()) {
+      pending_odometry_.PopReady();
+      continue;
+    }
+    const auto msg = entry.message;
+    const auto stamp = entry.stamp;
+    const std::string odom_frame = FARUtil::NormalizeFrameID(msg->header.frame_id);
+    const bool needs_transform = !FARUtil::IsSameFrameID(odom_frame, master_params_.world_frame);
+    if (needs_transform &&
+        !tf_listener_->canTransform(master_params_.world_frame, odom_frame,
+                                    msg->header.stamp)) break;
+    tf::Pose tf_odom_pose;
+    tf::poseMsgToTF(msg->pose.pose, tf_odom_pose);
+    if (needs_transform) {
+      if (FARUtil::IsDebug) ROS_WARN_ONCE("FARMaster: odom frame does NOT match with world frame!");
+      tf::StampedTransform odom_to_world_tf_stamp;
+      try
+      {
+        tf_listener_->lookupTransform(master_params_.world_frame, odom_frame, msg->header.stamp, odom_to_world_tf_stamp);
+        tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
+      }
+      catch (const tf::TransformException& ex){
+        ROS_WARN_THROTTLE(1.0, "Waiting for odometry TF: %s", ex.what());
+        break;
+      }
+    }
+    const auto& origin = tf_odom_pose.getOrigin();
+    if (!odometry_history_.Add(stamp, {{origin.x(), origin.y(), origin.z()}})) {
+      pending_odometry_.PopReady();
+      continue;
+    }
+    robot_pos_.x = tf_odom_pose.getOrigin().getX();
+    robot_pos_.y = tf_odom_pose.getOrigin().getY();
+    robot_pos_.z = tf_odom_pose.getOrigin().getZ();
+    // extract robot heading
+    FARUtil::robot_pos = robot_pos_;
+    double roll, pitch, yaw;
+    tf_odom_pose.getBasis().getRPY(roll, pitch, yaw);
+    robot_heading_ = Point3D(cos(yaw), sin(yaw), 0);
+
+    if (!is_odom_init_) {
+      // system start time
+      FARUtil::systemStartTime = ros::Time::now().toSec();
+      FARUtil::map_origin = robot_pos_;
+      map_handler_.UpdateRobotPosition(robot_pos_);
+    }
+
+    is_odom_init_ = true;
+    pending_odometry_.PopReady();
+    this->ProcessPendingScans();
+    this->ProcessPendingTerrain();
   }
-
-  is_odom_init_ = true;
-  this->ProcessPendingScans();
-  this->ProcessPendingTerrain();
 }
 
 FARMaster::CloudProcessResult FARMaster::ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
@@ -710,10 +744,46 @@ void FARMaster::TerrainLocalCallBack(const sensor_msgs::PointCloud2ConstPtr& pc)
   this->CheckClockEpoch();
   if (master_params_.is_static_env) return;
   const auto stamp = MeasurementStamp(pc->header.stamp);
-  if (stamp <= last_local_terrain_stamp_) return;
-  if (this->ProcessCloud(pc, local_terrain_ptr_) != CloudProcessResult::ACCEPTED) return;
-  last_local_terrain_stamp_ = stamp;
-  FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
+  if (!this->ValidMeasurementTime(stamp) ||
+      !pending_local_terrains_.Push(stamp, pc, last_local_terrain_stamp_,
+                                    far_planner::SteadyNowNs())) {
+    ROS_WARN_THROTTLE(1.0, "Dropping invalid or out-of-order local terrain");
+    return;
+  }
+  this->ProcessPendingLocalTerrain();
+}
+
+void FARMaster::ProcessPendingLocalTerrain() {
+  const auto max_age = std::max<std::uint64_t>(1000000000ULL, sensor_time_tolerance_ns_ * 2);
+  const auto expired = pending_local_terrains_.DiscardExpired(far_planner::SteadyNowNs(), max_age);
+  if (expired != 0) {
+    ROS_WARN_THROTTLE(1.0, "Expired %zu local terrain clouds waiting for TF", expired);
+  }
+  while (pending_local_terrains_.Size() != 0) {
+    const auto& entry = pending_local_terrains_.Front();
+    if (entry.stamp <= last_local_terrain_stamp_) {
+      pending_local_terrains_.PopReady();
+      continue;
+    }
+    const auto pc = entry.message;
+    const std::string source = FARUtil::NormalizeFrameID(pc->header.frame_id);
+    if (source.empty()) {
+      pending_local_terrains_.PopReady();
+      continue;
+    }
+    if (!FARUtil::IsSameFrameID(source, master_params_.world_frame) &&
+        !tf_listener_->canTransform(master_params_.world_frame, source,
+                                    pc->header.stamp)) break;
+    const auto result = this->ProcessCloud(pc, local_terrain_ptr_);
+    if (result == CloudProcessResult::TF_UNAVAILABLE) break;
+    if (result == CloudProcessResult::INVALID) {
+      pending_local_terrains_.PopReady();
+      continue;
+    }
+    last_local_terrain_stamp_ = entry.stamp;
+    pending_local_terrains_.PopReady();
+    FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
+  }
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::PointCloud2ConstPtr& pc) {

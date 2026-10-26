@@ -56,8 +56,10 @@ private:
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
     far_planner::OdometryHistory odometry_history_;
+    far_planner::PendingMeasurementQueue<nav_msgs::OdometryConstPtr> pending_odometry_{200};
     far_planner::PendingMeasurementQueue<sensor_msgs::PointCloud2ConstPtr> pending_scans_;
     far_planner::PendingMeasurementQueue<sensor_msgs::PointCloud2ConstPtr> pending_terrains_{2};
+    far_planner::PendingMeasurementQueue<sensor_msgs::PointCloud2ConstPtr> pending_local_terrains_{2};
     far_planner::ClockEpoch clock_epoch_;
     std::uint64_t last_scan_stamp_ = 0, last_terrain_stamp_ = 0, last_local_terrain_stamp_ = 0;
     std::uint64_t sensor_time_tolerance_ns_ = 200000000ULL;
@@ -129,7 +131,9 @@ private:
     CloudProcessResult ProcessCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
                                    const PointCloudPtr& cloudOut, Point3D* sensor_origin = nullptr);
     void ProcessPendingScans();
+    void ProcessPendingOdometry();
     void ProcessPendingTerrain();
+    void ProcessPendingLocalTerrain();
     void ProcessTerrainCloud(const sensor_msgs::PointCloud2ConstPtr& pc,
                              const Point3D& terrain_robot_pos);
 

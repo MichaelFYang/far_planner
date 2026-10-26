@@ -108,6 +108,25 @@ class ScanTfRetryTest(unittest.TestCase):
         transforms.publish(TFMessage(transforms=[terrain_tf]))
         wait_for(lambda: len(terrain_updates) > before)
 
+        # Late odometry TF must release both the odometry and terrain queues.
+        late_odom_stamp = rospy.Time.now()
+        late_pose = Odometry()
+        late_pose.header = Header(stamp=late_odom_stamp, frame_id='late_odom')
+        late_pose.pose.pose.orientation.w = 1.0
+        before = len(terrain_updates)
+        odometry.publish(late_pose)
+        terrain.publish(cloud('late_odom', late_odom_stamp))
+        time.sleep(0.2)
+        self.assertEqual(len(terrain_updates), before)
+        odom_tf = TransformStamped()
+        odom_tf.header = Header(stamp=late_odom_stamp, frame_id='map')
+        odom_tf.child_frame_id = 'late_odom'
+        odom_tf.transform.translation.x = 1.0
+        odom_tf.transform.rotation.w = 1.0
+        transforms.publish(TFMessage(transforms=[odom_tf]))
+        wait_for(lambda: len(terrain_updates) > before)
+        self.assertGreater(terrain_updates[-1].width, 0)
+
 
 if __name__ == '__main__':
     rospy.init_node('test_scan_tf_ros1', anonymous=True)
