@@ -138,6 +138,8 @@ Graph publishers set the graph header and each node header to the same world fra
 
 The graph decoder now applies the same validator before replacing its displayed and saved graph. A bad frame, geometry, duplicate ID, size, or connection leaves the previous graph intact; an explicitly empty, correctly framed graph clears it. The shared validator lives in `visibility_graph_msg` so both consumers use the same rules.
 
+Decoder startup strips leading `/` from `world_frame` and rejects an empty or whitespace-containing frame and a nonpositive or nonfinite `visual_scale_ratio`. Invalid settings exit with a diagnostic instead of silently rejecting every graph or publishing unusable markers.
+
 ## Graph exchange spatial index stage
 
 `GraphMsger` now packs only searchable nodes into its KD-tree cloud and keeps a parallel pointer for each point. Search returns the exact node pointer, avoiding both empty/ghost slots and loss of integer ID precision through a float intensity field. PCL returns squared distances, so the matcher compares them with the squared linear radius. Tests cover skipped nodes, a large ID, radius semantics, empty rebuilds, and invalid queries.

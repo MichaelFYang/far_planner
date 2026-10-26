@@ -35,7 +35,8 @@ def test_decoder_keeps_last_valid_graph():
 
         with open(os.path.join(directory, 'decoder.log'), 'w+') as log:
             process = subprocess.Popen(
-                [os.environ['GRAPH_DECODER_EXECUTABLE']],
+                [os.environ['GRAPH_DECODER_EXECUTABLE'], '--ros-args',
+                 '-p', 'world_frame:=/map'],
                 stdout=log, stderr=subprocess.STDOUT)
 
             def spin_until(predicate, timeout=10.0):
@@ -55,6 +56,7 @@ def test_decoder_keeps_last_valid_graph():
                 graph = published[-1]
                 assert graph.size == expected_size
                 assert graph.robot_id == expected_robot
+                assert graph.header.frame_id == 'map'
                 assert len(graph.nodes) == expected_size
                 return graph
 
@@ -151,3 +153,15 @@ def test_decoder_keeps_last_valid_graph():
                     process.wait(timeout=5)
                 node.destroy_node()
                 rclpy.shutdown()
+
+
+def test_decoder_rejects_invalid_startup_parameters():
+    for setting, parameter in (('world_frame:=/', 'world_frame'),
+                               ('visual_scale_ratio:=0.0', 'visual_scale_ratio'),
+                               ('visual_scale_ratio:=-1.0', 'visual_scale_ratio')):
+        result = subprocess.run(
+            [os.environ['GRAPH_DECODER_EXECUTABLE'], '--ros-args', '-p', setting],
+            capture_output=True, text=True, timeout=10, check=False)
+        assert result.returncode == 1
+        assert 'Decoder startup error' in result.stdout + result.stderr
+        assert parameter in result.stdout + result.stderr
