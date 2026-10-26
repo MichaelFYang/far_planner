@@ -96,6 +96,8 @@ The two visibility-graph traversals and terrain A* now push an immutable cost wi
 
 A five-node geometric graph demonstrated the old failure: the cost to node 1 settled at 45 instead of the 44.89018 route through node 3. `test/test_search.cpp` now checks both graph traversals against an independent quadratic shortest-path reference over 40 deterministic graphs with covered/uncovered nodes. It also checks an obstacle-grid terrain route. These tests establish search behavior for the covered cases, not the whole navigation stack.
 
+Goal snapping now marks only the closest navigation point after scanning all candidates. Previously, each improving candidate retained `is_goal`, making a discarded point appear static after later goal resets. The new regression fails on the old behavior and checks selection plus replacement.
+
 ## Graph lifecycle stage
 
 `EraseNodeFromStack` now uses stable remove-and-erase for all matching pointers, including the first element and adjacent copies. Merged-node removal uses the iterator returned by `erase`, so removing the first or consecutive nodes does not decrement past `begin()`.
