@@ -8,6 +8,7 @@
 
 #include <string>
 #include <rclcpp/time.hpp>
+#include <rviz_common/display_context.hpp>
 
 #include "teleop_rviz_plugin/drive_widget.hpp"
 
@@ -22,6 +23,7 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   , mouse_pressed_sent_(false)
 {
   node_ = rclcpp::Node::make_shared("teleop_panel_node");
+  clock_ = node_->get_clock();
 
   QVBoxLayout * layout = new QVBoxLayout;
   check_box_1_ = new QCheckBox("Planning Attemptable", this);
@@ -44,14 +46,14 @@ TeleopPanel::TeleopPanel(QWidget * parent)
 
   QTimer * output_timer = new QTimer(this);
 
-  connect(push_button_1_, SIGNAL(pressed()), this, SLOT(pressButton1()));
-  connect(push_button_2_, SIGNAL(pressed()), this, SLOT(pressButton2()));
-  connect(push_button_3_, SIGNAL(pressed()), this, SLOT(pressButton3()));
-  connect(push_button_4_, SIGNAL(pressed()), this, SLOT(pressButton4()));
-  connect(check_box_1_, SIGNAL(stateChanged(int)), this, SLOT(clickBox1(int)));
-  connect(check_box_2_, SIGNAL(stateChanged(int)), this, SLOT(clickBox2(int)));
+  connect(push_button_1_, &QPushButton::pressed, this, &TeleopPanel::pressButton1);
+  connect(push_button_2_, &QPushButton::pressed, this, &TeleopPanel::pressButton2);
+  connect(push_button_3_, &QPushButton::pressed, this, &TeleopPanel::pressButton3);
+  connect(push_button_4_, &QPushButton::pressed, this, &TeleopPanel::pressButton4);
+  connect(check_box_1_, &QCheckBox::toggled, this, &TeleopPanel::clickBox1);
+  connect(check_box_2_, &QCheckBox::toggled, this, &TeleopPanel::clickBox2);
   connect(drive_widget_, &DriveWidget::outputVelocity, this, &TeleopPanel::setVel);
-  connect(output_timer, SIGNAL(timeout()), this, SLOT(sendVel()));
+  connect(output_timer, &QTimer::timeout, this, &TeleopPanel::sendVel);
 
   output_timer->start(100);
 
@@ -64,6 +66,12 @@ TeleopPanel::TeleopPanel(QWidget * parent)
 
 
   drive_widget_->setEnabled(true);
+}
+
+void TeleopPanel::onInitialize()
+{
+  rviz_common::Panel::onInitialize();
+  clock_ = getDisplayContext()->getClock();
 }
 
 void TeleopPanel::pressButton1()
@@ -100,7 +108,7 @@ void TeleopPanel::pressButton2()
     joy.buttons.push_back(0);
     joy.buttons.push_back(0);
 
-    joy.header.stamp = node_->now();  // ROS2 uses node_->now() to get the current time
+    joy.header.stamp = clock_->now();
     joy.header.frame_id = "teleop_panel";
     velocity_publisher_->publish(joy);
   }
@@ -191,7 +199,7 @@ void TeleopPanel::sendVel()
     joy.buttons.push_back(0);
     joy.buttons.push_back(0);
 
-    joy.header.stamp = node_->now();
+    joy.header.stamp = clock_->now();
     joy.header.frame_id = "teleop_panel";
     velocity_publisher_->publish(joy);
 
