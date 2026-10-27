@@ -20,6 +20,38 @@ FAR Planner was used by the [CMU-OSU Team](https://www.subt-explorer.com) in att
 
 Use the branch matching your ROS installation; its README contains the corresponding commands.
 
+## Workflow
+
+1. **Build the matching branch.** Select your ROS distribution above, then follow [Usage](#usage) to install dependencies and build the workspace.
+2. **Start the robot or simulator stack.** Supply odometry, registered scans, terrain analysis, TF, and a local planner. The linked development environment supplies these components separately. Keep observations and transforms on the same ROS clock; see [Sensor inputs](#sensor-inputs).
+3. **Launch FAR and set a goal.** Use RViz's **Goalpoint** tool to publish `/goal_point`. FAR updates its visibility graph and publishes intermediate `/way_point` targets; the external local planner performs obstacle-aware motion control.
+4. **Inspect and validate.** Watch the graph, route, and waypoint in RViz. Arrival is relative to FAR's adjusted goal anchor; check robot position separately when exact requested-point proximity matters. Run the [development checks](#development) before changing planning behavior.
+
+## Algorithm pipeline
+
+```mermaid
+flowchart TD
+    I["Odometry, raw scans, and terrain clouds"] --> T["Validate inputs; match measurement-time TF and odometry"]
+    T --> M["Maintain obstacle/free-space map"]
+    M --> C["Extract local polygons and terrain heights"]
+    C --> G["Maintain persistent visibility graph"]
+    G --> S["Search covered and attemptable routes"]
+    Q["/goal_point: transform, refine, and connect goal"] --> S
+    S --> W["Reconstruct route and publish /way_point"]
+    W --> L["External local planner and robot/simulator"]
+    L --> I
+```
+
+Contours describe XY geometry with terrain-derived heights. Graph maintenance updates corner, visibility, and trajectory connections; route selection uses separate covered-space and attemptable searches. In dynamic mode, clearing occupied geometry requires free-ray evidence. The normal route policy does not guarantee a return to re-observe a blocked corridor. See the [algorithm guide](docs/algorithm.md) for module logic and timing contracts, and the [validation record](docs/validation.md) for tested behavior and remaining limitations.
+
+| Package under `src/` | Responsibility |
+| --- | --- |
+| [`far_planner`](src/far_planner/) | Sensor processing, map/contour updates, graph maintenance, route search, and waypoint publication |
+| [`graph_decoder`](src/graph_decoder/) | Read, validate, and save visibility graphs |
+| [`boundary_handler`](src/boundary_handler/) | Generate a graph from custom polygon boundaries and a reference trajectory |
+| [`visibility_graph_msg`](src/visibility_graph_msg/) | Shared graph messages and validation/export helpers |
+| [`goalpoint_rviz_plugin`](src/goalpoint_rviz_plugin/), [`teleop_rviz_plugin`](src/teleop_rviz_plugin/) | RViz goal selection and navigation/teleoperation controls |
+
 ## Usage
 
 The repository has been tested in Ubuntu 26.04 with ROS2 Lyrical. Follow instructions in [Autonomous Exploration Development Environment](http://cmu-exploration.com) to setup the development environment. Make sure to checkout the branch that matches the computer setup, compile, and download the simulation environments.
