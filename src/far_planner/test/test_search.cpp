@@ -475,6 +475,47 @@ TEST(GraphSearch, DecreaseOfQueuedNodeMustReorderBothTraversals)
         node->free_parent.reset();
     }
 }
+TEST(GraphSearch, RepeatedQueriesResetReachabilityAndParents)
+{
+    NodePtrStack graph = {Node(0, 0, 0), Node(1, 1, 0), Node(2, 2, 0), Node(3, 3, 0)};
+    Link(graph[0], graph[1]);
+    Link(graph[1], graph[2]);
+    Link(graph[2], graph[3]);
+    GraphPlanner planner;
+    planner.UpdaetVGraph(graph);
+    const auto check = [&](std::size_t source, const std::vector<bool>& reachable,
+                           const std::vector<bool>& covered_reachable) {
+        planner.UpdateGraphTraverability(graph[source], nullptr);
+        for (std::size_t i = 0; i < graph.size(); ++i) {
+            SCOPED_TRACE(::testing::Message() << "source " << source << ", node " << i);
+            EXPECT_EQ(graph[i]->is_traversable, reachable[i]);
+            EXPECT_EQ(graph[i]->is_free_traversable, covered_reachable[i]);
+            const float distance = std::abs(static_cast<float>(i) - static_cast<float>(source));
+            EXPECT_FLOAT_EQ(graph[i]->gscore, reachable[i] ? distance : FARUtil::kINF);
+            EXPECT_FLOAT_EQ(graph[i]->fgscore, covered_reachable[i] ? distance : FARUtil::kINF);
+            const auto parent = i == source ? NavNodePtr() : graph[i < source ? i + 1 : i - 1];
+            EXPECT_EQ(graph[i]->parent, reachable[i] ? parent : NavNodePtr());
+            EXPECT_EQ(graph[i]->free_parent, covered_reachable[i] ? parent : NavNodePtr());
+        }
+    };
+    check(0, {true, true, true, true}, {true, true, true, true});
+    graph[1]->connect_nodes = {graph[0]};
+    graph[2]->connect_nodes = {graph[3]};
+    check(0, {true, true, false, false}, {true, true, false, false});
+    check(3, {false, false, true, true}, {false, false, true, true});
+    Link(graph[1], graph[2]);
+    graph[2]->is_covered = false;
+    check(3, {true, true, true, true}, {false, false, false, true});
+    graph[2]->is_covered = true;
+    check(0, {true, true, true, true}, {true, true, true, true});
+    planner.ResetPlannerInternalValues();
+    for (const auto& node : graph) {
+        node->connect_nodes.clear();
+        node->parent.reset();
+        node->free_parent.reset();
+    }
+}
+
 TEST(GraphSearch, EqualCostRoutesUseStableNodeIds)
 {
     GraphPlanner planner;
