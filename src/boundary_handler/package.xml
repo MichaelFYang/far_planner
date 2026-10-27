@@ -13,6 +13,9 @@
   <depend>visualization_msgs</depend>
   <depend>visibility_graph_msg</depend>
   <test_depend>gtest</test_depend>
+  <test_depend>rostest</test_depend>
+  <test_depend>rospy</test_depend>
+  <test_depend>rosgraph</test_depend>
   <exec_depend>roslaunch</exec_depend>
   <exec_depend>far_planner</exec_depend>
   <exec_depend>rviz</exec_depend>

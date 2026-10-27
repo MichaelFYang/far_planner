@@ -1,0 +1,4 @@
+<launch>
+  <test test-name="test_startup_shutdown_ros1" pkg="boundary_handler"
+        type="test_startup_shutdown_ros1.py" time-limit="45"/>
+</launch>

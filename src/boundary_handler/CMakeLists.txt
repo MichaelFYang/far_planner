@@ -50,6 +50,11 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 )
 
 if(CATKIN_ENABLE_TESTING)
+  find_package(rostest REQUIRED)
+  catkin_install_python(PROGRAMS test/test_startup_shutdown_ros1.py
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+  add_rostest(test/test_startup_shutdown_ros1.test)
   catkin_add_gtest(test_input_parser test/test_input_parser.cpp test/test_intersection.cpp)
   if(TARGET test_input_parser)
     target_compile_definitions(test_input_parser PRIVATE FAR_PLANNER_ROS1)

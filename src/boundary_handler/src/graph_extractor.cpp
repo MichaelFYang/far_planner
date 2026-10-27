@@ -499,19 +499,23 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "boundary_graph_node");
+  // Its NodeHandle must stay alive while the catch distinguishes errors from shutdown.
   GraphExtractor ge_node;
   try {
     ge_node.Init();
+    if (!ros::ok() || ros::isShuttingDown()) return 0;
     ge_node.Run();
+    ros::Rate loop_rate(1.0);
+    while (ros::ok() && !ros::isShuttingDown()) {
+      ros::spinOnce();
+      ge_node.Loop();
+      loop_rate.sleep();
+    }
   } catch (const std::exception& ex) {
+    if (!ros::ok() || ros::isShuttingDown()) return 0;
     std::cerr << "Boundary setup error: " << ex.what() << '\n';
     ROS_ERROR("Boundary setup error: %s", ex.what());
     return 1;
   }
-  ros::Rate loop_rate(1.0);
-    while (ros::ok()) {
-        ros::spinOnce();
-        ge_node.Loop();
-        loop_rate.sleep();
-    }
+  return 0;
 }
