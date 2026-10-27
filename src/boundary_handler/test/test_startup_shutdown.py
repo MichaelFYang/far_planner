@@ -89,3 +89,55 @@ def test_shutdown_during_trajectory_read(stop_signal):
                     except ProcessLookupError:
                         pass
                     process.wait(timeout=5.0)
+
+
+@pytest.mark.parametrize('valid_output', [True, False])
+def test_generated_graph_lifecycle(valid_output):
+    environment = os.environ.copy()
+    environment['ROS_DOMAIN_ID'] = str(100 + os.getpid() % 100)
+    environment['ROS_LOCALHOST_ONLY'] = '1'
+    samples = os.environ['BOUNDARY_SAMPLE_DATA']
+    with tempfile.TemporaryDirectory(prefix='boundary-graph-lifecycle-') as directory:
+        environment['ROS_LOG_DIR'] = directory
+        for name in ('boundary.ply', 'trajectory.txt'):
+            shutil.copyfile(os.path.join(samples, name), os.path.join(directory, name))
+        graph_file = 'result.vgh' if valid_output else 'missing/result.vgh'
+        graph = os.path.join(directory, graph_file)
+        log_path = os.path.join(directory, 'boundary.log')
+
+        def read_log():
+            with open(log_path) as stream:
+                return stream.read()
+
+        with open(log_path, 'w') as log:
+            process = subprocess.Popen([
+                os.environ['BOUNDARY_HANDLER_EXECUTABLE'], '--ros-args',
+                '-p', 'folder_path:=' + directory, '-p', 'graph_file:=' + graph_file,
+            ], env=environment, stdout=log, stderr=subprocess.STDOUT,
+                start_new_session=True)
+            try:
+                if valid_output:
+                    deadline = time.monotonic() + 10.0
+                    while not os.path.exists(graph):
+                        assert process.poll() is None, read_log()
+                        assert time.monotonic() < deadline, read_log()
+                        time.sleep(0.01)
+                    with open(graph) as saved:
+                        assert len(saved.readlines()) == 25
+                    process.send_signal(signal.SIGINT)
+                return_code = process.wait(timeout=10.0)
+                output = read_log()
+                assert return_code == (0 if valid_output else 1), output
+                assert 'LeakSanitizer' not in output, output
+                assert 'ERROR: AddressSanitizer' not in output, output
+                assert 'runtime error:' not in output, output
+                if not valid_output:
+                    assert not os.path.exists(graph), output
+                    assert 'Boundary setup error' in output, output
+            finally:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait(timeout=5.0)

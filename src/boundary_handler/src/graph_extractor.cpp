@@ -44,7 +44,8 @@ void GraphExtractor::Init() {
     this->LoadParams();
     
     robot_id_ = 0;
-    extracted_polys_.clear(), extracted_graph_.clear();
+    extracted_polys_.clear();
+    ResetGraph(extracted_graph_);
     
     this->ReadTrajFile(free_p_);
 }
@@ -162,7 +163,7 @@ void GraphExtractor::Loop() {
 
 
 void GraphExtractor::ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& graphOut) {
-    graphOut.clear();
+    ResetGraph(graphOut);
     if (polysIn.empty()) return;
     for (const auto& poly_ptr : polysIn) {
         NavNodePtr temp_node_ptr = NULL;
