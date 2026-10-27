@@ -112,7 +112,7 @@ The two original cases failed before the fix. The map regression also compares 9
 
 Goal refinement receives the current odometry position explicitly. It previously dereferenced a pointer populated only by an earlier graph traversal, so a goal arriving between graph initialization and the first planning tick could crash, including after reset. The indoor simulator exposed this sequence; a focused regression checks refinement before any traversal and again after reset.
 
-`PathToGoal` reports arrival within `g_planner/converge_distance` of either the active adjusted goal or the original requested goal. Free-grid and polygon refinement can move the active XY target; `goal_adjust_radius` sizes the free-grid search but does not bound the later polygon projection. An arrival status therefore does not guarantee that the original requested XYZ was reached. The garage validation below checks that separately.
+`PathToGoal` reports arrival within `g_planner/converge_distance` of either the active adjusted goal or its initialization anchor (`origin_goal_pos_`). For a new node, that anchor is the requested position; when reusing a nearby navigation node, it is already the snapped node's position. Free-grid and polygon refinement can move the active XY target; `goal_adjust_radius` sizes the free-grid search but does not bound the later polygon projection. An arrival status therefore does not guarantee that the original requested XYZ was reached. The garage validation below checks that separately.
 
 When local terrain occupies the goal grid, free-space classification requires a cell marked free without an overlapping inflated obstacle. Previously, one overlapping free sample could admit the goal to the covered traversal even when no free cell existed; a nearby navigation node could also bypass that blocked terrain. The navigation-node fallback now applies only when the goal grid has no terrain cells. A route-level regression fails on the old behavior and checks blocked terrain, obstacle removal, and the no-terrain fallback.
 
@@ -415,6 +415,19 @@ Sampled vehicle Z ranged from 0.850 to 4.376 m, exercising a 3.526 m height chan
 The recording's three cloud streams used `map` and strictly increasing stamps. Odometry bracketed all 1,147 messages in each terrain stream and 1,148 of 1,149 scans; the largest pose bracket was 5.429 ms. One scan had no bracket in the recording. This checks input availability for interpolation, not acceptance of every message or nontrivial sensor-frame TF chains.
 
 An earlier pilot target at `(40, 74, 1.70)` was refined and reported arrival 3.07 m from the requested point. It failed the independent requested-goal acceptance check and is not counted as a successful ramp traversal. The table uses open-lane targets that passed that check. The simulator integrates planar motion and sets vehicle Z from terrain observations, rather than contact dynamics; this run covers one selected garage route on native Jazzy, not general multi-layer navigation or collision safety. Assets, launch wrappers, recordings, and plots remain outside the repository.
+
+## Live Lyrical planner validation
+
+The official Lyrical desktop container ran planner source `552a559` against the native Jazzy simulator at `8313dfed10533787582be8a6044483fe3299622f`. The processes used a private localhost domain, shared IPC, and the same user ID. Parameters were checked through the running planner's service.
+
+| Scenario | Goals reached | Graph snapshots | Finite waypoints | Maximum requested-XYZ error |
+| --- | ---: | ---: | ---: | ---: |
+| Indoor, dynamic mode | 3 | 109 | 102 | 0.039 m |
+| Garage ascent and return, multi-layer mode | 5 | 396 | 385 | 0.121 m |
+
+Every goal required a new false-to-true arrival sequence and an independent requested-XYZ error below 0.6 m. Graph checks covered node headers, finite geometry, unique IDs, sizes, and resolved connections. Indoor processing produced 218 nonempty scan-ray messages. The garage follow-up also recorded active path endpoints, rechecked position after a one-second dwell, and observed a 3.329 m vehicle-height span and 3.667 m maximum graph-height span. Every first arrival observation was already inside the acceptance bound. Both planners and simulators exited normally.
+
+The first garage attempt stopped at a return-leg arrival observation 0.604 m from the request, after three successful goals. That failed result remains separate; the passing follow-up does not establish repeatability or explain the earlier miss. A Humble/Jazzy live attempt could not connect the two SDKs before graph publication and is not counted as planner validation. Use a matching simulator SDK for that check: [ROS 2 does not guarantee cross-distribution communication](https://github.com/ros2/ros2_documentation/blob/rolling/source/Releases.rst#cross-distribution-communications). Logs and observer reports remain outside the repository.
 
 ## Dynamic terrain retention validation
 
