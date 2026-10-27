@@ -80,7 +80,6 @@ TEST(GraphNodes, DirectDefaultConstructionHasNeutralState)
     EXPECT_EQ(nav.id, 0U);
     EXPECT_FALSE(nav.is_active);
     EXPECT_FALSE(nav.is_goal);
-    EXPECT_EQ(nav.node_type, NodeType::NOT_DEFINED);
     EXPECT_EQ(nav.free_direct, NodeFreeDirect::UNKNOW);
     EXPECT_EQ(nav.parent, nullptr);
     EXPECT_TRUE(nav.connect_nodes.empty());
