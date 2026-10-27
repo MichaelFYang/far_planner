@@ -18,7 +18,7 @@
   <depend>nav_msgs</depend>
   <depend>pcl_conversions</depend>
   <depend>eigen</depend>
-  <depend>opencv4</depend>
+  <depend>libopencv-dev</depend>
   <depend>visualization_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
