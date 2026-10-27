@@ -92,6 +92,10 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_gtest(test_frame_transforms test/test_frame_transforms.cpp test/test_sensor_timing.cpp test/test_local_terrain_callback.cpp test/test_viewpoint_extension.cpp test/test_overlap_cloud.cpp test/test_search.cpp test/test_graph_lifecycle.cpp test/test_graph_node_index.cpp test/test_graph_message.cpp test/test_map_handler.cpp test/test_contour_detector.cpp test/test_ros_context_cleanup.cpp)
   target_link_libraries(test_frame_transforms far_planner_core)
+  ament_add_pytest_test(test_startup_shutdown test/test_startup_shutdown.py
+    TIMEOUT 30
+    ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
+  )
   ament_add_pytest_test(test_terrain_tf test/test_terrain_tf.py
     TIMEOUT 40
     ENV FAR_PLANNER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
