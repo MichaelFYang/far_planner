@@ -335,6 +335,8 @@ void FARMaster::PlanningCallBack() {
   if (!is_init_completed_ || !is_graph_init_) return;
   const NavNodePtr goal_ptr = graph_planner_.GetGoalNodePtr();
   if (goal_ptr == NULL) {
+    // Imports can add nodes between graph-update and planning ticks.
+    graph_planner_.UpdaetVGraph(graph_manager_.GetNavGraph());
     /* Graph Traversablity Update */
     if (!FARUtil::IsDebug) printf("\033[2K");
     std::cout<<"    "<<"Adding Goal to V-Graph "<<"Time: "<<0.f<<"ms"<<std::endl;

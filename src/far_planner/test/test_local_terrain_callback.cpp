@@ -10,6 +10,61 @@
 
 class LocalTerrainCallbackTestAccess {
 public:
+    static void VerifyPlanningRefreshesAddedNodes() {
+#ifdef FAR_PLANNER_ROS1
+        int argc = 0;
+        char** argv = nullptr;
+        if (!ros::isInitialized()) ros::init(argc, argv, "planning_callback_test");
+#else
+        if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+#endif
+        FARMaster planner;
+#ifndef FAR_PLANNER_ROS1
+        struct ShutdownBeforePlanner {
+            ~ShutdownBeforePlanner() { rclcpp::shutdown(); }
+        } shutdown_before_planner;
+#endif
+        planner.graph_manager_.ResetCurrentGraph();
+#ifndef FAR_PLANNER_ROS1
+        planner.is_init_completed_ = true;
+#endif
+        planner.is_graph_init_ = true;
+        NavNodePtr source, existing, added;
+        DynamicGraph::CreateNavNodeFromPoint(Point3D(0, 0, 0), source, true);
+        DynamicGraph::CreateNavNodeFromPoint(Point3D(1, 0, 0), existing, false);
+        source->is_covered = existing->is_covered = true;
+        DynamicGraph::AddNodeToGraph(source);
+        DynamicGraph::AddNodeToGraph(existing);
+        DynamicGraph::AddEdge(source, existing);
+        planner.odom_node_ptr_ = source;
+        planner.graph_planner_.UpdaetVGraph(DynamicGraph::GetNavGraph());
+
+        // An import can add nodes and links between graph and planning ticks.
+        DynamicGraph::CreateNavNodeFromPoint(Point3D(2, 0, 0), added, false);
+        added->is_covered = true;
+        DynamicGraph::AddNodeToGraph(added);
+        DynamicGraph::AddEdge(existing, added);
+#ifdef FAR_PLANNER_ROS1
+        planner.PlanningCallBack(ros::TimerEvent());
+#else
+        planner.PlanningCallBack();
+#endif
+        EXPECT_TRUE(added->is_traversable);
+        EXPECT_TRUE(added->is_free_traversable);
+        EXPECT_FLOAT_EQ(added->gscore, 2.0f);
+        EXPECT_FLOAT_EQ(added->fgscore, 2.0f);
+        EXPECT_EQ(added->parent, existing);
+        EXPECT_EQ(added->free_parent, existing);
+        source->position.x = -1.0f;
+#ifdef FAR_PLANNER_ROS1
+        planner.PlanningCallBack(ros::TimerEvent());
+#else
+        planner.PlanningCallBack();
+#endif
+        EXPECT_FLOAT_EQ(added->gscore, 3.0f);
+        EXPECT_FLOAT_EQ(added->fgscore, 3.0f);
+    }
+
     static void VerifyTimingAndEmptyClear() {
 #ifdef FAR_PLANNER_ROS1
         int argc = 0;
@@ -87,4 +142,8 @@ public:
 
 TEST(LocalTerrainCallback, WaitsForMatchingOdometryAndClearsWithoutTf) {
     LocalTerrainCallbackTestAccess::VerifyTimingAndEmptyClear();
+}
+
+TEST(PlanningCallback, RefreshesNodesAddedAfterGraphUpdate) {
+    LocalTerrainCallbackTestAccess::VerifyPlanningRefreshesAddedNodes();
 }
