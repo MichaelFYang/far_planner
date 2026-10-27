@@ -7,6 +7,7 @@ far_planner:
     vehicle_height: 0.5  # Unit: meter
     sensor_range: 15.0  # Unit: meter
     terrain_range: 7.5   # Unit: meter
+    sensor_time_tolerance: 0.2  # Seconds; max scan/terrain/local-terrain/odometry gap
     local_planner_range: 2.5   # Unit: meter
     visualize_ratio: 0.4
     is_viewpoint_extend: true
@@ -35,7 +36,7 @@ far_planner:
     util/terrain_free_Z: 0.15
     util/dyosb_update_thred: 4
     util/new_point_counter: 5
-    util/dynamic_obs_dacay_time: 10.0  # Unit: second
+    util/dynamic_obs_dacay_time: 15.0 # Seconds; exceed retained terrain lifetime and update lag
     util/new_points_decay_time: 1.0   # Unit: second
 
     # Dynamic Graph Params
@@ -53,6 +54,5 @@ far_planner:
     # Graph Planner Params
     g_planner/converge_distance: 0.25  # Unit: meter
     g_planner/goal_adjust_radius: 1.0  # Unit: meter
-    g_planner/free_counter_thred: 7
     g_planner/reach_goal_vote_size: 3
     g_planner/path_momentum_thred: 3

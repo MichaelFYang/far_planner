@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(visibility_graph_msg)
 
 # Default to C++14
@@ -29,5 +29,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 ament_export_dependencies(rosidl_default_runtime)
+ament_export_include_directories(include/${PROJECT_NAME})
+
+install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()

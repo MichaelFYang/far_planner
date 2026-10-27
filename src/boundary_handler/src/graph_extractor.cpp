@@ -1,6 +1,7 @@
 /*
  * Boundary Graph Extractor
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
@@ -8,6 +9,18 @@
 
 #include "boundary_handler/graph_extractor.h"
 #include "boundary_handler/intersection.h"
+#include "boundary_handler/input_parser.h"
+#include "boundary_handler/parameter_validation.h"
+#include <visibility_graph_msg/graph_file_writer.h>
+
+#if __has_include(<ament_index_cpp/get_package_share_path.hpp>)
+#include <ament_index_cpp/get_package_share_path.hpp>
+#else
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#endif
+#include <rclcpp/executors/single_threaded_executor.hpp>
+#include <stdexcept>
+#include <utility>
 
 /***************************************************************************************/
 
@@ -28,23 +41,28 @@ void GraphExtractor::Init() {
     graph_viz_pub_ = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("/graph_decoder_viz",5);
     viz_node_pub_  = nh_->create_publisher<visualization_msgs::msg::Marker>("/free_p_viz",5);
     
-    this->LoadParmas();
+    this->LoadParams();
     
     robot_id_ = 0;
-    boundary_ptr_ = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-    extracted_polys_.clear(), extracted_graph_.clear();
+    extracted_polys_.clear();
+    ResetGraph(extracted_graph_);
     
     this->ReadTrajFile(free_p_);
 }
 
 
-void GraphExtractor::LoadParmas() {
+void GraphExtractor::LoadParams() {
+#if __has_include(<ament_index_cpp/get_package_share_path.hpp>)
+    const auto default_folder_path = (ament_index_cpp::get_package_share_path("far_planner") / "data").string();
+#else
+    const auto default_folder_path = ament_index_cpp::get_package_share_directory("far_planner") + "/data";
+#endif
     // Declare parameters if they haven't been declared yet
     nh_->declare_parameter("world_frame", "map");
-    nh_->declare_parameter("folder_path", "/home/workspace/src/boundary_handler/data/");
-    nh_->declare_parameter("boundary_file", "boundary.pcd");
-    nh_->declare_parameter("traj_file", "traj.txt");
-    nh_->declare_parameter("graph_file", "graph.txt");
+    nh_->declare_parameter("folder_path", default_folder_path);
+    nh_->declare_parameter("boundary_file", "boundary.ply");
+    nh_->declare_parameter("traj_file", "trajectory.txt");
+    nh_->declare_parameter("graph_file", "boundary_graph.vgh");
     nh_->declare_parameter("visual_scale_ratio", 1.0f);
     nh_->declare_parameter("height_tolz", 1.0f);
 
@@ -58,10 +76,11 @@ void GraphExtractor::LoadParmas() {
     nh_->get_parameter("visual_scale_ratio", ge_params_.viz_scale_ratio);
     nh_->get_parameter("height_tolz", ge_params_.height_tolz);
 
-    // Append folder_path to the paths
-    ge_params_.vgraph_path    = folder_path + ge_params_.vgraph_path;
-    ge_params_.bd_file_path   = folder_path + ge_params_.bd_file_path;
-    ge_params_.traj_file_path = folder_path + ge_params_.traj_file_path;
+    ge_params_.frame_id = boundary_handler::NormalizeWorldFrame(ge_params_.frame_id);
+    boundary_handler::ValidateGeometryParameters(ge_params_.viz_scale_ratio, ge_params_.height_tolz);
+    ge_params_.vgraph_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.vgraph_path);
+    ge_params_.bd_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.bd_file_path);
+    ge_params_.traj_file_path = boundary_handler::ResolveFilePath(folder_path, ge_params_.traj_file_path);
 }
 
 
@@ -129,7 +148,7 @@ void GraphExtractor::SetColor(const VizColor& color,
 void GraphExtractor::Run() {
     /* Main Running Function */
     RCLCPP_INFO(nh_->get_logger(), "Start reading boundary file ...");
-    this->ReadBoundaryFile(boundary_ptr_, extracted_polys_);
+    this->ReadBoundaryFile(extracted_polys_);
     RCLCPP_INFO(nh_->get_logger(), "Boundary reading success, constructing V-Graph ...");
     this->ConstructVGraph(extracted_polys_, extracted_graph_);
     RCLCPP_INFO(nh_->get_logger(), "V-Graph constructed.");
@@ -144,12 +163,11 @@ void GraphExtractor::Loop() {
 
 
 void GraphExtractor::ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& graphOut) {
-    graphOut.clear();
+    ResetGraph(graphOut);
     if (polysIn.empty()) return;
     for (const auto& poly_ptr : polysIn) {
         NavNodePtr temp_node_ptr = NULL;
         NodePtrStack node_stack;
-        node_stack.clear();
         const int N = poly_ptr->vertices.size();
         for (std::size_t idx=0; idx<N; idx++) {
             this->CreateNavNode(poly_ptr->vertices[idx], temp_node_ptr);
@@ -172,8 +190,7 @@ void GraphExtractor::ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& 
     const std::size_t GN = graphOut.size();
     // generate visbility connections
     for (std::size_t i=0; i<GN; i++) {
-        for (std::size_t j=0; j<GN; j++) {
-            if (i == j || j > i) continue;
+        for (std::size_t j=0; j<i; j++) {
             const NavNodePtr node_ptr1 = graphOut[i];
             const NavNodePtr node_ptr2 = graphOut[j];
             if (this->IsValidConnect(node_ptr1, node_ptr2)) {
@@ -226,14 +243,9 @@ PointPair GraphExtractor::ReprojectEdge(const NavNodePtr& node_ptr1, const NavNo
 }
 
 bool GraphExtractor::IsEdgeCollideSegment(const PointPair& line, const PointPair& edge) {
-    const cv::Point2f start_p(line.first.x, line.first.y);
-    const cv::Point2f end_p(line.second.x, line.second.y);
-    const cv::Point2f edge_p1(edge.first.x, edge.first.y);
-    const cv::Point2f edge_p2(edge.second.x, edge.second.y);
-    if (POLYOPS::doIntersect(start_p, end_p, edge_p1, edge_p2)) {
-        return true;
-    }
-    return false;
+    return POLYOPS::doIntersect(
+        {line.first.x, line.first.y}, {line.second.x, line.second.y},
+        {edge.first.x, edge.first.y}, {edge.second.x, edge.second.y});
 }
 
 bool GraphExtractor::IsInDirectConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
@@ -314,6 +326,7 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
     for (const auto& node_ptr : graphIn) {
         visibility_graph_msg::msg::Node msg_node;
         msg_node.header.frame_id = frame_id;
+        msg_node.header.stamp = graphOut.header.stamp;
         msg_node.position    = ToGeoMsgP(node_ptr->position);
         msg_node.id          = node_ptr->id;
         msg_node.freetype    = static_cast<int>(node_ptr->free_direct);
@@ -345,146 +358,51 @@ void GraphExtractor::EncodeGraph(const NodePtrStack& graphIn, visibility_graph_m
     graphOut.size = graphOut.nodes.size();
 }
 
-void GraphExtractor::ReadBoundaryFile(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
-    /* Modified from waypointExample.cpp from https://github.com/HongbiaoZ/autonomous_exploration_development_environment/tree/noetic/src/waypoint_example*/
-    FILE* boundary_file = fopen(ge_params_.bd_file_path.c_str(), "r");
-    if (boundary_file == NULL) {
-        printf ("\nCannot read input boundary, exit.\n\n");
-        exit(1);
-    }
-    char str[50];
-    int val, pointNum;
-    std::string strCur, strLast;
-    while (strCur != "end_header") {
-        val = fscanf(boundary_file, "%s", str);
-        if (val != 1) {
-            printf ("\nError reading boundary files, exit.\n\n");
-            exit(1);
+void GraphExtractor::ReadBoundaryFile(PolygonStack& polysOut) {
+    std::ifstream input(ge_params_.bd_file_path);
+    if (!input) throw std::runtime_error("Cannot open boundary: " + ge_params_.bd_file_path);
+    const auto boundary_vertices = boundary_handler::ReadAsciiPly(input);
+    PolygonStack polygons;
+    PointStack vertices;
+    int poly_id = boundary_vertices.front().polygon_index;
+    auto append_polygon = [&]() {
+        if (vertices.size() > 2) {
+            PolygonPtr polygon;
+            this->CreatePolygon(vertices, polygon, free_p_);
+            polygons.push_back(std::move(polygon));
         }
-
-        strLast = strCur;
-        strCur = std::string(str);
-
-        if (strCur == "vertex" && strLast == "element") {
-            val = fscanf(boundary_file, "%d", &pointNum);
-            if (val != 1) {
-                printf ("\nError reading boundary files, exit.\n\n");
-                exit(1);
-            }
+        vertices.clear();
+    };
+    for (const auto& vertex : boundary_vertices) {
+        const int vertex_poly_id = vertex.polygon_index;
+        if (vertex_poly_id != poly_id) {
+            append_polygon();
+            poly_id = vertex_poly_id;
         }
+        vertices.emplace_back(vertex.x, vertex.y, vertex.z);
     }
-
-    bd_cloud->clear();
-    PCLPoint point;
-    int val1, val2, val3, val4;
-    for (int i = 0; i < pointNum; i++) {
-        val1 = fscanf(boundary_file, "%f", &point.x);
-        val2 = fscanf(boundary_file, "%f", &point.y);
-        val3 = fscanf(boundary_file, "%f", &point.z);
-        val4 = fscanf(boundary_file, "%f", &point.intensity);
-
-        if (val1 != 1 || val2 != 1 || val3 != 1 || val4 != 1) {
-            printf ("\nError reading boundary values, exit.\n\n");
-            exit(1);
-        }
-        bd_cloud->push_back(point);
-    }
-    // verify the polygon vertex size
-    this->FilterPolyBoundary(bd_cloud, polysOut);
-    fclose(boundary_file);
+    append_polygon();
+    polysOut.swap(polygons);
 }
 
 void GraphExtractor::ReadTrajFile(Point3D& free_p) {
-    FILE* traj_file = fopen(ge_params_.traj_file_path.c_str(), "r");
-    if (traj_file == NULL) {
-        printf ("\nCannot read trajectory files, exit.\n\n");
-        exit(1);
-    }
-    int valx, valy, valz;
-    valx = fscanf(traj_file, "%f", &free_p.x);
-    valy = fscanf(traj_file, "%f", &free_p.y);
-    valz = fscanf(traj_file, "%f", &free_p.z);
-    if (valx != 1 || valx != 1 || valx != 1) {
-        printf ("\nError reading trajectory values, exit.\n\n");
-        exit(1);
-    }
-    fclose(traj_file);
-}
-
-void GraphExtractor::FilterPolyBoundary(const PointCloudPtr& bd_cloud, PolygonStack& polysOut) {
-    polysOut.clear();
-    if (bd_cloud->empty()) return;
-    int poly_id = (int)bd_cloud->points[0].intensity;
-    PointStack vertices;
-    vertices.clear();
-    for (const auto& p : bd_cloud->points) {
-        if ((int)p.intensity == poly_id) {
-            vertices.push_back(Point3D(p));
-        } else {
-            if (vertices.size() > 2) { // at least 3 vertices to form a polygon
-                PolygonPtr new_poly_ptr = NULL;
-                this->CreatePolygon(vertices, new_poly_ptr, free_p_);
-                polysOut.push_back(new_poly_ptr);
-            }
-            vertices.clear();
-            vertices.push_back(Point3D(p));
-            poly_id = (int)p.intensity;
-        }
-    }
-    if (vertices.size() > 2) { // last polygon
-        PolygonPtr new_poly_ptr = NULL;
-        this->CreatePolygon(vertices, new_poly_ptr, free_p_);
-        polysOut.push_back(new_poly_ptr);
-    }
+    std::ifstream input(ge_params_.traj_file_path);
+    if (!input) throw std::runtime_error("Cannot open trajectory: " + ge_params_.traj_file_path);
+    const auto values = boundary_handler::ReadTrajectory(input);
+    free_p = Point3D(values[0], values[1], values[2]);
 }
 
 void GraphExtractor::SaveVGraph(const NodePtrStack& graphIn) {
-    if (graphIn.empty()) return;
-    const std::string file_path = ge_params_.vgraph_path;
-    if (file_path == "") return;
-    std::ofstream graph_file;
-    graph_file.open(file_path);
-    // Lambda function
-    auto OutputPoint3D = [&](const Point3D& p) {
-        graph_file << std::to_string(p.x) << " ";
-        graph_file << std::to_string(p.y) << " ";
-        graph_file << std::to_string(p.z) << " ";
-    };
-    for (const auto& node_ptr : graphIn) {
-        graph_file << std::to_string(node_ptr->id) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->free_direct)) << " ";
-        OutputPoint3D(node_ptr->position);
-        OutputPoint3D(node_ptr->surf_dirs.first);
-        OutputPoint3D(node_ptr->surf_dirs.second);
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_covered))  << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_frontier)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_navpoint)) << " ";
-        graph_file << std::to_string(static_cast<int>(node_ptr->is_boundary)) << " ";
-        for (const auto& cidx : node_ptr->connect_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->poly_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        } 
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->contour_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "|" << " ";
-        for (const auto& cidx : node_ptr->traj_idxs) {
-            graph_file << std::to_string(cidx) << " ";
-        }
-        graph_file << "\n";
-    }
-    graph_file.close();
+    if (graphIn.empty()) throw std::runtime_error("cannot save an empty boundary graph");
+    if (ge_params_.vgraph_path.empty()) throw std::invalid_argument("boundary graph output path is empty");
+    graph_file::WriteGraphFile(ge_params_.vgraph_path, graphIn);
 }
 
 void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {
+    if (viz_node_pub_->get_subscription_count() == 0) return;
     Marker node_marker;
     node_marker.type = Marker::SPHERE;
     this->SetMarker(VizColor::GREEN, "free_position", 1.25f,  0.75f, node_marker);
-    std::size_t idx = 0;
     node_marker.pose.position.x = free_p.x;
     node_marker.pose.position.y = free_p.y;
     node_marker.pose.position.z = free_p.z;
@@ -492,7 +410,9 @@ void GraphExtractor::VisualizeFreePoint(const Point3D& free_p) {
 }
 
 void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
+    if (graph_viz_pub_->get_subscription_count() == 0) return;
     MarkerArray graph_marker_array;
+    graph_marker_array.markers.reserve(12);
     Marker nav_node_marker, covered_node_marker, internav_node_marker, frontier_node_marker, edge_marker, poly_edge_marker, 
            contour_edge_marker, free_edge_marker, traj_edge_marker, boundary_edge_marker, corner_surf_marker, corner_helper_marker;
     nav_node_marker.type       = Marker::SPHERE_LIST;
@@ -596,34 +516,42 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
         idx ++;    
     } 
     nav_node_marker.points.resize(idx);
-    graph_marker_array.markers.push_back(nav_node_marker);
-    graph_marker_array.markers.push_back(covered_node_marker);
-    graph_marker_array.markers.push_back(internav_node_marker);
-    graph_marker_array.markers.push_back(frontier_node_marker);
-    graph_marker_array.markers.push_back(edge_marker);
-    graph_marker_array.markers.push_back(poly_edge_marker);
-    graph_marker_array.markers.push_back(boundary_edge_marker);
-    graph_marker_array.markers.push_back(free_edge_marker);
-    graph_marker_array.markers.push_back(contour_edge_marker);
-    graph_marker_array.markers.push_back(traj_edge_marker);
-    graph_marker_array.markers.push_back(corner_surf_marker);
-    graph_marker_array.markers.push_back(corner_helper_marker);
+    graph_marker_array.markers.push_back(std::move(nav_node_marker));
+    graph_marker_array.markers.push_back(std::move(covered_node_marker));
+    graph_marker_array.markers.push_back(std::move(internav_node_marker));
+    graph_marker_array.markers.push_back(std::move(frontier_node_marker));
+    graph_marker_array.markers.push_back(std::move(edge_marker));
+    graph_marker_array.markers.push_back(std::move(poly_edge_marker));
+    graph_marker_array.markers.push_back(std::move(boundary_edge_marker));
+    graph_marker_array.markers.push_back(std::move(free_edge_marker));
+    graph_marker_array.markers.push_back(std::move(contour_edge_marker));
+    graph_marker_array.markers.push_back(std::move(traj_edge_marker));
+    graph_marker_array.markers.push_back(std::move(corner_surf_marker));
+    graph_marker_array.markers.push_back(std::move(corner_helper_marker));
     graph_viz_pub_->publish(graph_marker_array);
 }
 
 int main(int argc, char** argv){
     rclcpp::init(argc, argv);
-    
-    auto ge_node = std::make_shared<GraphExtractor>();
-    ge_node->Run();
-
-    rclcpp::Rate loop_rate(1.0);
-    while (rclcpp::ok()) {
-        ge_node->Loop();
-        rclcpp::spin_some(ge_node->GetNodeHandle());
-        loop_rate.sleep();
+    try {
+        auto ge_node = std::make_shared<GraphExtractor>();
+        if (rclcpp::ok()) ge_node->Run();
+        if (rclcpp::ok()) {
+            rclcpp::executors::SingleThreadedExecutor executor;
+            executor.add_node(ge_node->GetNodeHandle());
+            rclcpp::Rate loop_rate(1.0);
+            while (rclcpp::ok()) {
+                ge_node->Loop();
+                executor.spin_some();
+                loop_rate.sleep();
+            }
+        }
+    } catch (const std::exception& ex) {
+        if (!rclcpp::ok()) return 0;
+        RCLCPP_ERROR(rclcpp::get_logger("boundary_handler"), "Boundary setup error: %s", ex.what());
+        rclcpp::shutdown();
+        return 1;
     }
-
-    rclcpp::shutdown();
+    if (rclcpp::ok()) rclcpp::shutdown();
     return 0;
 }

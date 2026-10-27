@@ -1,13 +1,11 @@
+// Copyright (c) 2021-2026 Fan Yang and contributors
+// SPDX-License-Identifier: MIT
+
 #ifndef NODE_STRUCT_H
 #define NODE_STRUCT_H
 
 #include "point_struct.h"
-
-enum NodeType {
-    NOT_DEFINED = 0,
-    GROUND      = 1,
-    AIR         = 2
-};
+#include <boost/functional/hash.hpp>
 
 enum NodeFreeDirect {
   UNKNOW  =  0,
@@ -18,22 +16,14 @@ enum NodeFreeDirect {
 
 typedef std::pair<Point3D, Point3D> PointPair;
 
-namespace LiDARMODEL {
-    /* array resolution: 1 degree */
-    static const int kHorizontalFOV = 360;  
-    static const int kVerticalFOV = 31; 
-    static const float kAngleResX = 0.2;
-    static const float kAngleResY = 2.0;    
-} // NODEPARAMS
-
 struct Polygon
 {
   Polygon() = default;
-  std::size_t N;
+  std::size_t N = 0;
   std::vector<Point3D> vertices;
-  bool is_robot_inside;
-  bool is_pillar;
-  float perimeter;
+  bool is_robot_inside = false;
+  bool is_pillar = false;
+  float perimeter = 0.0f;
 };
 
 typedef std::shared_ptr<Polygon> PolygonPtr;
@@ -43,18 +33,17 @@ struct CTNode
 {
     CTNode() = default;
     Point3D position;
-    bool is_global_match;
-    bool is_contour_necessary;
-    bool is_ground_associate;
-    std::size_t nav_node_id;
-    NodeFreeDirect free_direct;
+    bool is_global_match = false;
+    bool is_contour_necessary = false;
+    bool is_ground_associate = false;
+    std::size_t nav_node_id = 0;
+    NodeFreeDirect free_direct = NodeFreeDirect::UNKNOW;
 
     PointPair surf_dirs;
     PolygonPtr poly_ptr;
     std::shared_ptr<CTNode> front;
     std::shared_ptr<CTNode> back;
 
-    std::vector<std::shared_ptr<CTNode>> connect_nodes;
 };
 
 typedef std::shared_ptr<CTNode> CTNodePtr;
@@ -63,26 +52,26 @@ typedef std::vector<CTNodePtr> CTNodeStack;
 struct NavNode
 {
     NavNode() = default;
-    std::size_t id;
+    std::size_t id = 0;
     Point3D position;
     PointPair surf_dirs;
     std::deque<Point3D> pos_filter_vec;
     std::deque<PointPair> surf_dirs_vec;
     CTNodePtr ctnode;
-    bool is_active;
-    bool is_block_frontier;
-    bool is_contour_match;
-    bool is_odom;
-    bool is_goal;
-    bool is_near_nodes;
-    bool is_wide_near;
-    bool is_merged;
-    bool is_covered;
-    bool is_frontier;
-    bool is_finalized;
-    bool is_navpoint;
-    bool is_boundary;
-    int  clear_dumper_count;
+    bool is_active = false;
+    bool is_block_frontier = false;
+    bool is_contour_match = false;
+    bool is_odom = false;
+    bool is_goal = false;
+    bool is_near_nodes = false;
+    bool is_wide_near = false;
+    bool is_merged = false;
+    bool is_covered = false;
+    bool is_frontier = false;
+    bool is_finalized = false;
+    bool is_navpoint = false;
+    bool is_boundary = false;
+    int  clear_dumper_count = 0;
     std::deque<int> frontier_votes;
     std::unordered_set<std::size_t> invalid_boundary;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
@@ -95,13 +84,12 @@ struct NavNode
     std::vector<std::shared_ptr<NavNode>> trajectory_connects;
     std::unordered_map<std::size_t, std::size_t> trajectory_votes;
     std::unordered_map<std::size_t, std::size_t> terrain_votes;
-    NodeType node_type; 
-    NodeFreeDirect free_direct;
+    NodeFreeDirect free_direct = NodeFreeDirect::UNKNOW;
     // planner members
-    bool is_block_to_goal;
-    bool is_traversable;
-    bool is_free_traversable;
-    float gscore, fgscore;
+    bool is_block_to_goal = false;
+    bool is_traversable = false;
+    bool is_free_traversable = false;
+    float gscore = 0.0f, fgscore = 0.0f;
     std::shared_ptr<NavNode> parent;
     std::shared_ptr<NavNode> free_parent;
     
@@ -131,22 +119,6 @@ struct nodeptr_hash
   std::size_t operator() (const NavNodePtr& n_ptr) const
   {
     return std::hash<std::size_t>()(n_ptr->id);
-  }
-};
-
-struct nodeptr_gcomp
-{
-  bool operator()(const NavNodePtr& n1, const NavNodePtr& n2) const
-  {
-    return n1->gscore > n2->gscore;
-  }
-};
-
-struct nodeptr_fgcomp
-{
-  bool operator()(const NavNodePtr& n1, const NavNodePtr& n2) const
-  {
-    return n1->fgscore > n2->fgscore;
   }
 };
 

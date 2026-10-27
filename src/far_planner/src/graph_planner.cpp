@@ -1,12 +1,17 @@
 /*
  * FAR Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
 
 
 #include "far_planner/graph_planner.h"
+#include "far_planner/goal_grid_search.h"
+#include "far_planner/parameter_validation.h"
+
+#include <functional>
 
 /***************************************************************************************/
 
@@ -23,7 +28,9 @@ void GraphPlanner::Init(const rclcpp::Node::SharedPtr nh, const GraphPlannerPara
     // attemptable planning listener
     attemptable_sub_ = nh_->create_subscription<std_msgs::msg::Bool>("/planning_attemptable", 5, std::bind(&GraphPlanner::AttemptStatusCallBack, this, std::placeholders::_1));
     // initialize terrain grid
-    const int col_num = std::ceil(gp_params_.adjust_radius * 2.0f / FARUtil::kLeafSize);
+    const int col_num = far_planner::CheckedDimension(
+        static_cast<double>(gp_params_.adjust_radius) * 2.0, FARUtil::kLeafSize,
+        "goal terrain grid width");
     Eigen::Vector3i grid_size(col_num, col_num, 1);
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(FARUtil::kLeafSize, FARUtil::kLeafSize, FARUtil::kLeafSize);
@@ -40,20 +47,23 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
     this->InitNodesStates(current_graph_);
     // start expand the whole current_graph_
     odom_node_ptr_->gscore = 0.0;
-    IdxSet open_set;
-    std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_gcomp> open_queue;
-    IdxSet close_set;
+    using SearchEntry = std::pair<float, NavNodePtr>;
+    const auto farther = [](const SearchEntry& lhs, const SearchEntry& rhs) {
+        if (lhs.first != rhs.first) return lhs.first > rhs.first;
+        // Equal-cost routes must not depend on node allocation addresses.
+        return lhs.second->id > rhs.second->id;
+    };
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> open_queue(farther);
     // Expansion from odom node to all reachable navigation node
-    open_queue.push(odom_node_ptr_);
-    open_set.insert(odom_node_ptr_->id);
-    while (!open_set.empty()) {
-        const NavNodePtr current = open_queue.top();
+    open_queue.push({0.0f, odom_node_ptr_});
+    while (!open_queue.empty()) {
+        const auto entry = open_queue.top();
         open_queue.pop();
-        open_set.erase(current->id);
-        close_set.insert(current->id);
+        const NavNodePtr current = entry.second;
+        if (entry.first != current->gscore || current->is_traversable) continue;
         current->is_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
+            if (neighbor->is_traversable || this->IsInvalidBoundary(current, neighbor)) continue;
             float edist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && edist > FARUtil::kEpsilon && !FARUtil::IsAtSameLayer(neighbor, current)) { // check for multi layer traverse cost
                 const Point3D diff_p = neighbor->position - current->position;
@@ -68,38 +78,30 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
             if (temp_gscore < neighbor->gscore) {
                 neighbor->parent = current;
                 neighbor->gscore = temp_gscore;
-                if (!open_set.count(neighbor->id)) {
-                    open_queue.push(neighbor);
-                    open_set.insert(neighbor->id);
-                }
+                // Keep queue keys immutable; obsolete entries are skipped on pop.
+                open_queue.push({temp_gscore, neighbor});
             }
         }
     }
-    std::priority_queue<NavNodePtr, NodePtrStack, nodeptr_fgcomp> fopen_queue;
-    IdxSet fopen_set;
-    close_set.clear();
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> fopen_queue(farther);
     // Expansion from odom node to all covered navigation node
     odom_node_ptr_->fgscore = 0.0;
-    fopen_queue.push(odom_node_ptr_);
-    fopen_set.insert(odom_node_ptr_->id);
-    while (!fopen_set.empty()) {
-        const NavNodePtr current = fopen_queue.top();
+    fopen_queue.push({0.0f, odom_node_ptr_});
+    while (!fopen_queue.empty()) {
+        const auto entry = fopen_queue.top();
         fopen_queue.pop();
-        fopen_set.erase(current->id);
-        close_set.insert(current->id);
+        const NavNodePtr current = entry.second;
+        if (entry.first != current->fgscore || current->is_free_traversable) continue;
         current->is_free_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (!neighbor->is_covered || close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
+            if (!neighbor->is_covered || neighbor->is_free_traversable || this->IsInvalidBoundary(current, neighbor)) continue;
             const float e_dist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && (!is_goal_in_freespace_ || e_dist > FARUtil::kTerrainRange)) continue;
             const float temp_fgscore = current->fgscore + e_dist;
             if (temp_fgscore < neighbor->fgscore) {
                 neighbor->free_parent = current;
                 neighbor->fgscore = temp_fgscore;
-                if (!fopen_set.count(neighbor->id)) {
-                    fopen_queue.push(neighbor);
-                    fopen_set.insert(neighbor->id);
-                } 
+                fopen_queue.push({temp_fgscore, neighbor});
             }
         }
     }
@@ -327,11 +329,12 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
                 is_use_internav_goal_   = true;
                 goal_node_ptr_          = node_ptr;
                 min_dist                = cur_dist;
-                goal_node_ptr_->is_goal = true;
             }
         }
     }
-    if (!is_use_internav_goal_) {
+    if (is_use_internav_goal_) {
+        goal_node_ptr_->is_goal = true;
+    } else {
         DynamicGraph::CreateNavNodeFromPoint(goal, goal_node_ptr_, false, false, true);
         DynamicGraph::AddNodeToGraph(goal_node_ptr_);
     }
@@ -352,7 +355,8 @@ void GraphPlanner::UpdateGoal(const Point3D& goal) {
     this->ResetFreeTerrainGridOrigin(goal_node_ptr_->position);
 }
 
-void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height)
+void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const Point3D& odom_position,
+                                          const bool& is_adjust_height)
 {
     if (is_use_internav_goal_) return; // return if using an exsiting internav node as goal
     if (is_adjust_height && is_global_path_init_ && recorded_path_.size() > 1) { // use path to adjust goal height
@@ -366,35 +370,13 @@ void GraphPlanner::ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool
     }
     const Eigen::Vector3i ori_sub = free_terrain_grid_->Pos2Sub(origin_goal_pos_.x, origin_goal_pos_.y, grid_center_.z);
     const Point3D ori_pos_height(origin_goal_pos_.x, origin_goal_pos_.y, goal_ptr->position.z);
-    const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_node_ptr_->position) ? true : false;
+    const bool is_origin_free = ContourGraph::IsPoint3DConnectFreePolygon(ori_pos_height, odom_position);
     if (is_origin_free) {
         goal_ptr->position = ori_pos_height;
     } else { // reproject to nearby free space
-        std::array<int, 4> dx = {-1, 0, 1, 0};
-        std::array<int, 4> dy = { 0, 1, 0,-1};
-        std::deque<int> q;
-        std::unordered_set<int> visited_set;
-        q.push_back(free_terrain_grid_->Sub2Ind(ori_sub));
-        visited_set.insert(free_terrain_grid_->Sub2Ind(ori_sub));
-        int valid_idx = -1;
-        while (!q.empty()) {
-            const int cur_id = q.front();
-            q.pop_front();
-            if (free_terrain_grid_->GetCell(cur_id) == FREE_BIT) {
-                valid_idx = cur_id;
-                break;
-            }
-            for (int i=0; i<4; i++) {
-                Eigen::Vector3i csub = free_terrain_grid_->Ind2Sub(cur_id);
-                csub.x() += dx[i], csub.y() += dy[i], csub.z() = 0;
-                if (!free_terrain_grid_->InRange(csub)) continue;
-                const int cidx = free_terrain_grid_->Sub2Ind(csub);
-                if (!visited_set.count(cidx)) {
-                    q.push_back(cidx);
-                    visited_set.insert(cidx);
-                }
-            }
-        }
+        if (!free_terrain_grid_->InRange(ori_sub)) return;
+        const int valid_idx = goal_grid_search_.Find(
+            *free_terrain_grid_, free_terrain_grid_->Sub2Ind(ori_sub), FREE_BIT);
         if (valid_idx != -1 && free_terrain_grid_->InRange(valid_idx)) {
             Point3D new_p = Point3D(free_terrain_grid_->Ind2Pos(valid_idx));
             new_p.z = goal_ptr->position.z;
@@ -441,37 +423,35 @@ void GraphPlanner::UpdateFreeTerrainGrid(const Point3D& center,
     free_terrain_grid_->ReInitGrid(INIT_BIT);
     // evaluate goal freespace status
     is_goal_in_freespace_ = false;
+    bool has_terrain_cell = false;
     if (!freeCloudIn->empty() || !obsCloudIn->empty()) { // process terrain cloud
         const int C_IF = FARUtil::kObsInflate;
         for (const auto& point : obsCloudIn->points) { // Set obstacle cloud in free terrain grid
+            if (FARUtil::IsMultiLayer &&
+                std::abs(static_cast<double>(point.z) - center.z) > FARUtil::kTolerZ) continue;
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-            for (int i = -C_IF; i <= C_IF; i++) {
-                for (int j = -C_IF; j <= C_IF; j++) {
-                    Eigen::Vector3i sub = c_sub;
-                    sub.x() += i, sub.y() += j, sub.z() = 0;
-                    if (free_terrain_grid_->InRange(sub)) {
-                        const int ind = free_terrain_grid_->Sub2Ind(sub);
-                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | OBS_BIT;
-                    }
-                }
-            }
+            c_sub.z() = 0;
+            free_terrain_grid_->ForEachXYCellInRadius(c_sub, C_IF, [&](int ind) {
+                has_terrain_cell = true;
+                free_terrain_grid_->GetCell(ind) |= OBS_BIT;
+            });
         }
         for (const auto& point : freeCloudIn->points) { // Set free cloud in free terrain grid
+            // Free points describe ground, while the goal Z describes the vehicle body.
+            if (FARUtil::IsMultiLayer &&
+                std::abs(static_cast<double>(point.z) + FARUtil::vehicle_height - center.z) >
+                    FARUtil::kTolerZ) continue;
             Eigen::Vector3i c_sub = free_terrain_grid_->Pos2Sub(point.x, point.y, grid_center_.z);
-            for (int i = -1; i <= 1; i++) {
-                for (int j = -1; j <= 1; j++) {
-                    Eigen::Vector3i sub = c_sub;
-                    sub.x() += i, sub.y() += j, sub.z() = 0;
-                    if (free_terrain_grid_->InRange(sub)) {
-                        const int ind = free_terrain_grid_->Sub2Ind(sub);
-                        free_terrain_grid_->GetCell(ind) = free_terrain_grid_->GetCell(ind) | FREE_BIT;
-                        is_goal_in_freespace_ = true;
-                    }
-                }
-            }
+            c_sub.z() = 0;
+            free_terrain_grid_->ForEachXYCellInRadius(c_sub, 1, [&](int ind) {
+                has_terrain_cell = true;
+                auto& cell = free_terrain_grid_->GetCell(ind);
+                cell |= FREE_BIT;
+                if (cell == FREE_BIT) is_goal_in_freespace_ = true;
+            });
         }
     }
-    if (!is_goal_in_freespace_) { // check for freespace status if no terrain clouds around
+    if (!is_goal_in_freespace_ && !has_terrain_cell) { // fallback only without local terrain evidence
         float min_dist = FARUtil::kINF;
         for (const auto& node_ptr : current_graph_) {
             if (!node_ptr->is_navpoint) continue;

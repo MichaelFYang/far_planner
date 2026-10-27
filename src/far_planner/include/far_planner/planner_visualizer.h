@@ -3,6 +3,7 @@
 
 #include "utility.h"
 #include "contour_graph.h"
+#include <boost/functional/hash.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -68,6 +69,10 @@ public:
                      const PointStack& occupancy_centers,
                      const float& ceil_length,
                      const float& ceil_height);
+
+    bool HasMapGridSubscribers() const {
+        return viz_map_pub_ && viz_map_pub_->get_subscription_count() > 0;
+    }
 
     void VizContourGraph(const CTNodeStack& contour_graph);
 

@@ -1,0 +1,195 @@
+// Copyright (c) 2026 Fan Yang and contributors
+// SPDX-License-Identifier: MIT
+#include <gtest/gtest.h>
+#include <limits>
+#include "far_planner/sensor_timing.h"
+
+using far_planner::OdometryHistory;
+using far_planner::WithinSensorSkew;
+
+TEST(SensorTiming, UsesExactOldPoseInsteadOfLatest)
+{
+    OdometryHistory history;
+    ASSERT_TRUE(history.Add(100, {{1.0, 2.0, 3.0}}));
+    ASSERT_TRUE(history.Add(200, {{3.0, 4.0, 5.0}}));
+    OdometryHistory::Position position;
+    ASSERT_TRUE(history.PositionAt(100, 50, position));
+    EXPECT_DOUBLE_EQ(position[0], 1.0);
+}
+
+TEST(SensorTiming, InterpolatesOnlyBetweenNearbyMeasurements)
+{
+    OdometryHistory history;
+    history.Add(100, {{1.0, 2.0, 3.0}});
+    history.Add(200, {{3.0, 4.0, 5.0}});
+    OdometryHistory::Position position{{9.0, 9.0, 9.0}};
+    ASSERT_TRUE(history.PositionAt(150, 50, position));
+    EXPECT_EQ(position, (OdometryHistory::Position{{2.0, 3.0, 4.0}}));
+    EXPECT_FALSE(history.PositionAt(150, 49, position));
+    EXPECT_FALSE(history.PositionAt(99, 100, position));
+    EXPECT_FALSE(history.PositionAt(201, 100, position));
+    EXPECT_EQ(position, (OdometryHistory::Position{{2.0, 3.0, 4.0}}));
+}
+
+TEST(SensorTiming, RejectsInvalidDuplicateAndOutOfOrderOdometry)
+{
+    OdometryHistory history;
+    EXPECT_FALSE(history.Add(0, {{0.0, 0.0, 0.0}}));
+    ASSERT_TRUE(history.Add(200, {{2.0, 0.0, 0.0}}));
+    EXPECT_FALSE(history.Add(200, {{9.0, 0.0, 0.0}}));
+    EXPECT_FALSE(history.Add(100, {{9.0, 0.0, 0.0}}));
+    EXPECT_FALSE(history.Add(300, {{std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0}}));
+    EXPECT_EQ(history.LatestStamp(), 200U);
+}
+
+TEST(SensorTiming, BoundsHistoryAndCanStartANewEpoch)
+{
+    OdometryHistory history;
+    for (std::uint64_t i = 1; i <= 2001; ++i) history.Add(i, {{0.0, 0.0, 0.0}});
+    OdometryHistory::Position position;
+    EXPECT_FALSE(history.PositionAt(1, 100, position));
+    EXPECT_TRUE(history.PositionAt(2, 100, position));
+    history.Add(10000002002ULL, {{0.0, 0.0, 0.0}});
+    EXPECT_FALSE(history.PositionAt(2001, 100, position));
+    history.Clear();
+    EXPECT_EQ(history.LatestStamp(), 0U);
+    EXPECT_TRUE(history.Add(1, {{0.0, 0.0, 0.0}}));
+}
+
+TEST(SensorTiming, SkewIsSymmetricAndRequiresBothMeasurements)
+{
+    EXPECT_TRUE(WithinSensorSkew(100, 120, 20));
+    EXPECT_TRUE(WithinSensorSkew(120, 100, 20));
+    EXPECT_FALSE(WithinSensorSkew(100, 121, 20));
+    EXPECT_FALSE(WithinSensorSkew(0, 1, 20));
+    EXPECT_FALSE(WithinSensorSkew(1, 0, 20));
+}
+
+TEST(SensorTiming, ArrivalFreshnessDoesNotChangeWhileWaitingForTf)
+{
+    using far_planner::SensorStampFreshOnArrival;
+    EXPECT_FALSE(SensorStampFreshOnArrival(0, 0, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 0, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 1000, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1000, 1200, 200));
+    EXPECT_FALSE(SensorStampFreshOnArrival(1000, 1201, 200));
+    EXPECT_TRUE(SensorStampFreshOnArrival(1300, 1200, 200));
+}
+
+TEST(SensorTiming, DetectsClockRewindIncludingZeroWithoutTreatingPauseAsReset)
+{
+    far_planner::ClockEpoch epoch;
+    EXPECT_FALSE(epoch.Observe(100));
+    EXPECT_FALSE(epoch.Observe(100));
+    EXPECT_FALSE(epoch.Observe(200));
+    EXPECT_TRUE(epoch.Observe(50));
+    EXPECT_FALSE(epoch.Observe(60));
+    EXPECT_TRUE(epoch.Observe(0));
+    EXPECT_FALSE(epoch.Observe(0));
+}
+
+TEST(SensorTiming, PendingScanWaitsForLaterOdometryAndRejectsReordering)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    EXPECT_TRUE(scans.Push(150, 1, 100, 1000));
+    EXPECT_FALSE(scans.HasReady(100));
+    EXPECT_FALSE(scans.Push(150, 2, 100, 1000));
+    EXPECT_FALSE(scans.Push(140, 3, 100, 1000));
+    EXPECT_TRUE(scans.Push(170, 4, 100, 1001));
+    ASSERT_TRUE(scans.HasReady(160));
+    EXPECT_EQ(scans.Front().stamp, 150U);
+    EXPECT_EQ(scans.Front().message, 1);
+    EXPECT_EQ(scans.Size(), 2U); // A retry can inspect without consuming.
+    const auto first = scans.PopReady();
+    EXPECT_EQ(first.stamp, 150U);
+    EXPECT_EQ(first.message, 1);
+    EXPECT_FALSE(scans.HasReady(160));
+    EXPECT_TRUE(scans.HasReady(200));
+    EXPECT_EQ(scans.PopReady().message, 4);
+    EXPECT_FALSE(scans.Push(150, 5, 170, 1002));
+}
+
+TEST(SensorTiming, FindsTimestampCompatibleScanAnywhereInPendingQueue)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    ASSERT_TRUE(scans.Push(100, 1, 0, 1000));
+    ASSERT_TRUE(scans.Push(200, 2, 0, 1001));
+    ASSERT_TRUE(scans.Push(300, 3, 0, 1002));
+    EXPECT_TRUE(scans.HasStampWithin(225, 25));
+    EXPECT_TRUE(scans.HasStampWithin(275, 25));
+    EXPECT_FALSE(scans.HasStampWithin(250, 25));
+    scans.PopReady();
+    scans.PopReady();
+    EXPECT_FALSE(scans.HasStampWithin(200, 0));
+}
+
+TEST(SensorTiming, PendingScanQueueIsBoundedExpiresAndResets)
+{
+    far_planner::PendingMeasurementQueue<int> scans;
+    for (std::uint64_t stamp = 1; stamp <= 33; ++stamp)
+        EXPECT_TRUE(scans.Push(stamp, static_cast<int>(stamp), 0, stamp));
+    EXPECT_EQ(scans.Size(), 32U);
+    EXPECT_EQ(scans.PopReady().stamp, 2U);
+    EXPECT_EQ(scans.DiscardExpired(100, 60), 31U);
+    EXPECT_EQ(scans.Size(), 0U);
+    EXPECT_TRUE(scans.Push(101, 7, 0, 100));
+    scans.Clear();
+    EXPECT_EQ(scans.Size(), 0U);
+    EXPECT_TRUE(scans.Push(1, 8, 0, 101));
+    EXPECT_EQ(scans.DiscardExpired(102, 1), 0U);
+    EXPECT_EQ(scans.Size(), 1U);
+}
+
+TEST(SensorTiming, PendingTerrainQueueRetainsOnlyTwoRecentClouds)
+{
+    far_planner::PendingMeasurementQueue<int> terrain(2);
+    EXPECT_TRUE(terrain.Push(10, 1, 0, 100));
+    EXPECT_TRUE(terrain.Push(20, 2, 0, 110));
+    EXPECT_TRUE(terrain.Push(30, 3, 0, 120));
+    ASSERT_EQ(terrain.Size(), 2U);
+    EXPECT_EQ(terrain.PopReady().stamp, 20U);
+    EXPECT_EQ(terrain.PopReady().message, 3);
+}
+
+TEST(SensorTiming, TerrainSelectsClosestProcessedScanAndItsOrigin)
+{
+    struct Scan {
+        int point;
+        int origin;
+    };
+    far_planner::RecentMeasurementHistory<Scan> scans;
+    ASSERT_TRUE(scans.Add(100, {1, 10}));
+    ASSERT_TRUE(scans.Add(120, {2, 20}));
+    const auto* exact = scans.Nearest(100, 25);
+    ASSERT_NE(exact, nullptr);
+    EXPECT_EQ(exact->value.point, 1);
+    EXPECT_EQ(exact->value.origin, 10);
+    const auto* nearby = scans.Nearest(117, 25);
+    ASSERT_NE(nearby, nullptr);
+    EXPECT_EQ(nearby->value.point, 2);
+    EXPECT_EQ(nearby->value.origin, 20);
+    const auto* tie = scans.Nearest(110, 10);
+    ASSERT_NE(tie, nullptr);
+    EXPECT_EQ(tie->stamp, 100U);
+    EXPECT_EQ(scans.Nearest(200, 25), nullptr);
+    scans.PruneBefore(110);
+    ASSERT_EQ(scans.Size(), 1U);
+    EXPECT_EQ(scans.Nearest(100, 25)->stamp, 120U);
+    scans.Clear();
+    EXPECT_EQ(scans.Nearest(120, 25), nullptr);
+}
+
+TEST(SensorTiming, ProcessedScanHistoryRejectsReorderingAndIsBounded)
+{
+    far_planner::RecentMeasurementHistory<int> scans(2);
+    EXPECT_FALSE(scans.Add(0, 0));
+    EXPECT_TRUE(scans.Add(100, 1));
+    EXPECT_FALSE(scans.Add(100, 2));
+    EXPECT_FALSE(scans.Add(99, 2));
+    EXPECT_TRUE(scans.Add(110, 3));
+    EXPECT_TRUE(scans.Add(120, 4));
+    EXPECT_EQ(scans.Size(), 2U);
+    EXPECT_EQ(scans.Nearest(100, 0), nullptr);
+    ASSERT_NE(scans.Nearest(110, 0), nullptr);
+    EXPECT_EQ(scans.Nearest(110, 0)->value, 3);
+}
