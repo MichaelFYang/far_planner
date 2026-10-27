@@ -49,10 +49,6 @@ private:
                         const NavNodePtr& node_ptr2,
                         const bool& is_check_contour);
 
-    bool NodeLocalPerception(const NavNodePtr& node_ptr,
-                             bool& _is_wall_end,
-                             const bool& is_nearby_update = true);
-
     bool IsInDirectConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     bool IsInContourDirConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
@@ -62,10 +58,6 @@ private:
     bool IsFrontierNode(const NavNodePtr& node_ptr);
     
     void ReEvaluateConvexity(const NavNodePtr& node_ptr);
-
-    /* Merge two nodes in Graph into one remain node, (mark one node as merged)*/
-    void MergeNodeInGraph(const NavNodePtr& node_ptr1, 
-                          const NavNodePtr& node_ptr2);
 
     /* check whether there is a connection in similar diection */
     bool IsSimilarConnectInDiection(const NavNodePtr& node_ptr_from,
@@ -80,8 +72,6 @@ private:
     static void InitNodePosition(const NavNodePtr& node_ptr, const Point3D& new_pos); 
 
     bool UpdateNodeSurfDirs(const NavNodePtr& node_ptr, PointPair cur_dirs);
-
-    void ReOrganizeGraphConnect();
 
     bool ReEvaluateCorner(const NavNodePtr node_ptr);
 

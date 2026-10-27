@@ -58,7 +58,6 @@ struct CTNode
     std::shared_ptr<CTNode> front;
     std::shared_ptr<CTNode> back;
 
-    std::vector<std::shared_ptr<CTNode>> connect_nodes;
 };
 
 typedef std::shared_ptr<CTNode> CTNodePtr;
