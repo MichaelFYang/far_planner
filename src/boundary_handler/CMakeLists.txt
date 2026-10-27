@@ -42,6 +42,12 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_startup_shutdown test/test_startup_shutdown.py
+    TIMEOUT 30
+    ENV BOUNDARY_HANDLER_EXECUTABLE=$<TARGET_FILE:${PROJECT_NAME}>
+        BOUNDARY_SAMPLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/../far_planner/data
+  )
   ament_add_gtest(test_input_parser test/test_input_parser.cpp test/test_intersection.cpp)
   target_include_directories(test_input_parser PRIVATE include)
   target_link_libraries(test_input_parser visibility_graph_msg::visibility_graph_msg)

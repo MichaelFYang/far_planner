@@ -532,26 +532,25 @@ void GraphExtractor::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
     rclcpp::init(argc, argv);
-    
-    std::shared_ptr<GraphExtractor> ge_node;
     try {
-        ge_node = std::make_shared<GraphExtractor>();
-        ge_node->Run();
+        auto ge_node = std::make_shared<GraphExtractor>();
+        if (rclcpp::ok()) ge_node->Run();
+        if (rclcpp::ok()) {
+            rclcpp::executors::SingleThreadedExecutor executor;
+            executor.add_node(ge_node->GetNodeHandle());
+            rclcpp::Rate loop_rate(1.0);
+            while (rclcpp::ok()) {
+                ge_node->Loop();
+                executor.spin_some();
+                loop_rate.sleep();
+            }
+        }
     } catch (const std::exception& ex) {
+        if (!rclcpp::ok()) return 0;
         RCLCPP_ERROR(rclcpp::get_logger("boundary_handler"), "Boundary setup error: %s", ex.what());
         rclcpp::shutdown();
         return 1;
     }
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(ge_node->GetNodeHandle());
-    rclcpp::Rate loop_rate(1.0);
-    while (rclcpp::ok()) {
-        ge_node->Loop();
-        executor.spin_some();
-        loop_rate.sleep();
-    }
-
-    rclcpp::shutdown();
+    if (rclcpp::ok()) rclcpp::shutdown();
     return 0;
 }

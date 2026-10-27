@@ -496,16 +496,15 @@ void GraphDecoder::VisualizeGraph(const NodePtrStack& graphIn) {
 
 int main(int argc, char** argv){
   rclcpp::init(argc, argv);
-  std::shared_ptr<GraphDecoder> gd_node;
   try {
-    gd_node = std::make_shared<GraphDecoder>();
+    auto gd_node = std::make_shared<GraphDecoder>();
+    if (rclcpp::ok()) rclcpp::spin(gd_node->GetNodeHandle());
   } catch (const std::exception& ex) {
+    if (!rclcpp::ok()) return 0;
     RCLCPP_ERROR(rclcpp::get_logger("graph_decoder_node"), "Decoder startup error: %s", ex.what());
     rclcpp::shutdown();
     return 1;
   }
-  
-  rclcpp::spin(gd_node->GetNodeHandle());
-  rclcpp::shutdown();
+  if (rclcpp::ok()) rclcpp::shutdown();
   return 0;
 }
