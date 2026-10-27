@@ -97,7 +97,7 @@ Terrain intensity must encode traversability height cost, not lidar reflectivity
 
 ## Development
 
-See [the algorithm and refactor guide](docs/algorithm.md) for the data flow, TF/time contract, invariants, and validation plan.
+See [the algorithm guide](docs/algorithm.md) for the data flow, TF/time contract, and invariants. The [validation record](docs/validation.md) contains regression cases, SDK checks, measurements, and known integration failures.
 
 For rendered Goalpoint and TeleopPanel regression checks, see the optional [RViz interaction test](tests/rviz_interaction/README.md). It builds separately and keeps its logs and screenshots outside the source tree.
 
