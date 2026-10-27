@@ -3,7 +3,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <random>
 
@@ -473,6 +475,55 @@ TEST(GraphSearch, DecreaseOfQueuedNodeMustReorderBothTraversals)
         node->free_parent.reset();
     }
 }
+TEST(GraphSearch, EqualCostRoutesUseStableNodeIds)
+{
+    GraphPlanner planner;
+    for (bool reverse_addresses : {false, true}) {
+        for (bool reverse_neighbors : {false, true}) {
+            SCOPED_TRACE(::testing::Message() << "reverse addresses: " << reverse_addresses
+                         << ", reverse neighbors: " << reverse_neighbors);
+            NodePtrStack alternatives = {Node(10, 1, 1), Node(20, 1, -1)};
+            std::sort(alternatives.begin(), alternatives.end(), std::less<NavNodePtr>());
+            const auto lower_id = alternatives[reverse_addresses ? 1 : 0];
+            const auto higher_id = alternatives[reverse_addresses ? 0 : 1];
+            lower_id->id = 10;
+            lower_id->position = Point3D(1, 1, 0);
+            higher_id->id = 20;
+            higher_id->position = Point3D(1, -1, 0);
+            const auto source = Node(0, 0, 0);
+            const auto target = Node(30, 2, 0);
+            NodePtrStack graph = {source, lower_id, higher_id, target};
+            Link(source, lower_id);
+            Link(source, higher_id);
+            Link(lower_id, target);
+            Link(higher_id, target);
+            if (reverse_neighbors) {
+                for (const auto& node : graph) {
+                    std::reverse(node->connect_nodes.begin(), node->connect_nodes.end());
+                }
+            }
+            planner.UpdaetVGraph(graph);
+            planner.UpdateGraphTraverability(source, nullptr);
+            EXPECT_FLOAT_EQ(target->gscore, 2.0f * std::sqrt(2.0f));
+            EXPECT_FLOAT_EQ(target->fgscore, target->gscore);
+            EXPECT_EQ(target->parent, lower_id);
+            EXPECT_EQ(target->free_parent, lower_id);
+            // Cost remains primary even when the shorter route has a higher ID.
+            lower_id->position.y = 2.0f;
+            planner.UpdateGraphTraverability(source, nullptr);
+            EXPECT_FLOAT_EQ(target->gscore, 2.0f * std::sqrt(2.0f));
+            EXPECT_FLOAT_EQ(target->fgscore, target->gscore);
+            EXPECT_EQ(target->parent, higher_id);
+            EXPECT_EQ(target->free_parent, higher_id);
+            for (const auto& node : graph) {
+                node->connect_nodes.clear();
+                node->parent.reset();
+                node->free_parent.reset();
+            }
+        }
+    }
+}
+
 TEST(GraphSearch, MatchesIndependentShortestPathsForGeneralAndCoveredGraph)
 {
     std::mt19937 generator(271828);
