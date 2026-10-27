@@ -307,6 +307,7 @@ void GraphDecoder::ReadGraphCallBack(const std_msgs::StringConstPtr& msg) {
     visibility_graph_msg::Graph graph_msg;
     ConvertGraphToMsg(loaded_graph, graph_msg);
     graph_pub_.publish(graph_msg);
+    ResetGraph(loaded_graph);
 }
 
 void GraphDecoder::SaveGraphCallBack(const std_msgs::StringConstPtr& msg) {
