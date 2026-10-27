@@ -93,7 +93,7 @@ The default launch connects these inputs to the autonomous exploration developme
 | `/terrain_cloud` | `/terrain_map_ext` | Extended terrain with height cost in intensity |
 | `/terrain_local_cloud` | `/terrain_map` | Local terrain with height cost in intensity |
 
-Terrain intensity must encode traversability height cost, not lidar reflectivity. For example, zero reflectivity on a wall must not be interpreted as free terrain. Clouds and odometry must use the same ROS clock; see the [TF/time contract](docs/algorithm.md#tf-and-timestamp-contract) for interpolation and queue limits. Configure `util/dynamic_obs_dacay_time` (`Util/` on ROS 1) to outlast upstream terrain retention and pruning lag; the default is 15 seconds.
+Terrain intensity must encode traversability height cost, not lidar reflectivity. For example, zero reflectivity on a wall must not be interpreted as free terrain. Clouds and odometry must use the same ROS clock; see the [TF/time contract](docs/algorithm.md#tf-and-timestamp-contract) for interpolation and queue limits. Configure `util/dynamic_obs_dacay_time` (`Util/` on ROS 1) to outlast upstream terrain retention and pruning lag; the default is 15 seconds. This interval expires clearing exclusions; it does not expire occupied geometry that has not been observed free.
 
 ## Development
 
