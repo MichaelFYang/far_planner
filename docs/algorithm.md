@@ -98,6 +98,7 @@ Consequently, an arrival status is not a requested-XYZ guarantee. Tests that req
 
 The refactor concentrates on reducing repeated work while preserving decision order and explicit invariants:
 
+- Remove unused contour-node adjacency storage and dead private helpers.
 - Filter touched cloud cells and enumerate sparse visited cells instead of scanning the entire world grid.
 - Reuse terrain projections by accepted-cloud revision and reset search state only for previously touched cells.
 - Visit nearby node pairs once; retain defensive copies when adjacency is mutated during traversal.
