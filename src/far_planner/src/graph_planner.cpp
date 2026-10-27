@@ -48,7 +48,12 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
     // start expand the whole current_graph_
     odom_node_ptr_->gscore = 0.0;
     using SearchEntry = std::pair<float, NavNodePtr>;
-    std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> open_queue;
+    const auto farther = [](const SearchEntry& lhs, const SearchEntry& rhs) {
+        if (lhs.first != rhs.first) return lhs.first > rhs.first;
+        // Equal-cost routes must not depend on node allocation addresses.
+        return lhs.second->id > rhs.second->id;
+    };
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> open_queue(farther);
     IdxSet close_set;
     // Expansion from odom node to all reachable navigation node
     open_queue.push({0.0f, odom_node_ptr_});
@@ -80,7 +85,7 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
             }
         }
     }
-    std::priority_queue<SearchEntry, std::vector<SearchEntry>, std::greater<SearchEntry>> fopen_queue;
+    std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> fopen_queue(farther);
     close_set.clear();
     // Expansion from odom node to all covered navigation node
     odom_node_ptr_->fgscore = 0.0;
