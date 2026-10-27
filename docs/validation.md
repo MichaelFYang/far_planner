@@ -23,7 +23,7 @@ These results apply to the source revisions and workloads documented below. The 
 
 On ROS 2, graph-update and planning wall timers use `main_run_freq`, and `main()` calls `rclcpp::spin(node)`. On ROS 1, `ros::spin()` services callbacks continuously; graph updates and planning use separate ROS timers at `main_run_freq`, while a 50 ms wall timer retries queued observations even when simulated time is paused. Both entry points serialize planner callbacks. A TF listener may use its own thread. Introducing parallel planner callbacks requires a separate ownership and synchronization design.
 
-Module configuration is loaded and validated before each module's `Init()` derives grid dimensions, angle thresholds, and other processing state. `DynamicGraph::Init()` supplies the terrain planner's parameters. Node factories fill IDs and flags before publishing nodes to their owning containers; contour construction links non-pillar vertices into closed rings before surface analysis. Preserve these ordering contracts when moving initialization or callbacks. The static review found constructor-initialization warnings for these paths, but no confirmed read before initialization in the current entry points.
+Module configuration is loaded and validated before each module's `Init()` derives grid dimensions, angle thresholds, and other processing state. `DynamicGraph::Init()` supplies the terrain planner's parameters. Node factories fill IDs and flags before publishing nodes to their owning containers; contour construction links non-pillar vertices into closed rings before surface analysis. Preserve these ordering contracts when moving initialization or callbacks. The static review found constructor-initialization warnings for these paths, but no confirmed read before initialization in the current entry points. A refreshed native Jazzy Cppcheck 2.13 warning/performance pass covers all 17 production C++ translation units using their actual compile commands, the Qt library model, and the SDK's empty `Q_SLOTS` annotation. It retains the same 97 initialization and three initializer-list advisories reviewed against these initialization contracts; no diagnostic signatures were added or suppressed.
 
 On ROS 2, shutdown during `Init()` is normal cancellation: the entry point checks the context before creating an executor and does not report a startup failure after a signal has shut it down. The ROS 2 `test/test_startup_shutdown.py` sends SIGINT and SIGTERM during initialization and separately verifies that a zero graph frequency still fails with a diagnostic. Both signal cases failed before the fix. At that stage, Humble, Jazzy, and Lyrical each pass 118 behavioral cases (124 reported checks including CTest wrappers); all three startup cases also pass under ASan/UBSan with leak detection.
 
@@ -132,7 +132,7 @@ A full graph reset now clears reciprocal navigation edges, potential connections
 
 Merged-node and temporary-goal deletion also clear both sides of terrain-feasibility vote histories through the node ID map. These histories can exist for rejected pairs with no visibility edge, so adjacency alone cannot find them. Histories between surviving nodes remain intact. Regressions cover terrain-only neighbors and 32 goal replacements; the previous implementation retained stale node IDs after each removal.
 
-Normal contour replacement now clears reciprocal front/back links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
+Normal contour replacement now clears reciprocal front/back links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. The repeated-run profiles below cover only their measured workloads and do not rule out other ownership growth.
 
 Planner destruction also resets its goal, navigation graph, and contour graph, breaking their ownership cycles without publishing a reset waypoint. A live indoor replay previously left about 0.96 MB in linked graph allocations at shutdown. The lifecycle regression checks that destruction releases linked navigation and contour nodes even without an explicit reset or full initialization.
 
@@ -338,7 +338,7 @@ The 50.6-second input recording was replayed with ROS simulated time under Addre
 
 After correcting the scan/terrain wiring, the installed Jazzy launch ran with `is_static_env=false` for five cycles of the same route: all 15 goals reported arrival, with a maximum final XY error of 0.133 m. During 222 seconds of observation it published 1,074 nonempty scan-ray debug clouds and 538 graph snapshots. After the first 60 seconds, sampled planner RSS stayed between 122.1 and 129.5 MiB; the published graph peaked at 91 nodes and ended at 80. This short repeat run exercises dynamic-mode processing in a static world; it does not establish moving-obstacle performance or long-duration memory stability.
 
-The indoor runs above cover one environment on native Jazzy; the garage case below adds a ramp route. Broader moving-obstacle cases, additional multi-layer routes, stock RViz layout behavior, other distributions' simulator runs, and representative robot recordings remain to be checked. Simulator assets, recordings, and diagnostic output stay outside the repository.
+These initial indoor runs cover one environment on native Jazzy. Later sections add garage ramps, other SDKs, stock RViz layouts, and moving-barrier diagnostics. Representative robot recordings and broader environments remain outside the verified scope. Simulator assets, recordings, and diagnostic output stay outside the repository.
 
 ## Rendered RViz interaction regression
 
@@ -369,9 +369,19 @@ Release builds and fresh full-workspace test runs pass in the official `osrf/ros
 
 Melodic exposed two library differences: PCL 1.8 exports a whitespace-only compiler definition, and its cloud `swap()` leaves the destination header unchanged. The ROS 1 build discards empty options; successful cloud transforms now set the target frame and measurement stamp after swapping points. Existing moving/rotating-TF and frame-normalization regressions failed before the header fix. The measurement-time test also checks a stale input header stamp and preservation of its sequence number.
 
-The ROS 1 core suite now runs through `add_rostest_gtest`, which supplies the master required by its node handles. Python tests use catkin-rewritten shebangs and SDK-compatible standard-library APIs, following [ROS Python version rules](https://reps.openrobotics.org/rep-0151/). Python 2 test deadlines use POSIX elapsed time instead of the unavailable `time.monotonic`; no planner clock policy changes. The rendered RViz regression also passes on Melodic/Qt5.9. These are build, behavioral, and plugin checks; they do not add a Melodic closed-loop simulator run.
+The ROS 1 core suite now runs through `add_rostest_gtest`, which supplies the master required by its node handles. Python tests use catkin-rewritten shebangs and SDK-compatible standard-library APIs, following [ROS Python version rules](https://reps.openrobotics.org/rep-0151/). Python 2 test deadlines use POSIX elapsed time instead of the unavailable `time.monotonic`; no planner clock policy changes. The rendered RViz regression also passes on Melodic/Qt5.9. These compatibility checks precede the SDK-matched Melodic indoor simulator run documented below.
 
 ## Build dependency audit
+
+Library modernization follows each ROS SDK's supported dependency set. The final environment inventory records these installed versions; ROS 1 retains its SDK compatibility while Lyrical uses Qt6.
+
+| SDK | PCL | OpenCV | Qt |
+| --- | --- | --- | --- |
+| Humble | 1.12.1 | 4.5.4 | 5.15.3 |
+| Jazzy | 1.14.0 | 4.6.0 | 5.15.13 |
+| Lyrical | 1.15.1 | 4.10.0 | 6.10.2 |
+| Noetic | 1.10.0 | 4.2.0 | 5.12.8 |
+| Melodic | 1.8.1 | 3.2.0 | 5.9.5 |
 
 The planner requests PCL `common`, `filters`, and `kdtree` before loading the ROS conversion package, rather than discovering every installed PCL module. Filters retain their own transitive dependencies. The unused PCL search header is removed. On ROS 1, direct PCL cloud transformation also removes the `pcl_ros` manifest/CMake dependency and the runtime `pcl_ros_tf`, segmentation, features, and ML libraries.
 
@@ -499,6 +509,8 @@ The diagnostic uses recorded odometry, so it is not a closed-loop navigation pas
 A subsequent physical re-observation control on `2592af4` retained the ordinary gradual withdrawal, then temporarily routed the local planner back along the vehicle's travelled breadcrumbs and held it for eight seconds before resuming FAR waypoints. Obstacle checks and FAR's original goal/map/graph state remained active; all 64 captured planning snapshots during the control retained goal ID 26 and anchor `(4, 14, 0.75)`. In the corridor interior, all 99 retained map points matched newly observed clearing-ray voxels, and the count became zero (including all 15 frames in the final three seconds of the hold). The original direct goal connection reopened.
 
 That diagnostic completed all three goals with maximum requested-XYZ error 0.106 m, 226 consistent graphs, 212 finite waypoints, and normal planner/launch-parent exits. It shows recovery after physical re-observation without resetting the goal or clearing occupied cells artificially. It changes vehicle guidance and therefore does not pass the original autonomous workload or establish that the normal policy selects an appropriate re-observation pose.
+
+The clearing decision predates this refactor: both the base branch and current `ScanHandler::ExtractDyObsCloud` select occupied samples only in ray-traversed cells. The exclusion timer prevents already-cleared samples from being restored by retained upstream terrain; it does not age unobserved occupied geometry out of the map. Taken together, the captured graph costs, absent clearing-ray coverage, and same-goal physical re-observation control identify a visibility/re-observation limitation in this workload. They do not demonstrate a TF, shortest-path, or visible-obstacle-retirement defect, and do not establish a passing result for the original autonomous policy.
 
 ## Source migration notes
 

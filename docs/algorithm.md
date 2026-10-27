@@ -86,6 +86,8 @@ Dynamic clearing selects the nearest processed scan within the terrain timestamp
 
 Default `sensor_time_tolerance` is 0.2 seconds and must be in `(0, 10]`. Increasing it permits more temporal mismatch. Dynamic exclusions default to 15 seconds and must outlast upstream terrain retention and pruning lag; a new cloud header does not make every retained point fresh. Spinning scans require upstream deskewing because one header stamp cannot describe every point's acquisition time.
 
+The 15-second exclusion is not a lifetime for occupied map points. Dynamic clearing needs ray evidence that an occupied cell is now free; geometry outside that evidence can remain until re-observed. The route policy does not guarantee an active return to such a viewpoint.
+
 Detailed [TF/timing regressions](validation.md#tf-and-timestamp-contract) and [retention experiments](validation.md#dynamic-terrain-retention-validation) define the tested scope.
 
 ## Goal and route semantics
