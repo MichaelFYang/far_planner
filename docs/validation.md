@@ -7,13 +7,13 @@ This companion to the [algorithm guide](algorithm.md) records regression cases, 
 | Check | Current evidence |
 | --- | --- |
 | Builds and dependency resolution | All five SDKs; current official rosdep rules resolve all manifests |
-| ROS 2 core | 118 behavioral cases, 124 reported checks on Humble/Jazzy/Lyrical |
+| ROS 2 core | 119 behavioral cases, 125 reported checks on Humble/Jazzy/Lyrical |
 | ROS 2 graph utilities | 12 decoder and 16 boundary checks on each SDK |
-| ROS 1 workspace | 270 reported checks on both Melodic and Noetic |
-| Native sanitizers | 110 C++ cases, three planner-startup cases, five boundary process cases; leak detection enabled |
+| ROS 1 workspace | 272 reported checks on both Melodic and Noetic |
+| Native sanitizers | 111 C++ cases, three planner-startup cases, five boundary process cases; leak detection enabled |
 | Rendered controls and stock layouts | Plugin interactions on all SDKs; 15 stock-layout cases with the fixture conditions below |
 | Recording replay | Three goals on all five SDKs; separate sanitized replay passes |
-| Open integration case | Barrier introduced after initial mapping: two 110-second arrival waits fail; a third run also fails after a 300-second diagnostic wait |
+| Open integration case | Barrier introduced after initial mapping: four original 110-second arrival waits fail; an additional run also fails after a 300-second diagnostic wait |
 
 These results apply to the source revisions and workloads documented below. The open barrier case keeps integration validation incomplete.
 
@@ -25,7 +25,7 @@ On ROS 2, graph-update and planning wall timers use `main_run_freq`, and `main()
 
 Module configuration is loaded and validated before each module's `Init()` derives grid dimensions, angle thresholds, and other processing state. `DynamicGraph::Init()` supplies the terrain planner's parameters. Node factories fill IDs and flags before publishing nodes to their owning containers; contour construction links non-pillar vertices into closed rings before surface analysis. Preserve these ordering contracts when moving initialization or callbacks. The static review found constructor-initialization warnings for these paths, but no confirmed read before initialization in the current entry points.
 
-On ROS 2, shutdown during `Init()` is normal cancellation: the entry point checks the context before creating an executor and does not report a startup failure after a signal has shut it down. The ROS 2 `test/test_startup_shutdown.py` sends SIGINT and SIGTERM during initialization and separately verifies that a zero graph frequency still fails with a diagnostic. Both signal cases failed before the fix. Humble, Jazzy, and Lyrical now each pass 118 behavioral cases (124 reported checks including CTest wrappers); all three startup cases also pass under ASan/UBSan with leak detection.
+On ROS 2, shutdown during `Init()` is normal cancellation: the entry point checks the context before creating an executor and does not report a startup failure after a signal has shut it down. The ROS 2 `test/test_startup_shutdown.py` sends SIGINT and SIGTERM during initialization and separately verifies that a zero graph frequency still fails with a diagnostic. Both signal cases failed before the fix. At that stage, Humble, Jazzy, and Lyrical each pass 118 behavioral cases (124 reported checks including CTest wrappers); all three startup cases also pass under ASan/UBSan with leak detection.
 
 Boundary startup cancellation also skips graph generation, preserving an existing output file. A FIFO-controlled trajectory read verifies SIGINT/SIGTERM on ROS 2 and SIGINT on ROS 1; an empty trajectory still exits with an input error. ROS 1 checks `isShuttingDown()` while keeping its owning `NodeHandle` alive through error classification. These cases pass across all five SDKs. ROS 2 graph-decoder construction is inside its cancellation handler so a stopped context cannot escape through executor creation.
 
@@ -70,6 +70,8 @@ Remaining limits are explicit:
 - These tests do not establish end-to-end navigation correctness. Validate synchronized bag replay and motion on the actual robot before adopting the refactor branches.
 
 ## Search correctness stage
+
+Both graph queues now break exactly equal-cost ties by ascending node ID. Previously, the default pair comparison used `shared_ptr` address order: the same symmetric diamond graph selected a different route when its two branch nodes exchanged allocation addresses, despite unchanged IDs, geometry, and costs. The regression fails before the change in both traversals and passes afterward for reversed addresses and neighbor order. An unequal-cost control still selects the cheaper branch when its ID is higher. This improves reproducibility for a fixed graph; it does not make sensor-driven graph construction deterministic or establish a navigation fix. Current suites report 125 checks on each ROS 2 SDK, 272 on each ROS 1 SDK, and 111 native C++ sanitizer cases, all passing. The sanitized 50.643-second replay on `7775349` reaches all three goals, with 113 consistent graphs, 103 finite waypoints, and normal exit without sanitizer findings.
 
 The two visibility-graph traversals and terrain A* now push an immutable cost with each queue entry. Every distance improvement adds a new entry; an older entry is skipped when popped. This removes both mutable comparator keys and the separate open-set bookkeeping. The general graph traversal retains its slope-adjusted goal cost, while the covered traversal retains its coverage and free-goal restrictions. Terrain A* still uses Euclidean step costs and a Euclidean heuristic. Each query now clears search scores and parent links only for grid cells touched by the previous query; new nodes start with infinite scores. A failed query followed by successful queries has regression coverage. The reduced reset work is not yet a measured planner throughput gain.
 
@@ -124,7 +126,7 @@ Planner destruction also resets its goal, navigation graph, and contour graph, b
 
 The boundary extractor likewise breaks reciprocal node links before graph replacement and destruction. Normal generation and output-error teardown each leaked 16,072 bytes in 175 allocations before the fix; both process regressions now pass under ASan/UBSan with leak detection. The bundled 25-node graph is byte-identical before and after. The extractor is noncopyable to keep graph ownership unambiguous. Current boundary suites report 16 checks on each ROS 2 SDK; the decoder suite reports 12.
 
-A reference audit removed two unused private contour helpers and five private declarations with no callers or implementations. The unused `AddConnect` helper was the only production writer of `CTNode::connect_nodes`; removing both reduces native 64-bit `sizeof(CTNode)` from 144 to 120 bytes. Contour topology uses the reciprocal `front`/`back` ring, and its lifecycle regression retains the weak-reference release assertions. Active height checks use `IsEdgeOverlapInHeight`; the discarded `IsOverlapRange` helper had an incorrect OR predicate but no runtime callers. This measures object storage, not whole-planner memory or throughput. Current core/workspace suites still report 124 checks on each ROS 2 SDK and 270 on each ROS 1 SDK, with no failures; the native 110-case ASan/UBSan suite also passes. On source `56b72f4`, the sanitized 50.643-second recording replay again reaches all three goals, with 113 consistent graphs, 102 finite waypoints, and normal exit without sanitizer findings.
+A reference audit removed two unused private contour helpers and five private declarations with no callers or implementations. The unused `AddConnect` helper was the only production writer of `CTNode::connect_nodes`; removing both reduces native 64-bit `sizeof(CTNode)` from 144 to 120 bytes. Contour topology uses the reciprocal `front`/`back` ring, and its lifecycle regression retains the weak-reference release assertions. Active height checks use `IsEdgeOverlapInHeight`; the discarded `IsOverlapRange` helper had an incorrect OR predicate but no runtime callers. This measures object storage, not whole-planner memory or throughput. At that cleanup stage, core/workspace suites report 124 checks on each ROS 2 SDK and 270 on each ROS 1 SDK, with no failures; the native 110-case ASan/UBSan suite also passes. On source `56b72f4`, the sanitized 50.643-second recording replay again reaches all three goals, with 113 consistent graphs, 102 finite waypoints, and normal exit without sanitizer findings.
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
@@ -329,7 +331,7 @@ The ROS 2 OpenCV manifest key is `libopencv-dev`, matching ROS 1. The former `op
 
 ## ROS 1 SDK compatibility
 
-Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 270 checks, zero errors/failures/skips. The core C++ suite contains 110 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
+Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 272 checks, zero errors/failures/skips. The core C++ suite contains 111 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
 
 | SDK | GCC | CMake | PCL | Qt | ROS Python |
 | --- | --- | --- | --- | --- | --- |
@@ -352,7 +354,7 @@ The planner requests PCL `common`, `filters`, and `kdtree` before loading the RO
 
 Noetic's conversion package still exports upstream I/O/VTK link paths; these exports are retained. ELF linkers already discarded unused direct libraries on the tested ROS 2 builds, so their shorter link commands are not a measured runtime-memory improvement. OpenCV image codecs and GUI support remain required by image saving and visualization. GDCM dictionary initialization in the allocation trace comes through the installed OpenCV image-codec library.
 
-In eight alternating Noetic startups per build, sampled one second after process creation with the default configuration and no sensor input, median RSS changed from 99.60 to 79.78 MiB; mapped shared-library files fell from 217 to 213 in every run. All processes exited normally. This measures startup only. At that dependency-audit stage, Humble/Jazzy/Lyrical each reported 120 planner checks, Noetic reported 264 workspace checks, and the native C++ sanitizer suite passed 110 tests. Current counts are listed under scheduling and ROS 1 SDK compatibility. The Noetic recording replay after the dependency change still produces three arrivals, 110 consistent graphs, 99 finite waypoints, and a normal exit.
+In eight alternating Noetic startups per build, sampled one second after process creation with the default configuration and no sensor input, median RSS changed from 99.60 to 79.78 MiB; mapped shared-library files fell from 217 to 213 in every run. All processes exited normally. This measures startup only. At that dependency-audit stage, Humble/Jazzy/Lyrical each reported 120 planner checks, Noetic reported 264 workspace checks, and the native C++ sanitizer suite passed 110 tests. Current counts are listed in the verification summary. The Noetic recording replay after the dependency change still produces three arrivals, 110 consistent graphs, 99 finite waypoints, and a normal exit.
 
 ## Cross-distribution recording replay
 
@@ -458,6 +460,8 @@ The held vehicle moved 0.001 m during withdrawal. These diagnostic controls chan
 A full-trail replay audit selected candidate old-obstacle points more than 0.25 m from the static mesh preview and outside the expanded final box, in an interior region that avoids cropping potential ray-cell centers. Across 320 late paired map/ray frames, none of those points matched a 0.15 m clearing-ray voxel. Sampled failed-run frames retained 117–129 such points; the held control's same geometry mask retained at most 11. This approximate mask does not identify objects. The evidence is consistent with retained geometry that was not observed clear, while the route-selection contribution remains unresolved.
 
 A fresh original-workload run after the contour-storage cleanup (`56b72f4`) still exceeded the 110-second arrival wait after gradual withdrawal, with zero arrivals. Its 334 graph snapshots and 326 waypoints passed the consistency/finite checks; the planner and launch parent exited normally. The storage cleanup is therefore not counted as a navigation fix.
+
+The original workload also times out after the same 110-second arrival wait on the stable-ID search ordering (`7775349`), with zero arrivals, 334 consistent graphs, and 327 finite waypoints. The planner and launch parent exit normally. Stable-ID tie-breaking improves the focused reproducibility case but is not counted as a fix for this navigation workload.
 
 ## Source migration notes
 
