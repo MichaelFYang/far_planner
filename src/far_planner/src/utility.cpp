@@ -1,6 +1,7 @@
 /*
  * FAR Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
@@ -8,38 +9,50 @@
 
 #include "far_planner/utility.h"
 
+namespace {
+PointCloudPtr TaggedMergedCloud(const PointCloudPtr& first, float first_tag,
+                                const PointCloudPtr& second, float second_tag) {
+  PointCloudPtr merged(new PointCloud);
+  *merged = *first + *second;
+  const std::size_t split = first->size();
+  for (std::size_t i = 0; i < merged->size(); ++i) {
+    merged->points[i].intensity = i < split ? first_tag : second_tag;
+  }
+  return merged;
+}
+}  // namespace
+
 /***************************************************************************************/
 
 void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size) {
-  // filter point cloud with constant leaf size 0.2m
   pcl::PointCloud<PCLPoint> filter_rs_cloud;
   pcl::VoxelGrid<PCLPoint> vg;
   vg.setInputCloud(point_cloud);
   vg.setLeafSize(leaf_size.x(), leaf_size.y(), leaf_size.z());
   vg.filter(filter_rs_cloud);
-  *point_cloud = filter_rs_cloud;
+  point_cloud->swap(filter_rs_cloud);
 }
 
 void FARUtil::FilterCloud(const PointCloudPtr& point_cloud, const float& leaf_size) {
-  // filter point cloud with constant leaf size 0.2m
   const Eigen::Vector3d leaf(leaf_size, leaf_size, leaf_size);
   FilterCloud(point_cloud, leaf);
 }
 
-void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut) {
+void FARUtil::RemoveNanInfPoints(const PointCloudPtr& cloudInOut, bool require_finite_intensity) {
   pcl::PointCloud<PCLPoint> temp_cloud;
   temp_cloud.resize(cloudInOut->points.size());
   std::size_t idx = 0;
   for (const auto& p : cloudInOut->points) {
-    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
+        (require_finite_intensity && !std::isfinite(p.intensity))) {
       if (FARUtil::IsDebug) ROS_WARN_ONCE("FARUtil: nan or inf point detected.");
       continue;
     }
     temp_cloud.points[idx] = p;
     idx ++;
   }
-  temp_cloud.points.resize(idx);
-  *cloudInOut = temp_cloud;
+  temp_cloud.resize(idx);
+  cloudInOut->swap(temp_cloud);
 }
 
 PCLPoint FARUtil::Point3DToPCLPoint(const Point3D& point) {
@@ -55,15 +68,12 @@ void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
                                       const PointCloudPtr& cloudRefer,
                                       const PointCloudPtr& cloudNew)
 {
-  PointCloudPtr temp_new_cloud(new pcl::PointCloud<PCLPoint>());
-  FARUtil::ResetCloudIntensity(cloudIn, false);
-  FARUtil::ResetCloudIntensity(cloudRefer, true);
-  cloudNew->clear(), temp_new_cloud->clear();
-  *temp_new_cloud = *cloudIn + *cloudRefer;
+  PointCloudPtr temp_new_cloud = TaggedMergedCloud(cloudIn, 0.0f, cloudRefer, 255.0f);
+  cloudNew->clear();
   FARUtil::FilterCloud(temp_new_cloud, FARUtil::kLeafSize * 2.0);
   for (const auto& p : temp_new_cloud->points) {
     if (p.intensity < FARUtil::kNewPIThred) {
-      cloudNew->points.push_back(p);
+      cloudNew->push_back(p);
     } 
   }
 }
@@ -74,14 +84,6 @@ void FARUtil::ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHig
     cloudIn->points[i].intensity = kValue;
   }
 }
-
-void FARUtil::ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut) {
-  const float curTime = ros::Time::now().toSec() - FARUtil::systemStartTime;
-  for (std::size_t i=0; i<cloudInOut->size(); i++) {
-    cloudInOut->points[i].intensity = curTime;
-  }
-}
-
 
 void FARUtil::CropPCLCloud(const PointCloudPtr& cloudIn,
                           const PointCloudPtr& cloudCropped,
@@ -106,7 +108,7 @@ void FARUtil::CropPCLCloud(const PointCloudPtr& cloudInOut,
 {
   PointCloudPtr temp_crop_ptr(new pcl::PointCloud<PCLPoint>());
   FARUtil::CropPCLCloud(cloudInOut, temp_crop_ptr, centriod, range);
-  *cloudInOut = *temp_crop_ptr;
+  cloudInOut->swap(*temp_crop_ptr);
 }
 
 void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float& height) {
@@ -118,55 +120,77 @@ void FARUtil::CropCloudWithinHeight(const PointCloudPtr& cloudInOut, const float
     temp_cloud.points[idx] = p;
     idx ++;
   }
-  temp_cloud.points.resize(idx);
-  *cloudInOut = temp_cloud;
+  temp_cloud.resize(idx);
+  cloudInOut->swap(temp_cloud);
+}
+
+std::string FARUtil::NormalizeFrameID(const std::string& frame_id) {
+    const auto first = frame_id.find_first_not_of('/');
+    return first == std::string::npos ? std::string() : frame_id.substr(first);
 }
 
 void FARUtil::TransformPCLFrame(const std::string& from_frame_id,
-                               const std::string& to_frame_id,
-                               const tf::TransformListener* tf_listener,
-                               const PointCloudPtr& cloudInOut) 
-{
-  if (cloudInOut->empty()) return;
-  pcl::PointCloud<PCLPoint> aft_tf_cloud;
-  tf::StampedTransform cloud_to_map_tf;
-  try {
-    tf_listener->waitForTransform(to_frame_id, from_frame_id, ros::Time(0), ros::Duration(1.0));
-    tf_listener->lookupTransform(to_frame_id, from_frame_id, ros::Time(0), cloud_to_map_tf);
-  } catch (tf::TransformException ex){
-    throw ex;
-    return;
-  }
-  pcl_ros::transformPointCloud(*cloudInOut, aft_tf_cloud, cloud_to_map_tf);
-  *cloudInOut = aft_tf_cloud;
+                                const std::string& to_frame_id,
+                                const tf::Transformer* tf_listener,
+                                const PointCloudPtr& cloudInOut,
+                                const ros::Time& stamp,
+                                Point3D* sensor_origin) {
+    const std::string source = NormalizeFrameID(from_frame_id);
+    const std::string target = NormalizeFrameID(to_frame_id);
+    if (source.empty() || target.empty()) {
+        throw tf::TransformException("Point cloud source and target frames must be nonempty");
+    }
+    if (stamp.isZero()) {
+        throw tf::TransformException("Sensor clouds require a nonzero measurement timestamp");
+    }
+    if (cloudInOut->empty()) return;
+    if (source == target) {
+        cloudInOut->header.frame_id = target;
+        cloudInOut->header.stamp = stamp.toNSec() / 1000ULL;
+        return;
+    }
+
+    tf::StampedTransform transform;
+    tf_listener->lookupTransform(target, source, stamp, transform);
+    const auto rotation = transform.getRotation();
+    const auto& translation = transform.getOrigin();
+    PointCloud transformed;
+    pcl::transformPointCloud(*cloudInOut, transformed,
+        Eigen::Vector3f(translation.x(), translation.y(), translation.z()),
+        Eigen::Quaternionf(rotation.w(), rotation.x(), rotation.y(), rotation.z()));
+    cloudInOut->swap(transformed);
+    // PCL 1.8 swaps points and shape, but leaves the destination header intact.
+    cloudInOut->header.frame_id = target;
+    cloudInOut->header.stamp = stamp.toNSec() / 1000ULL;
+    if (sensor_origin) {
+        *sensor_origin = Point3D(translation.x(), translation.y(), translation.z());
+    }
 }
 
 void FARUtil::TransformPoint3DFrame(const std::string& from_frame_id,
-                                   const std::string& to_frame_id,
-                                   const tf::TransformListener* tf_listener,
-                                   Point3D& point)
-{
-  tf::Vector3 point_vec(point.x, point.y, point.z);
-  tf::StampedTransform transform_tf_stamp;
-  try {
-    tf_listener->waitForTransform(to_frame_id, from_frame_id, ros::Time(0), ros::Duration(1.0));
-    tf_listener->lookupTransform(to_frame_id, from_frame_id, ros::Time(0), transform_tf_stamp);
-    point_vec = transform_tf_stamp * point_vec;
-  } catch (tf::TransformException ex){
-    ROS_ERROR("Tracking Point3D TF lookup: %s",ex.what());
-    return;
-  }
-  point.x = point_vec.x();
-  point.y = point_vec.y();
-  point.z = point_vec.z();
+                                    const std::string& to_frame_id,
+                                    const tf::Transformer* tf_listener,
+                                    Point3D& point,
+                                    const ros::Time& stamp) {
+    const std::string source = NormalizeFrameID(from_frame_id);
+    const std::string target = NormalizeFrameID(to_frame_id);
+    if (source.empty() || target.empty()) {
+        throw tf::TransformException("Goal source and target frames must be nonempty");
+    }
+    if (source == target) return;
+    // Zero is an explicit latest-transform request for an operator goal only.
+    tf::StampedTransform transform;
+    tf_listener->lookupTransform(target, source, stamp, transform);
+    const tf::Vector3 result = transform * tf::Vector3(point.x, point.y, point.z);
+    point.x = result.x();
+    point.y = result.y();
+    point.z = result.z();
 }
 
 bool FARUtil::IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame) {
-  std::string str1 = cur_frame;
-  std::string str2 = ref_frame;
-  if (cur_frame[0] == '/') str1 = cur_frame.substr(1);
-  if (ref_frame[0] == '/') str2 = ref_frame.substr(1);
-  return str1 == str2;
+    const std::string source = NormalizeFrameID(cur_frame);
+    const std::string target = NormalizeFrameID(ref_frame);
+    return !source.empty() && !target.empty() && source == target;
 }
 
 void FARUtil::ConvertCloudToPCL(const PointStack& point_stack, 
@@ -176,7 +200,7 @@ void FARUtil::ConvertCloudToPCL(const PointStack& point_stack,
   point_cloud_ptr->points.resize(point_stack.size());
   std::size_t i = 0;
   for (const auto& p : point_stack) {
-    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.x)) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {
       if (FARUtil::IsDebug) ROS_WARN_ONCE("FARUtil: nan or inf point detected.");
       continue;
     }
@@ -188,6 +212,7 @@ void FARUtil::ConvertCloudToPCL(const PointStack& point_stack,
     point_cloud_ptr->points[i] = point;
     i++;
   }
+  point_cloud_ptr->resize(i);
 }
 
 geometry_msgs::Point FARUtil::Point3DToGeoMsgPoint(const Point3D& point) {
@@ -232,10 +257,10 @@ void FARUtil::UpdateKdTrees(const PointCloudPtr& newObsCloudIn)
 
 void FARUtil::ClearKdTree(const PointCloudPtr& cloud_ptr,
                           const PointKdTreePtr& kdTree_ptr) {
-  PCLPoint temp_p;
-  temp_p.x = temp_p.y = temp_p.z = 0.0f;
-  cloud_ptr->resize(1), cloud_ptr->points[0] = temp_p;
-  kdTree_ptr->setInputCloud(cloud_ptr);
+  // PCL cannot build an empty FLANN tree. Release its old index and guard
+  // searches until the next nonempty update rebuilds it.
+  cloud_ptr->clear();
+  if (kdTree_ptr) *kdTree_ptr = pcl::KdTreeFLANN<PCLPoint>(false);
 }
 
 bool FARUtil::IsPointNearNewPoints(const Point3D& p, const bool& is_creation) {
@@ -248,6 +273,8 @@ std::size_t FARUtil::PointInXCounter(const Point3D& p,
                                      const float& radius,
                                      const PointKdTreePtr& KdTree) 
 {
+  if (!KdTree || !KdTree->getInputCloud() || KdTree->getInputCloud()->empty() ||
+      !std::isfinite(radius) || radius <= 0.0f) return 0;
   std::vector<int> pointSearchInd;
   std::vector<float> pointSearchSqDis;
   PCLPoint pcl_p;
@@ -284,11 +311,8 @@ int FARUtil::Mod(const int& a, const int& b) {
 
 void FARUtil::EraseNodeFromStack(const NavNodePtr& node_ptr,
                                  NodePtrStack& node_stack) {
-  for (auto it = node_stack.begin(); it != node_stack.end(); it++) {
-    if (*it  == node_ptr) {
-      node_stack.erase(it--);
-    }
-  }
+  node_stack.erase(std::remove(node_stack.begin(), node_stack.end(), node_ptr),
+                   node_stack.end());
 }
 
 bool FARUtil::IsSamePoint3D(const Point3D& p1, const Point3D& p2) {
@@ -451,10 +475,13 @@ float FARUtil::NoiseCosValue(const float& dot_value, const bool& is_large, const
 void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
                                 const float& radius,
                                 const std::size_t c_thred) {
+  if (cloudInOut->empty()) {
+    *FARUtil::kdtree_filter_cloud_ = pcl::KdTreeFLANN<PCLPoint>(false);
+    return;
+  }
   PointCloudPtr temp_ptr(new pcl::PointCloud<PCLPoint>());
-  if (cloudInOut->empty()) return;
   FARUtil::kdtree_filter_cloud_->setInputCloud(cloudInOut);
-  temp_ptr->clear(), temp_ptr->resize(cloudInOut->size());
+  temp_ptr->resize(cloudInOut->size());
   std::size_t idx = 0;
   for (const auto& p : cloudInOut->points) {
     const std::size_t counter = FARUtil::PointInXCounter(Point3D(p), radius, FARUtil::kdtree_filter_cloud_);
@@ -463,8 +490,10 @@ void FARUtil::ClusterFilterCloud(const PointCloudPtr& cloudInOut,
       idx ++;
     }
   }
-  temp_ptr->resize(idx), *cloudInOut = *temp_ptr;
-  return;
+  temp_ptr->resize(idx);
+  cloudInOut->swap(*temp_ptr);
+  // The index was built for the pre-filter points, which the swap replaced.
+  *FARUtil::kdtree_filter_cloud_ = pcl::KdTreeFLANN<PCLPoint>(false);
 }
 
 void FARUtil::TransferCloud(const Point3D& transPoint, const PointCloudPtr& cloudInOut) {
@@ -482,11 +511,8 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
                                  const PointCloudPtr& cloudOverlapOut,
                                  const float& margin_ratio)
 {
-  PointCloudPtr temp_cloud(new pcl::PointCloud<PCLPoint>());
-  FARUtil::ResetCloudIntensity(cloudIn, true);
-  FARUtil::ResetCloudIntensity(cloudRef, false);
-  *temp_cloud = *cloudIn + *cloudRef;
-  const float leaf_size = margin_ratio * FARUtil::kLeafSize;;
+  PointCloudPtr temp_cloud = TaggedMergedCloud(cloudIn, 255.0f, cloudRef, 0.0f);
+  const float leaf_size = margin_ratio * FARUtil::kLeafSize;
   FARUtil::FilterCloud(temp_cloud, leaf_size);
   cloudOverlapOut->clear(), cloudOverlapOut->resize(temp_cloud->size());
   std::size_t idx = 0;
@@ -501,19 +527,10 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
 
 void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                  const PointCloudPtr& cloudRef,
-                                 const bool& is_copy_cloud) 
+                                 const bool&)
 {
   if (cloudRef->empty() || cloudInOut->empty()) return;
-  PointCloudPtr temp_cloud(new pcl::PointCloud<PCLPoint>());
-  PointCloudPtr ref_cloud = cloudRef;
-  if (is_copy_cloud) {
-    PointCloudPtr copyRefCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*cloudRef, *copyRefCloud);
-    ref_cloud = copyRefCloud;
-  }
-  FARUtil::ResetCloudIntensity(cloudInOut, true);
-  FARUtil::ResetCloudIntensity(ref_cloud, false);
-  *temp_cloud = *cloudInOut + *ref_cloud;
+  PointCloudPtr temp_cloud = TaggedMergedCloud(cloudInOut, 255.0f, cloudRef, 0.0f);
   const float leaf_size = FARUtil::kLeafSize * 1.2;
   FARUtil::FilterCloud(temp_cloud, leaf_size);
   cloudInOut->clear(), cloudInOut->resize(temp_cloud->size());
@@ -530,31 +547,14 @@ void FARUtil::StackCloudByTime(const PointCloudPtr& curInCloud,
                               const PointCloudPtr& StackCloud,
                               const float& duration) 
 {
-  pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
-  outliers->indices.resize(StackCloud->size());
-  FARUtil::ResetCloudIntensityWithTime(curInCloud);
-  *StackCloud += *curInCloud;
-  std::size_t idx = 0;
-  std::size_t outIdx = 0;
   const float curTime = ros::Time::now().toSec() - FARUtil::systemStartTime;
-  for (const auto& pcl_p : StackCloud->points) {
-    if (curTime - pcl_p.intensity > duration) {
-      outliers->indices[outIdx] = idx;
-      outIdx ++;
-    }
-    idx ++;
-  }
-  outliers->indices.resize(outIdx);
-  FARUtil::RemoveIndicesFromCloud(outliers, StackCloud);
-}
-
-void FARUtil::RemoveIndicesFromCloud(const pcl::PointIndices::Ptr& outliers,
-                                    const PointCloudPtr& cloudInOut) {
-  pcl::ExtractIndices<PCLPoint> extract;
-  extract.setInputCloud(cloudInOut);
-  extract.setIndices(outliers);
-  extract.setNegative(true);
-  extract.filter(*cloudInOut);
+  for (auto& point : curInCloud->points) point.intensity = curTime;
+  *StackCloud += *curInCloud;
+  const auto end = std::remove_if(StackCloud->points.begin(), StackCloud->points.end(),
+      [curTime, duration](const PCLPoint& point) {
+        return curTime - point.intensity > duration;
+      });
+  StackCloud->resize(static_cast<std::size_t>(end - StackCloud->points.begin()));
 }
 
 float FARUtil::ApproxAtan2(const float& y, const float x) {
@@ -637,7 +637,6 @@ Point3D FARUtil::RANSACPoisiton(const std::deque<Point3D>& pos_filter_stack, con
   for (const auto& p : pos_filter_stack) {
     std::size_t temp_inlier_size = 0;
     PointStack temp_inlier_stack;
-    temp_inlier_stack.clear();
     for (const auto& cp : pos_filter_stack) {
       if ((p - cp).norm_flat() < margin) {
         temp_inlier_stack.push_back(cp);
@@ -771,14 +770,6 @@ bool FARUtil::IsVoteTrue(const std::deque<int>& votes, const bool& is_balance) {
       return true;
   }
   return false;
-}
-
-int FARUtil::VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes) {
-  int idx = 0;
-  while (idx < ordered_votes.size() && c < ordered_votes[idx]) {
-      idx ++;
-  }
-  return idx;
 }
 
 bool FARUtil::IsOutReachNode(const NavNodePtr& node_ptr) {

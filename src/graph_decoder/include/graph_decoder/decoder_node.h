@@ -16,6 +16,7 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include "graph_decoder/point_struct.h"
+#include "graph_decoder/graph_file_parser.h"
 
 typedef visualization_msgs::Marker Marker;
 typedef visualization_msgs::MarkerArray MarkerArray;
@@ -77,7 +78,7 @@ struct GraphDecoderParams {
 class GraphDecoder {
 public:
     GraphDecoder() = default;
-    ~GraphDecoder() = default;
+    ~GraphDecoder() { ResetGraph(received_graph_); }
 
     void Init();
     void Loop();
@@ -91,10 +92,11 @@ private:
     ros::ServiceServer request_graph_service_;
     GraphDecoderParams gd_params_;
     NodePtrStack received_graph_;
-    MarkerArray graph_marker_array_;
     std::size_t robot_id_;
+    std::size_t graph_viz_subscriber_count_ = 0;
+    std::size_t graph_viz_refresh_ticks_ = 0;
 
-    void LoadParmas();
+    void LoadParams();
 
     void SetMarker(const VizColor& color, 
                    const std::string& ns,
@@ -119,8 +121,9 @@ private:
     bool RequestGraphService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res); 
 
     void VisualizeGraph(const NodePtrStack& graphIn);
+    void VisualizeForNewSubscribers();
 
-    void CreateNavNode(std::string str, NavNodePtr& node_ptr);
+    void CreateNavNode(const graph_file::NodeRecord& record, NavNodePtr& node_ptr);
 
     void CreateNavNode(const visibility_graph_msg::Node& msg, NavNodePtr& node_ptr);
 
@@ -147,6 +150,12 @@ private:
     }
 
     inline void ResetGraph(NodePtrStack& graphOut) {
+        for (const auto& node : graphOut) {
+            node->connect_nodes.clear();
+            node->poly_connects.clear();
+            node->contour_connects.clear();
+            node->traj_connects.clear();
+        }
         graphOut.clear();
     }
 

@@ -1,0 +1,6 @@
+<!-- Copyright (c) 2026 Fan Yang and contributors; SPDX-License-Identifier: MIT -->
+<launch>
+  <!-- The core suite constructs ROS node handles; rostest owns its master. -->
+  <test test-name="test_frame_transforms" pkg="far_planner"
+        type="test_frame_transforms" time-limit="90" />
+</launch>

@@ -1,0 +1,12 @@
+<launch>
+  <node pkg="far_planner" type="far_planner" name="far_planner" output="screen">
+    <param name="is_static_env" value="false"/>
+    <param name="is_opencv_visual" value="false"/>
+    <param name="is_pub_boundary" value="false"/>
+    <param name="main_run_freq" value="10.0"/>
+    <param name="CDetector/filter_count_value" value="100"/>
+    <param name="MapHandler/map_grid_max_length" value="100.0"/>
+    <param name="MapHandler/map_grad_max_height" value="10.0"/>
+  </node>
+  <test pkg="far_planner" type="test_scan_tf_ros1.py" test-name="test_scan_tf_ros1" time-limit="40"/>
+</launch>

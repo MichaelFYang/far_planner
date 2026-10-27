@@ -1,6 +1,7 @@
 /*
  * FAR Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
@@ -386,6 +387,7 @@ void DPVisualizer::VizGraph(const NodePtrStack& graph) {
 void DPVisualizer::VizMapGrids(const PointStack& neighbor_centers, const PointStack& occupancy_centers,
                                const float& ceil_length, const float& ceil_height)
 {
+    if (!this->HasMapGridSubscribers()) return;
     MarkerArray map_grid_marker_array;
     Marker neighbor_marker, occupancy_marker;
     neighbor_marker.type = Marker::CUBE_LIST;
@@ -435,6 +437,7 @@ void DPVisualizer::SetMarker(const VizColor& color,
 void DPVisualizer::VizPointCloud(const ros::Publisher& viz_pub, 
                                  const PointCloudPtr& pc) 
 {
+    if (viz_pub.getNumSubscribers() == 0) return;
     sensor_msgs::PointCloud2 msg_pc;
     pcl::toROSMsg(*pc, msg_pc);
     msg_pc.header.frame_id = FARUtil::worldFrameId;

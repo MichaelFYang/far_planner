@@ -9,7 +9,6 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
-#include <boost/functional/hash.hpp>
 /*Internal Library*/
 #include "point_struct.h"
 #include "node_struct.h"
@@ -38,12 +37,10 @@
 /* PCL Library*/
 #include <pcl/pcl_macros.h>
 #include <pcl/point_cloud.h>
-#include <pcl/search/kdtree.h>
-#include <pcl_ros/transforms.h>
+#include <pcl/common/transforms.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 /* Utility Header Timer */
@@ -54,7 +51,6 @@ typedef std::vector<Point3D> PointStack;
 typedef std::vector<cv::Point2f> CVPointStack;
 typedef std::vector<NavNodePtr> NodePtrStack;
 
-typedef std::vector<std::size_t> IdxStack;
 typedef std::unordered_set<std::size_t> IdxSet;
 typedef std::unordered_map<std::size_t, std::size_t> IdxMap;
 
@@ -114,7 +110,6 @@ public:
     static PointCloudPtr stack_dyobs_cloud_;
     static PointCloudPtr cur_new_cloud_;
     static PointCloudPtr cur_dyobs_cloud_;
-    static PointCloudPtr cur_scan_cloud_;
     static PointCloudPtr local_terrain_obs_;
     static PointCloudPtr local_terrain_free_;
     // kdTree cloud
@@ -131,8 +126,6 @@ public:
 
     static void ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHigh);
 
-    static void ResetCloudIntensityWithTime(const PointCloudPtr& cloudInOut);
-    
     static void CropPCLCloud(const PointCloudPtr& cloudIn,
                              const PointCloudPtr& cloudCropped,
                              const Point3D& centriod,
@@ -167,19 +160,25 @@ public:
 
     static void FilterCloud(const PointCloudPtr& point_cloud, const Eigen::Vector3d& leaf_size);
 
+    static std::string NormalizeFrameID(const std::string& frame_id);
+
+    // Transform at the original message stamp; throw on failure without modifying input.
     static void TransformPCLFrame(const std::string& from_frame_id,
                                   const std::string& to_frame_id,
-                                  const tf::TransformListener* tf_listener,
-                                  const PointCloudPtr& cloudInOut);
+                                  const tf::Transformer* tf_listener,
+                                  const PointCloudPtr& cloudInOut,
+                                  const ros::Time& stamp,
+                                  Point3D* sensor_origin = nullptr);
 
     static void TransformPoint3DFrame(const std::string& from_frame_id,
                                       const std::string& to_frame_id,
-                                      const tf::TransformListener* tf_listener,
-                                      Point3D& point);
+                                      const tf::Transformer* tf_listener,
+                                      Point3D& point,
+                                      const ros::Time& stamp);
 
     static bool IsSameFrameID(const std::string& cur_frame, const std::string& ref_frame);
     
-    static void RemoveNanInfPoints(const PointCloudPtr& cloudInOut);
+    static void RemoveNanInfPoints(const PointCloudPtr& cloudInOut, bool require_finite_intensity);
 
     static bool IsPointNearNewPoints(const Point3D& p, const bool& is_creation=false);
 
@@ -259,8 +258,6 @@ public:
 
     static bool IsVoteTrue(const std::deque<int>& votes, const bool& is_balance=true);
 
-    static int VoteRankInVotes(const int& c, const std::vector<int>& ordered_votes);
-
     static bool IsDirsConverage(const PointPair& cur_directs,
                                 const PointPair& update_directs);
 
@@ -280,12 +277,10 @@ public:
                                     const PointCloudPtr& cloudOverlapOut,
                                     const float& margin_ratio=1.0);
 
+    // The copy flag remains for source compatibility; the reference is always preserved.
     static void RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                    const PointCloudPtr& cloudRef,
                                    const bool& is_copy_cloud=false);
-
-    static void RemoveIndicesFromCloud(const pcl::PointIndices::Ptr& outliers,
-                                       const PointCloudPtr& cloudInOut);
 
     static float ApproxAtan2(const float& y, const float x);
 

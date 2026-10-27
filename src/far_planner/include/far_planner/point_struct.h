@@ -14,7 +14,6 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/common/distances.h>
-#include <boost/functional/hash.hpp>
 
 // ROS message support
 #include <ros/console.h>
@@ -27,7 +26,7 @@ typedef pcl::PointCloud<PCLPoint>::Ptr PointCloudPtr;
 struct Point3D {
   float x, y, z;
   float intensity;
-  Point3D() = default;
+  Point3D(): x(0), y(0), z(0), intensity(0) {}
   Point3D(float _x, float _y, float _z):\
       x(_x), y(_y), z(_z), intensity(0) {}
   Point3D(float _x, float _y, float _z, float _i):\
@@ -48,9 +47,7 @@ struct Point3D {
 
   bool operator !=(const Point3D& pt) const
   {
-    return fabs(x - pt.x) > EPSILON ||
-           fabs(y - pt.y) > EPSILON ||
-           fabs(z - pt.z) > EPSILON;
+    return !(*this == pt);
   }
 
   float operator *(const Point3D& pt) const
@@ -152,26 +149,6 @@ struct Point3D {
   {
     os << "["<< p.ToString() << "] ";
     return os;
-  }
-};
-
-struct point_hash
-{
-  std::size_t operator() (const Point3D& p) const
-  {
-    std::size_t seed = 0;
-    boost::hash_combine(seed, p.x);
-    boost::hash_combine(seed, p.y);
-    boost::hash_combine(seed, p.z);
-    return seed;
-  }
-};
-
-struct point_comp
-{
-  bool operator()(const Point3D& p1, const Point3D& p2) const
-  {
-    return p1 == p2;
   }
 };
 

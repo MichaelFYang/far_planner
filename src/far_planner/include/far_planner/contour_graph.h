@@ -115,7 +115,6 @@ private:
     ContourGraphParams ctgraph_params_;
     float ALIGN_ANGLE_COS;
     NavNodePtr odom_node_ptr_ = NULL;
-    bool is_robot_inside_poly_ = false;
 
     // global contour set
     static std::unordered_set<NavEdge, navedge_hash> global_contour_set_;
@@ -124,7 +123,7 @@ private:
     
     /* static private functions */
     inline void AddCTNodeToGraph(const CTNodePtr& ctnode_ptr) {
-        if (ctnode_ptr == NULL && ctnode_ptr->free_direct == NodeFreeDirect::UNKNOW) {
+        if (ctnode_ptr == NULL) {
             if (FARUtil::IsDebug) ROS_ERROR_THROTTLE(1.0, "CG: Add ctnode to contour graph fails, ctnode is invaild.");
             return;
         }
@@ -146,16 +145,6 @@ private:
         return false;
     }
     
-    inline void AddConnect(const CTNodePtr& ctnode_ptr1, const CTNodePtr& ctnode_ptr2) {
-        if (ctnode_ptr1 != ctnode_ptr2 &&
-            !FARUtil::IsTypeInStack(ctnode_ptr2, ctnode_ptr1->connect_nodes) &&
-            !FARUtil::IsTypeInStack(ctnode_ptr1, ctnode_ptr2->connect_nodes))
-        {
-            ctnode_ptr1->connect_nodes.push_back(ctnode_ptr2);
-            ctnode_ptr2->connect_nodes.push_back(ctnode_ptr1);
-        }
-    }
-
     template <typename NodeType1, typename NodeType2>
     static inline bool IsInMatchHeight(const NodeType1& node_ptr1, const NodeType2& node_ptr2) {
         if (abs(node_ptr1->position.z - node_ptr2->position.z) < FARUtil::kTolerZ) {
@@ -241,14 +230,14 @@ private:
         return false;
     }
 
-    static inline bool IsOverlapRange(const HeightPair& hpair, const HeightPair& hpairRef) {
-        if (hpair.maxH > hpairRef.minH - FARUtil::kTolerZ || hpair.minH < hpairRef.maxH + FARUtil::kTolerZ) {
-            return true;
-        }
-        return false;
-    }
-
     inline void ClearContourGraph() {
+        const auto release_links = [](const CTNodePtr& node) {
+            if (!node) return;
+            node->front.reset();
+            node->back.reset();
+        };
+        for (const auto& node : ContourGraph::polys_ctnodes_) release_links(node);
+        for (const auto& node : ContourGraph::contour_graph_) release_links(node);
         ContourGraph::polys_ctnodes_.clear();
         ContourGraph::contour_graph_.clear();
         ContourGraph::contour_polygons_.clear(); 

@@ -2,6 +2,7 @@
 #define GRAPH_PLANNER_H
 
 #include "utility.h"
+#include "goal_grid_search.h"
 #include "dynamic_graph.h"
 #include "contour_graph.h"
 
@@ -16,7 +17,6 @@ struct GraphPlannerParams {
     float adjust_radius;
     float momentum_dist;
     bool  is_autoswitch;
-    int   free_thred;
     int   votes_size;
     int   momentum_thred;
 };
@@ -51,15 +51,11 @@ Point3D last_planning_odom_;
 // local terrain map for freespace adjustment
 Point3D grid_center_ = Point3D(0,0,0);
 std::unique_ptr<grid_ns::Grid<char>> free_terrain_grid_;
-
-float PriorityScore(const NavNodePtr& node_ptr);
+far_planner::GoalGridSearch goal_grid_search_;
 
 bool ReconstructPath(const NavNodePtr& goal_node_ptr,
                      const bool& is_free_nav,
                      NodePtrStack& global_path);
-
-bool IsNodeConnectInFree(const NavNodePtr& current_node,
-                         const NavNodePtr& neighbor_node);
 
 bool IsValidConnectToGoal(const NavNodePtr& node_ptr, 
                           const NavNodePtr& goal_node_ptr);
@@ -207,28 +203,28 @@ void UpdateFreeTerrainGrid(const Point3D& center,
 /**
  * @brief Adjust goal position based on terrain and polygons
  * @param goal_ptr current goal node pointer
+ * @param odom_position current robot position, independent of previous searches
  * @param is_adjust_height whether or not adjust height of goal -> (False if multi layer planning)
  */
-void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const bool& is_adjust_height);
+void ReEvaluateGoalPosition(const NavNodePtr& goal_ptr, const Point3D& odom_position,
+                            const bool& is_adjust_height);
 
 /**
  * @brief Reset internal values and containers
  */
 inline void ResetPlannerInternalValues() {
-    goal_node_ptr_ = NULL; 
+    this->GoalReset();
     odom_node_ptr_ = NULL;
     
     is_goal_init_         = false;
     is_use_internav_goal_ = false;
     is_global_path_init_  = false;
     is_free_nav_goal_     = false;
-    is_goal_in_freespace_ = false;
     
     current_graph_.clear(); 
     recorded_path_.clear();
     path_momentum_counter_ = 0;
     last_waypoint_dist_    = 0.0;
-    origin_goal_pos_    = Point3D(0,0,0);
     next_waypoint_      = Point3D(0,0,0);
     last_planning_odom_ = Point3D(0,0,0);
 }

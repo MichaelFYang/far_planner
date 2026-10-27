@@ -1,0 +1,17 @@
+<launch>
+  <param name="use_sim_time" value="true"/>
+  <node pkg="far_planner" type="far_planner" name="far_planner" output="screen">
+    <rosparam command="load" file="$(find far_planner)/config/default.yaml"/>
+    <param name="is_static_env" value="false"/>
+    <param name="is_opencv_visual" value="false"/>
+    <param name="is_pub_boundary" value="false"/>
+    <param name="main_run_freq" value="20.0"/>
+    <param name="Util/dyosb_update_thred" value="0"/>
+    <param name="sensor_range" value="10.0"/>
+    <param name="terrain_range" value="5.0"/>
+    <param name="MapHandler/map_grid_max_length" value="100.0"/>
+    <param name="MapHandler/map_grad_max_height" value="10.0"/>
+  </node>
+  <test pkg="far_planner" type="test_dynamic_terrain_retention_ros1.py"
+        test-name="test_dynamic_terrain_retention_ros1" time-limit="30"/>
+</launch>

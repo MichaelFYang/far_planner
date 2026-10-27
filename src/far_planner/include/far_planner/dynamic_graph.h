@@ -21,6 +21,7 @@ struct DynamicGraphParams {
 
 class DynamicGraph {  
 private:
+    friend class GraphVoteTestAccess;
     Point3D robot_pos_;
     NavNodePtr odom_node_ptr_     = NULL;
     NavNodePtr cur_internav_ptr_  = NULL;
@@ -47,10 +48,6 @@ private:
                         const NavNodePtr& node_ptr2,
                         const bool& is_check_contour);
 
-    bool NodeLocalPerception(const NavNodePtr& node_ptr,
-                             bool& _is_wall_end,
-                             const bool& is_nearby_update = true);
-
     bool IsInDirectConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
     bool IsInContourDirConstraint(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
@@ -60,10 +57,6 @@ private:
     bool IsFrontierNode(const NavNodePtr& node_ptr);
     
     void ReEvaluateConvexity(const NavNodePtr& node_ptr);
-
-    /* Merge two nodes in Graph into one remain node, (mark one node as merged)*/
-    void MergeNodeInGraph(const NavNodePtr& node_ptr1, 
-                          const NavNodePtr& node_ptr2);
 
     /* check whether there is a connection in similar diection */
     bool IsSimilarConnectInDiection(const NavNodePtr& node_ptr_from,
@@ -78,8 +71,6 @@ private:
     static void InitNodePosition(const NavNodePtr& node_ptr, const Point3D& new_pos); 
 
     bool UpdateNodeSurfDirs(const NavNodePtr& node_ptr, PointPair cur_dirs);
-
-    void ReOrganizeGraphConnect();
 
     bool ReEvaluateCorner(const NavNodePtr node_ptr);
 
@@ -406,15 +397,18 @@ private:
     /* Clear nodes in global graph which is marked as merge */
     inline void ClearMergedNodesInGraph() {
         // remove nodes
-        for (auto it = globalGraphNodes_.begin(); it != globalGraphNodes_.end(); it ++) {
-            if (IsMergedNode(*it)) {
-                ClearNodeConnectInGraph(*it);
-                ClearContourConnectionInGraph(*it);
-                ClearTrajectoryConnectInGraph(*it);
-                RemoveNodeIdFromMap(*it);
-                ClearNodeFromInternalStack(*it);
-                globalGraphNodes_.erase(it--);
+        for (auto it = globalGraphNodes_.begin(); it != globalGraphNodes_.end();) {
+            const NavNodePtr node_ptr = *it;
+            if (!IsMergedNode(node_ptr)) {
+                ++it;
+                continue;
             }
+            ClearNodeConnectInGraph(node_ptr);
+            ClearContourConnectionInGraph(node_ptr);
+            ClearTrajectoryConnectInGraph(node_ptr);
+            RemoveNodeIdFromMap(node_ptr);
+            ClearNodeFromInternalStack(node_ptr);
+            it = globalGraphNodes_.erase(it);
         }
         // clean outrange contour nodes 
         out_contour_nodes_.clear();
@@ -438,7 +432,7 @@ public:
      *  Updtae robot pos and odom node 
      *  @param robot_pos current robot position in world frame
     */
-    void UpdateRobotPosition(const Point3D& robot_pos);
+    void UpdateRobotPosition(const Point3D& robot_pos, std::uint64_t local_terrain_revision);
     
     /**
      * Extract Navigation Nodes from Vertices Detected -> Update [new_nodes_] internally.
@@ -537,43 +531,21 @@ public:
                                               const bool& is_navpoint=false, const bool& is_goal=false, const bool& is_boundary=false) 
     {
         node_ptr = std::make_shared<NavNode>();
-        node_ptr->pos_filter_vec.clear();
-        node_ptr->surf_dirs_vec.clear();
-        node_ptr->ctnode = NULL;
         node_ptr->is_active = true;
-        node_ptr->is_block_frontier = false;
-        node_ptr->is_contour_match = false;
         node_ptr->is_odom = is_odom;  
         node_ptr->is_near_nodes = true;
         node_ptr->is_wide_near = true;
-        node_ptr->is_merged = false;
-        node_ptr->is_covered  = (is_odom || is_navpoint || is_goal) ? true : false;
-        node_ptr->is_frontier = false;
-        node_ptr->is_finalized = is_navpoint ? true : false;
-        node_ptr->is_traversable = is_odom;
+        node_ptr->is_covered  = is_odom || is_navpoint || is_goal;
+        node_ptr->is_finalized = is_navpoint;
         node_ptr->is_navpoint = is_navpoint;
         node_ptr->is_boundary = is_boundary;
         node_ptr->is_goal = is_goal;
-        node_ptr->clear_dumper_count = 0;
-        node_ptr->frontier_votes.clear();
-        node_ptr->invalid_boundary.clear();
-        node_ptr->connect_nodes.clear();
-        node_ptr->poly_connects.clear();
-        node_ptr->contour_connects.clear();
-        node_ptr->contour_votes.clear();
-        node_ptr->potential_contours.clear();
-        node_ptr->trajectory_connects.clear();
-        node_ptr->trajectory_votes.clear();
-        node_ptr->terrain_votes.clear();
         node_ptr->free_direct = (is_odom || is_navpoint) ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
         // planner members
-        node_ptr->is_block_to_goal    = false;
         node_ptr->gscore              = FARUtil::kINF;
         node_ptr->fgscore             = FARUtil::kINF;
         node_ptr->is_traversable      = true;
         node_ptr->is_free_traversable = true;
-        node_ptr->parent              = NULL;
-        node_ptr->free_parent         = NULL;
         InitNodePosition(node_ptr, point);
         // Assign Global Unique ID
         AssignGlobalNodeID(node_ptr);
@@ -592,16 +564,25 @@ public:
             FARUtil::EraseNodeFromStack(node_ptr, pt_cnode_ptr->potential_edges);
             pt_cnode_ptr->edge_votes.erase(node_ptr->id);
         }
+        // Terrain checks can reject a pair before it gains a visibility edge.
+        for (const auto& vote : node_ptr->terrain_votes) {
+            const auto neighbor = MappedNavNodeFromId(vote.first);
+            if (neighbor && neighbor != node_ptr) {
+                neighbor->terrain_votes.erase(node_ptr->id);
+            }
+        }
         node_ptr->connect_nodes.clear();
         node_ptr->poly_connects.clear();
         node_ptr->edge_votes.clear();
         node_ptr->potential_edges.clear();
+        node_ptr->terrain_votes.clear();
     }
 
     static inline void ClearGoalNodeInGraph(const NavNodePtr& node_ptr) {
         ClearNodeConnectInGraph(node_ptr);
         //DEBUG
         if (!node_ptr->contour_connects.empty()) ROS_ERROR("DG: Goal node should not have contour connections.");
+        RemoveNodeIdFromMap(node_ptr);
         FARUtil::EraseNodeFromStack(node_ptr, globalGraphNodes_);
     }
 
@@ -669,6 +650,19 @@ public:
         is_bridge_internav_ = false;
         last_connect_pos_   = Point3D(0,0,0);
         
+        // All navigation nodes are discarded together. Break reciprocal edge,
+        // trajectory, potential-vote, and search-parent ownership cycles first.
+        for (const auto& node_ptr : globalGraphNodes_) {
+            node_ptr->connect_nodes.clear();
+            node_ptr->poly_connects.clear();
+            node_ptr->contour_connects.clear();
+            node_ptr->potential_contours.clear();
+            node_ptr->potential_edges.clear();
+            node_ptr->trajectory_connects.clear();
+            node_ptr->parent.reset();
+            node_ptr->free_parent.reset();
+            node_ptr->ctnode.reset();
+        }
         idx_node_map_.clear();
         near_nav_nodes_.clear(); 
         wide_near_nodes_.clear(); 
@@ -684,7 +678,7 @@ public:
 
     /* Get Internal Values */
     const NavNodePtr    GetOdomNode()         const { return odom_node_ptr_;};
-    const NodePtrStack& GetNavGraph()         const { return globalGraphNodes_;};
+    static const NodePtrStack& GetNavGraph()        { return globalGraphNodes_;};
     const NodePtrStack& GetExtendLocalNode()  const { return extend_match_nodes_;};
     const NodePtrStack& GetOutContourNodes()  const { return out_contour_nodes_;};
     const NodePtrStack& GetNewNodes()         const { return new_nodes_;};

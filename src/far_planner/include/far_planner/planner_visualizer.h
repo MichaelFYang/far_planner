@@ -57,6 +57,10 @@ public:
                      const float& ceil_length,
                      const float& ceil_height);
 
+    bool HasMapGridSubscribers() const {
+        return viz_map_pub_.getNumSubscribers() > 0;
+    }
+
     void VizContourGraph(const CTNodeStack& contour_graph);
 
     void VizPoint3D(const Point3D& point, 
