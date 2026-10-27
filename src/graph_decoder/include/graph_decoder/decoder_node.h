@@ -77,7 +77,7 @@ struct GraphDecoderParams {
 class GraphDecoder {
 public:
     GraphDecoder();
-    ~GraphDecoder() = default;
+    ~GraphDecoder() { ResetGraph(received_graph_); }
 
     void Init(); // ROS init
     rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
@@ -151,6 +151,13 @@ private:
     }
 
     inline void ResetGraph(NodePtrStack& graphOut) {
+        // Links are reciprocal shared_ptrs (cycles); break them or the nodes never free.
+        for (const auto& node : graphOut) {
+            node->connect_nodes.clear();
+            node->poly_connects.clear();
+            node->contour_connects.clear();
+            node->traj_connects.clear();
+        }
         graphOut.clear();
     }
 
