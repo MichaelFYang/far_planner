@@ -7,10 +7,10 @@ This companion to the [algorithm guide](algorithm.md) records regression cases, 
 | Check | Current evidence |
 | --- | --- |
 | Builds and dependency resolution | All five SDKs; current official rosdep rules resolve all manifests |
-| ROS 2 core | 119 behavioral cases, 125 reported checks on Humble/Jazzy/Lyrical |
+| ROS 2 core | 121 behavioral cases, 127 reported checks on Humble/Jazzy/Lyrical |
 | ROS 2 graph utilities | 12 decoder and 16 boundary checks on each SDK |
-| ROS 1 workspace | 272 reported checks on both Melodic and Noetic |
-| Native sanitizers | 111 C++ cases, three planner-startup cases, five boundary process cases; leak detection enabled |
+| ROS 1 workspace | 276 reported checks on both Melodic and Noetic |
+| Native sanitizers | 113 C++ cases, three planner-startup cases, five boundary process cases; leak detection enabled |
 | Rendered controls and stock layouts | Plugin interactions on all SDKs; 15 stock-layout cases with the fixture conditions below |
 | Recording replay | Three goals on all five SDKs; separate sanitized replay passes |
 | Open integration case | Barrier introduced after initial mapping: four original 110-second arrival waits fail; an additional run also fails after a 300-second diagnostic wait |
@@ -70,7 +70,20 @@ Remaining limits are explicit:
 
 ## Search correctness stage
 
-Both graph queues now break exactly equal-cost ties by ascending node ID. Previously, the default pair comparison used `shared_ptr` address order: the same symmetric diamond graph selected a different route when its two branch nodes exchanged allocation addresses, despite unchanged IDs, geometry, and costs. The regression fails before the change in both traversals and passes afterward for reversed addresses and neighbor order. An unequal-cost control still selects the cheaper branch when its ID is higher. This improves reproducibility for a fixed graph; it does not make sensor-driven graph construction deterministic or establish a navigation fix. Current suites report 125 checks on each ROS 2 SDK, 272 on each ROS 1 SDK, and 111 native C++ sanitizer cases, all passing. The sanitized 50.643-second replay on `7775349` reaches all three goals, with 113 consistent graphs, 103 finite waypoints, and normal exit without sanitizer findings.
+Both graph traversals now use their reset reachability flags as settled-node markers, removing the duplicate closed-ID hash set. A regression repeats queries after bridge removal/reconnection, source changes, and coverage changes, checking reachability, distances, and parent clearing. Searches require the current graph to include all connected nodes. Idle planning now refreshes that snapshot before each search: an import can otherwise add nodes between graph-update and planning ticks. The original hash-set implementation reproduced a stale 2 m imported-node distance after source motion required 3 m; the callback regression passes after the refresh independently of the flag optimization.
+
+In seven alternating Release process runs per variant, each batch performs 500 paired general/covered searches with graph setup and warmup excluded. Timing binaries use standard allocation functions; separate binaries count ordinary `operator new` calls. Final costs, parents, and reachability match in all four synthetic workloads. The actual before/after cores also match across 167,666 node/mode results from all 328 frozen complete graphs; general costs match the captured single-layer search exactly. That comparison uses no terminal goal, so covered-goal restrictions remain checked separately by the core regressions.
+
+| Search workload | Nodes | Before / after median ms | Ordinary C++ allocation calls, before / after |
+| --- | ---: | ---: | ---: |
+| Small grid | 64 | 5.056 / 3.432 | 70,000 / 4,000 |
+| Dense grid | 375 | 85.883 / 58.478 | 386,500 / 8,500 |
+| Disconnected, partial coverage | 375 | 11.711 / 7.327 | 140,000 / 4,500 |
+| Large dense grid | 1,024 | 238.333 / 175.382 | 1,037,500 / 10,000 |
+
+This measures the search method and attributed ordinary `operator new` calls, not all process allocations or whole-planner throughput. Search-only median time falls 26.4–37.4% in these workloads; the idle-callback snapshot copy is outside the benchmark. Final suites pass on all five SDKs: 127 reported ROS 2 planner checks per SDK, 276 ROS 1 workspace checks per SDK, and 113 native C++ sanitizer cases. The sanitized 50.643-second replay on `c67fd9b` reaches all three goals, with 113 consistent graphs, 103 finite waypoints, and normal exit without sanitizer findings.
+
+Both graph queues now break exactly equal-cost ties by ascending node ID. Previously, the default pair comparison used `shared_ptr` address order: the same symmetric diamond graph selected a different route when its two branch nodes exchanged allocation addresses, despite unchanged IDs, geometry, and costs. The regression fails before the change in both traversals and passes afterward for reversed addresses and neighbor order. An unequal-cost control still selects the cheaper branch when its ID is higher. This improves reproducibility for a fixed graph; it does not make sensor-driven graph construction deterministic or establish a navigation fix. At that tie-ordering stage, suites report 125 checks on each ROS 2 SDK, 272 on each ROS 1 SDK, and 111 native C++ sanitizer cases, all passing. The sanitized 50.643-second replay on `7775349` reaches all three goals, with 113 consistent graphs, 103 finite waypoints, and normal exit without sanitizer findings.
 
 The two visibility-graph traversals and terrain A* now push an immutable cost with each queue entry. Every distance improvement adds a new entry; an older entry is skipped when popped. This removes both mutable comparator keys and the separate open-set bookkeeping. The general graph traversal retains its slope-adjusted goal cost, while the covered traversal retains its coverage and free-goal restrictions. Terrain A* still uses Euclidean step costs and a Euclidean heuristic. Each query now clears search scores and parent links only for grid cells touched by the previous query; new nodes start with infinite scores. A failed query followed by successful queries has regression coverage. The reduced reset work is not yet a measured planner throughput gain.
 
@@ -347,7 +360,7 @@ The ROS 2 OpenCV manifest key is `libopencv-dev`, matching ROS 1. The former `op
 
 ## ROS 1 SDK compatibility
 
-Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 272 checks, zero errors/failures/skips. The core C++ suite contains 111 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
+Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 276 checks, zero errors/failures/skips. The core C++ suite contains 113 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
 
 | SDK | GCC | CMake | PCL | Qt | ROS Python |
 | --- | --- | --- | --- | --- | --- |
@@ -482,6 +495,10 @@ The original workload also times out after the same 110-second arrival wait on t
 A private diagnostic build of `ef04c4d` replayed the failed inputs while capturing the complete internal search graph, goal-connection decisions, and chosen paths. An independent quadratic reference matched reachability and reachable-node costs in all 167,666 node/mode comparisons across 328 snapshots (up to 375 nodes); maximum numerical cost difference was 0.000030 m. All 328 direct odometry-to-goal checks passed their eligibility, convexity, and direction gates but failed polygon visibility. Of the paths, 301 were freshly selected and 27 reused momentum. A persistent corridor anchor's goal segment crossed retained contours around Y=9–10 m, including while its connection was actively rechecked. These observations narrow the case toward retained geometry and re-observation; they do not establish a clearing-policy defect.
 
 The diagnostic uses recorded odometry, so it is not a closed-loop navigation pass or an exact reproduction of the original chosen paths. It produced 648 map and ray frames with normal planner/player exits. Compared by publication order with the earlier replay, all 648 ray point multisets and 645 map point multisets matched; debug publication stamps differed by at most 0.0252 seconds. Instrumentation and callback phase remain limits on replay equivalence.
+
+A subsequent physical re-observation control on `2592af4` retained the ordinary gradual withdrawal, then temporarily routed the local planner back along the vehicle's travelled breadcrumbs and held it for eight seconds before resuming FAR waypoints. Obstacle checks and FAR's original goal/map/graph state remained active; all 64 captured planning snapshots during the control retained goal ID 26 and anchor `(4, 14, 0.75)`. In the corridor interior, all 99 retained map points matched newly observed clearing-ray voxels, and the count became zero (including all 15 frames in the final three seconds of the hold). The original direct goal connection reopened.
+
+That diagnostic completed all three goals with maximum requested-XYZ error 0.106 m, 226 consistent graphs, 212 finite waypoints, and normal planner/launch-parent exits. It shows recovery after physical re-observation without resetting the goal or clearing occupied cells artificially. It changes vehicle guidance and therefore does not pass the original autonomous workload or establish that the normal policy selects an appropriate re-observation pose.
 
 ## Source migration notes
 
