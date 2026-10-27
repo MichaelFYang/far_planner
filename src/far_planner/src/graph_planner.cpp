@@ -54,18 +54,16 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         return lhs.second->id > rhs.second->id;
     };
     std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> open_queue(farther);
-    IdxSet close_set;
     // Expansion from odom node to all reachable navigation node
     open_queue.push({0.0f, odom_node_ptr_});
     while (!open_queue.empty()) {
         const auto entry = open_queue.top();
         open_queue.pop();
         const NavNodePtr current = entry.second;
-        if (entry.first != current->gscore || close_set.count(current->id)) continue;
-        close_set.insert(current->id);
+        if (entry.first != current->gscore || current->is_traversable) continue;
         current->is_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
+            if (neighbor->is_traversable || this->IsInvalidBoundary(current, neighbor)) continue;
             float edist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && edist > FARUtil::kEpsilon && !FARUtil::IsAtSameLayer(neighbor, current)) { // check for multi layer traverse cost
                 const Point3D diff_p = neighbor->position - current->position;
@@ -86,7 +84,6 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         }
     }
     std::priority_queue<SearchEntry, std::vector<SearchEntry>, decltype(farther)> fopen_queue(farther);
-    close_set.clear();
     // Expansion from odom node to all covered navigation node
     odom_node_ptr_->fgscore = 0.0;
     fopen_queue.push({0.0f, odom_node_ptr_});
@@ -94,11 +91,10 @@ void GraphPlanner::UpdateGraphTraverability(const NavNodePtr& odom_node_ptr, con
         const auto entry = fopen_queue.top();
         fopen_queue.pop();
         const NavNodePtr current = entry.second;
-        if (entry.first != current->fgscore || close_set.count(current->id)) continue;
-        close_set.insert(current->id);
+        if (entry.first != current->fgscore || current->is_free_traversable) continue;
         current->is_free_traversable = true; // reachable from current position
         for (const auto& neighbor : current->connect_nodes) {
-            if (!neighbor->is_covered || close_set.count(neighbor->id) || this->IsInvalidBoundary(current, neighbor)) continue;
+            if (!neighbor->is_covered || neighbor->is_free_traversable || this->IsInvalidBoundary(current, neighbor)) continue;
             const float e_dist = this->EulerCost(current, neighbor);
             if (neighbor == goal_ptr && (!is_goal_in_freespace_ || e_dist > FARUtil::kTerrainRange)) continue;
             const float temp_fgscore = current->fgscore + e_dist;
