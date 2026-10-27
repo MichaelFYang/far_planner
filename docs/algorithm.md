@@ -64,6 +64,8 @@ Module configuration is loaded and validated before each module's `Init()` deriv
 
 On ROS 2, shutdown during `Init()` is normal cancellation: the entry point checks the context before creating an executor and does not report a startup failure after a signal has shut it down. The ROS 2 `test/test_startup_shutdown.py` sends SIGINT and SIGTERM during initialization and separately verifies that a zero graph frequency still fails with a diagnostic. Both signal cases failed before the fix. Humble, Jazzy, and Lyrical now each pass 118 behavioral cases (124 reported checks including CTest wrappers); all three startup cases also pass under ASan/UBSan with leak detection.
 
+Boundary startup cancellation also skips graph generation, preserving an existing output file. A FIFO-controlled trajectory read verifies SIGINT/SIGTERM on ROS 2 and SIGINT on ROS 1; an empty trajectory still exits with an input error. ROS 1 checks `isShuttingDown()` while keeping its owning `NodeHandle` alive through error classification. These cases pass across all five SDKs. ROS 2 graph-decoder construction is inside its cancellation handler so a stopped context cannot escape through executor creation.
+
 ## TF and timestamp contract
 
 A measurement in frame `sensor` at time `t` must use `T_world_sensor(t)`, with target frame first and source frame second in the lookup. A nonzero input timestamp must not silently become a latest-transform query. TF time zero explicitly requests the latest available transform; a bounded wait can accommodate delayed TF delivery. See the [official tf2 time tutorial](https://raw.githubusercontent.com/ros2/ros2_documentation/jazzy/source/Tutorials/Intermediate/Tf2/Learning-About-Tf2-And-Time-Cpp.rst). A [TF message filter](https://raw.githubusercontent.com/ros2/ros2_documentation/jazzy/source/Tutorials/Intermediate/Tf2/Using-Stamped-Datatypes-With-Tf2-Ros-MessageFilter.rst) can queue stamped inputs until their transforms are available.
@@ -115,6 +117,8 @@ Goal refinement receives the current odometry position explicitly. It previously
 
 `PathToGoal` reports arrival within `g_planner/converge_distance` of either the active adjusted goal or its initialization anchor (`origin_goal_pos_`). For a new node, that anchor is the requested position; when reusing a nearby navigation node, it is already the snapped node's position. Free-grid and polygon refinement can move the active XY target; `goal_adjust_radius` sizes the free-grid search but does not bound the later polygon projection. An arrival status therefore does not guarantee that the original requested XYZ was reached. The garage validation below checks that separately.
 
+A controlled production-core probe, without TF or sensor input, confirms that distinction: a request 0.75 m from an existing navigation node snaps to it under the 0.8 m threshold. Arrival is true with the robot 0.146 m from that anchor and 0.604 m from the request. ASan/UBSan with leak detection reports no findings. This characterizes the current contract; it does not reconstruct or establish the cause of the earlier garage miss.
+
 When local terrain occupies the goal grid, free-space classification requires a cell marked free without an overlapping inflated obstacle. Previously, one overlapping free sample could admit the goal to the covered traversal even when no free cell existed; a nearby navigation node could also bypass that blocked terrain. The navigation-node fallback now applies only when the goal grid has no terrain cells. A route-level regression fails on the old behavior and checks blocked terrain, obstacle removal, and the no-terrain fallback.
 
 In multi-layer mode, goal-grid projection now rejects obstacle points outside `goal.z ± kTolerZ`. Free points describe ground, so their height is compared after adding `vehicle_height`. This derived tolerance is `floor_height - 2 * voxel_dim`; its boundary remains inclusive, matching the node-layer rule. Out-of-band samples neither occupy nor free a goal-grid cell; the existing same-layer navigation-node fallback still applies when no relevant terrain remains. Single-layer mode retains its XY projection.
@@ -149,6 +153,8 @@ Merged-node and temporary-goal deletion also clear both sides of terrain-feasibi
 Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
 Planner destruction also resets its goal, navigation graph, and contour graph, breaking their ownership cycles without publishing a reset waypoint. A live indoor replay previously left about 0.96 MB in linked graph allocations at shutdown. The lifecycle regression checks that destruction releases linked navigation and contour nodes even without an explicit reset or full initialization.
+
+The boundary extractor likewise breaks reciprocal node links before graph replacement and destruction. Normal generation and output-error teardown each leaked 16,072 bytes in 175 allocations before the fix; both process regressions now pass under ASan/UBSan with leak detection. The bundled 25-node graph is byte-identical before and after. The extractor is noncopyable to keep graph ownership unambiguous. Current boundary suites report 16 checks on each ROS 2 SDK; the decoder suite reports 12.
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
@@ -362,7 +368,7 @@ On ROS 2, the panel now shares RViz's clock after initialization, as the Goalpoi
 
 ## ROS 1 SDK compatibility
 
-Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 265 checks, zero errors/failures/skips. The core C++ suite contains 110 tests; its new rostest wrapper accounts for the increase from the earlier 264-check total. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
+Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 270 checks, zero errors/failures/skips. The core C++ suite contains 110 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
 
 | SDK | GCC | CMake | PCL | Qt | ROS Python |
 | --- | --- | --- | --- | --- | --- |
@@ -447,16 +453,17 @@ The first garage attempt stopped at a return-leg arrival observation 0.604 m fro
 
 ## SDK-matched indoor validation
 
-Humble and Noetic ran the planner and upstream simulator inside their matching SDK containers, with dynamic processing enabled, `main_run_freq=2.5`, and `sensor_time_tolerance=0.2`. Humble used planner source `dc8b719` and simulator source `158e67b31b644ed1e8b06eb1d7f70e183cc62591`; Noetic used `51e3568` and `bf0cba71365271ebff09831a05afd78578150300`. The simulator C++ sources were unchanged. Private headless wrappers omitted RViz/joystick/image rendering, retained a camera model for pose updates, and removed an unavailable, unused Rotors world plugin.
+Humble, Noetic, and Melodic ran the planner and upstream simulator inside their matching SDK containers, with dynamic processing enabled, `main_run_freq=2.5`, and `sensor_time_tolerance=0.2`. Humble used planner source `dc8b719` and simulator source `158e67b31b644ed1e8b06eb1d7f70e183cc62591`; Noetic used `51e3568` and `bf0cba71365271ebff09831a05afd78578150300`; Melodic used `8785613` and `9f7479ef90ff43e37fef586dc13680b13c89f316`. The simulator C++ sources were unchanged. Private headless wrappers omitted RViz/joystick/image rendering, retained a camera model for pose updates, and removed an unavailable, unused Rotors world plugin.
 
 | SDK | Goals reached | Graph snapshots | Finite waypoints | Nonempty scan-ray messages | Maximum requested-XYZ error |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Humble | 3 | 107 | 100 | 260 | 0.285 m |
 | Noetic | 3 | 106 | 99 | 213 | 0.162 m |
+| Melodic | 3 | 106 | 99 | 213 | 0.213 m |
 
-Each goal required a new false-to-true arrival sequence and independent XYZ error below 0.6 m. Graph and waypoint validation used the same frame, finite-geometry, ID, size, and connection checks as the Lyrical runs. Humble used the upstream wall-clock configuration; Noetic's observer and nodes shared simulated ROS time, configured before node initialization.
+Each goal required a new false-to-true arrival sequence and independent XYZ error below 0.6 m. Graph and waypoint validation used the same frame, finite-geometry, ID, size, and connection checks as the Lyrical runs. Humble used the upstream wall-clock configuration; both ROS 1 observers and nodes shared simulated ROS time, configured before node initialization.
 
-The Noetic launch and master exited with code zero and no ROS error/fatal log entries. Humble's FAR planner and graph decoder also stopped normally with no error/fatal entries in their launch log. Several external Humble simulator executables aborted during shutdown; the launcher's zero exit does not establish clean child-process teardown. That external-stack limitation remains separate from the passed planner navigation checks. Simulation assets, container recipes, logs, and observers remain outside this repository.
+Both ROS 1 launches and masters exited with code zero and no ROS error/fatal log entries. Humble's FAR planner and graph decoder also stopped normally with no error/fatal entries in their launch log. Several external Humble simulator executables aborted during shutdown; the launcher's zero exit does not establish clean child-process teardown. That external-stack limitation remains separate from the passed planner navigation checks. Simulation assets, container recipes, logs, and observers remain outside this repository.
 
 ## Dynamic terrain retention validation
 
