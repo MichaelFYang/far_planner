@@ -114,15 +114,17 @@ Every batch matched in acceptance, total path length, and returned point count. 
 
 `EraseNodeFromStack` now uses stable remove-and-erase for all matching pointers, including the first element and adjacent copies. Merged-node removal uses the iterator returned by `erase`, so removing the first or consecutive nodes does not decrement past `begin()`.
 
-A full graph reset now clears reciprocal navigation edges, potential connections, trajectory links, search-parent links, and navigation-to-contour references before releasing graph storage. Full contour reset clears the reciprocal vertex links and contour-node edges. `test/test_graph_lifecycle.cpp` verifies first/last/consecutive erasure and that linked navigation and contour vertices are actually destroyed after reset; both ownership tests failed before the fix.
+A full graph reset now clears reciprocal navigation edges, potential connections, trajectory links, search-parent links, and navigation-to-contour references before releasing graph storage. Full contour reset clears the reciprocal vertex links. `test/test_graph_lifecycle.cpp` verifies first/last/consecutive erasure and that linked navigation and contour vertices are actually destroyed after reset; both ownership tests failed before the fix.
 
 Merged-node and temporary-goal deletion also clear both sides of terrain-feasibility vote histories through the node ID map. These histories can exist for rejected pairs with no visibility edge, so adjacency alone cannot find them. Histories between surviving nodes remain intact. Regressions cover terrain-only neighbors and 32 goal replacements; the previous implementation retained stale node IDs after each removal.
 
-Normal contour replacement now clears reciprocal front/back and connection links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
+Normal contour replacement now clears reciprocal front/back links before dropping the old topology. Navigation nodes may still hold an old vertex until rematching later in the same serialized update, but that vertex no longer retains its old polygon neighbors. A lifecycle test confirms retired vertices are released after the last navigation reference is removed. Long-running heap profiling is still needed to rule out other ownership growth.
 
 Planner destruction also resets its goal, navigation graph, and contour graph, breaking their ownership cycles without publishing a reset waypoint. A live indoor replay previously left about 0.96 MB in linked graph allocations at shutdown. The lifecycle regression checks that destruction releases linked navigation and contour nodes even without an explicit reset or full initialization.
 
 The boundary extractor likewise breaks reciprocal node links before graph replacement and destruction. Normal generation and output-error teardown each leaked 16,072 bytes in 175 allocations before the fix; both process regressions now pass under ASan/UBSan with leak detection. The bundled 25-node graph is byte-identical before and after. The extractor is noncopyable to keep graph ownership unambiguous. Current boundary suites report 16 checks on each ROS 2 SDK; the decoder suite reports 12.
+
+A reference audit removed two unused private contour helpers and five private declarations with no callers or implementations. The unused `AddConnect` helper was the only production writer of `CTNode::connect_nodes`; removing both reduces native 64-bit `sizeof(CTNode)` from 144 to 120 bytes. Contour topology uses the reciprocal `front`/`back` ring, and its lifecycle regression retains the weak-reference release assertions. Active height checks use `IsEdgeOverlapInHeight`; the discarded `IsOverlapRange` helper had an incorrect OR predicate but no runtime callers. This measures object storage, not whole-planner memory or throughput. Current core/workspace suites still report 124 checks on each ROS 2 SDK and 270 on each ROS 1 SDK, with no failures; the native 110-case ASan/UBSan suite also passes. On source `56b72f4`, the sanitized 50.643-second recording replay again reaches all three goals, with 113 consistent graphs, 102 finite waypoints, and normal exit without sanitizer findings.
 
 Pillar classification now uses the closed polygon perimeter, including the last-to-first edge. A regression triangle has a 7 m open chain and a 12 m perimeter, crossing a 10 m pillar threshold. The pillar fallback also sets both surface directions to its sentinel value.
 
@@ -444,6 +446,19 @@ An additional diagnostic using the same dynamic-mode settings on `9cc0f54` retai
 
 A controlled native pipeline probe held odometry stationary while adding a box and then supplying visible clearing rays. With the shipped 2.5 Hz graph rate, the occupied phase produced 128 map obstacle points and four finalized graph corners; both returned to zero during clearing while extended terrain still carried the old box samples. The process exited normally. Separately, all 326 paired path/waypoint samples in the recorded failed route had forward components toward their selected navigation segment; the maximum XY deviation was 41.2 degrees. These checks do not explain the long detour, but do not establish a visible-clearing retirement or opposite-direction waypoint defect.
 
+Two single-run controls used the same pre-cleanup planner executable (`bbcb37909d5f…`), settings, occupied barrier pose, and final barrier pose:
+
+| Withdrawal/control | Goals reached | Maximum requested-XYZ error | Consistent graphs / finite waypoints |
+| --- | ---: | ---: | ---: |
+| Immediate relocation; approximately 16-second phase retained | 3 | 0.045 m | 147 / 110 |
+| Gradual withdrawal; vehicle held during motion, then resumed | 3 | 0.042 m | 166 / 152 |
+
+The held vehicle moved 0.001 m during withdrawal. These diagnostic controls change the observation/motion history; their starting poses also differ slightly between independent runs. They do not pass or replace the original autonomous gradual-withdrawal workload.
+
+A full-trail replay audit selected candidate old-obstacle points more than 0.25 m from the static mesh preview and outside the expanded final box, in an interior region that avoids cropping potential ray-cell centers. Across 320 late paired map/ray frames, none of those points matched a 0.15 m clearing-ray voxel. Sampled failed-run frames retained 117–129 such points; the held control's same geometry mask retained at most 11. This approximate mask does not identify objects. The evidence is consistent with retained geometry that was not observed clear, while the route-selection contribution remains unresolved.
+
+A fresh original-workload run after the contour-storage cleanup (`56b72f4`) still exceeded the 110-second arrival wait after gradual withdrawal, with zero arrivals. Its 334 graph snapshots and 326 waypoints passed the consistency/finite checks; the planner and launch parent exited normally. The storage cleanup is therefore not counted as a navigation fix.
+
 ## Source migration notes
 
 The planner and RViz headers are internal source interfaces; these packages install executables/plugins rather than an exported planner library. Forks that call their C++ helpers must update alongside this refactor. All in-repository callers compile on the five supported SDKs.
@@ -457,6 +472,7 @@ The planner and RViz headers are internal source interfaces; these packages inst
 | `GraphPlannerParams::free_thred` | Remove the unused field and its `free_counter_thred` configuration. Other removed parameter reads are listed above. |
 | `ResetCloudIntensityWithTime`, `VoteRankInVotes`, `RemoveIndicesFromCloud` | Use `StackCloudByTime` for retention, `far_planner::TopTwoScores` for contour selection, or an explicit PCL filter for caller-owned index removal. These unused wrappers are removed. |
 | `IdxStack`, `cur_scan_cloud_` | Use `std::vector<std::size_t>` for indices; retain stamped scan history in code that needs scan/terrain pairing. |
+| `CTNode::connect_nodes` | Remove references to this unused member; use `front`/`back` for contour-ring traversal. |
 | `point_hash` / `point_comp` | Define an exact or explicitly quantized key and matching equality; tolerant point equality cannot safely back the old exact-float hash. |
 | `nodeptr_gcomp`, `nodeptr_fgcomp`, `TNodeptr_fcomp` | Queue immutable `(cost, node)` entries and skip stale entries; changing a queued node's cost must not change heap ordering. |
 | Old RViz header paths | Use `goalpoint_rviz_plugin/goalpoint_tool.hpp` and `teleop_rviz_plugin/{teleop_panel,drive_widget}.hpp`. Keep Qt5 on Humble/Jazzy/ROS 1 and Qt6 on Lyrical. |
