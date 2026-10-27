@@ -57,6 +57,8 @@ Planner callbacks are serialized. On ROS 2, graph and planning wall timers use `
 
 `FARUtil`, `DynamicGraph`, `ContourGraph`, and `MapHandler` hold substantial static state. Copying a vector of shared node pointers does not produce an immutable graph snapshot. Node factories initialize nodes before insertion; contour construction closes non-pillar rings before surface analysis. Configuration must be loaded and validated before module initialization derives dimensions and thresholds.
 
+Idle planning refreshes the authoritative graph snapshot before searching, including nodes imported between timer ticks.
+
 Node retirement and reset must remove reciprocal adjacency, contour links, parent references, vote records, and ID-index entries before releasing owning containers. The planner and graph utilities also break ownership cycles during destruction. See the [lifecycle evidence](validation.md#graph-lifecycle-stage) and [startup checks](validation.md#initialization-and-scheduling-checks).
 
 ## TF and timestamp contract
@@ -99,6 +101,7 @@ Consequently, an arrival status is not a requested-XYZ guarantee. Tests that req
 The refactor concentrates on reducing repeated work while preserving decision order and explicit invariants:
 
 - Remove unused node fields, lidar constants, and private helpers.
+- Reuse settled-node flags instead of allocating duplicate closed-node hash sets.
 - Filter touched cloud cells and enumerate sparse visited cells instead of scanning the entire world grid.
 - Reuse terrain projections by accepted-cloud revision and reset search state only for previously touched cells.
 - Visit nearby node pairs once; retain defensive copies when adjacency is mutated during traversal.
