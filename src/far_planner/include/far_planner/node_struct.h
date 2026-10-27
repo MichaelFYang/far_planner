@@ -7,12 +7,6 @@
 #include "point_struct.h"
 #include <boost/functional/hash.hpp>
 
-enum NodeType {
-    NOT_DEFINED = 0,
-    GROUND      = 1,
-    AIR         = 2
-};
-
 enum NodeFreeDirect {
   UNKNOW  =  0,
   CONVEX  =  1,
@@ -21,14 +15,6 @@ enum NodeFreeDirect {
 };
 
 typedef std::pair<Point3D, Point3D> PointPair;
-
-namespace LiDARMODEL {
-    /* array resolution: 1 degree */
-    static const int kHorizontalFOV = 360;  
-    static const int kVerticalFOV = 31; 
-    static const float kAngleResX = 0.2;
-    static const float kAngleResY = 2.0;    
-} // NODEPARAMS
 
 struct Polygon
 {
@@ -98,7 +84,6 @@ struct NavNode
     std::vector<std::shared_ptr<NavNode>> trajectory_connects;
     std::unordered_map<std::size_t, std::size_t> trajectory_votes;
     std::unordered_map<std::size_t, std::size_t> terrain_votes;
-    NodeType node_type = NodeType::NOT_DEFINED;
     NodeFreeDirect free_direct = NodeFreeDirect::UNKNOW;
     // planner members
     bool is_block_to_goal = false;
