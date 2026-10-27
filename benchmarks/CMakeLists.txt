@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Fan Yang and contributors
 # SPDX-License-Identifier: MIT
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.10)
 project(far_planner_benchmarks LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -9,10 +9,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PCL REQUIRED COMPONENTS common filters)
 find_package(Eigen3 REQUIRED NO_MODULE)
 
+# Keep the optional build compatible with Melodic's CMake and PCL 1.8.
+link_directories(${PCL_LIBRARY_DIRS})
 add_executable(cloud_decay cloud_decay.cpp)
 target_include_directories(cloud_decay PRIVATE ${PCL_INCLUDE_DIRS})
-target_link_directories(cloud_decay PRIVATE ${PCL_LIBRARY_DIRS})
-target_compile_options(cloud_decay PRIVATE ${PCL_DEFINITIONS})
+foreach(pcl_definition IN LISTS PCL_DEFINITIONS)
+  string(STRIP "${pcl_definition}" pcl_definition)
+  if(pcl_definition)
+    target_compile_options(cloud_decay PRIVATE "${pcl_definition}")
+  endif()
+endforeach()
 target_link_libraries(cloud_decay PRIVATE ${PCL_LIBRARIES})
 
 add_executable(grid_position grid_position.cpp)
