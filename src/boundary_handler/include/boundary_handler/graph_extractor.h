@@ -96,7 +96,9 @@ struct GraphExtractorParams {
 class GraphExtractor {
 public:
     GraphExtractor()  = default;
-    ~GraphExtractor() = default;
+    ~GraphExtractor() { ResetGraph(extracted_graph_); }
+    GraphExtractor(const GraphExtractor&) = delete;
+    GraphExtractor& operator=(const GraphExtractor&) = delete;
 
     void Init();
     void Run();
@@ -215,7 +217,14 @@ private:
         }
     }
 
-    inline void ResetGraph(NodePtrStack& graphOut) {
+    // Break reciprocal links while the owning vector still retains every node.
+    static void ResetGraph(NodePtrStack& graphOut) {
+        for (const auto& node : graphOut) {
+            node->connect_nodes.clear();
+            node->poly_connects.clear();
+            node->contour_connects.clear();
+            node->traj_connects.clear();
+        }
         graphOut.clear();
     }
 

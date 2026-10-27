@@ -110,6 +110,63 @@ class StartupShutdownTest(unittest.TestCase):
     def test_invalid_trajectory_still_fails(self):
         self.exercise(False)
 
+    def generation(self, valid_output):
+        directory = tempfile.mkdtemp(prefix='boundary-graph-lifecycle-')
+        self.addCleanup(shutil.rmtree, directory)
+        samples = os.path.join(roslib.packages.get_pkg_dir('far_planner'), 'data')
+        for name in ('boundary.ply', 'trajectory.txt'):
+            shutil.copyfile(os.path.join(samples, name), os.path.join(directory, name))
+        graph_file = 'result.vgh' if valid_output else 'missing/result.vgh'
+        graph = os.path.join(directory, graph_file)
+        log_path = os.path.join(directory, 'boundary.log')
+        executable = roslib.packages.find_node('boundary_handler', 'boundary_handler')[0]
+
+        def read_log():
+            with io.open(log_path, encoding='utf-8') as stream:
+                return stream.read()
+
+        with open(log_path, 'w') as log:
+            process = subprocess.Popen([
+                executable, '__name:=boundary_generation_' + str(os.getpid()),
+                '_folder_path:=' + directory, '_graph_file:=' + graph_file,
+            ], stdout=log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+            try:
+                if valid_output:
+                    deadline = steady_time() + 10.0
+                    while not os.path.exists(graph):
+                        self.assertIsNone(process.poll(), read_log())
+                        self.assertLess(steady_time(), deadline, read_log())
+                        time.sleep(0.01)
+                    with open(graph) as saved:
+                        self.assertEqual(len(saved.readlines()), 25)
+                    process.send_signal(signal.SIGINT)
+                deadline = steady_time() + 10.0
+                while process.poll() is None:
+                    self.assertLess(steady_time(), deadline, read_log())
+                    time.sleep(0.01)
+                output = read_log()
+                self.assertEqual(process.returncode, 0 if valid_output else 1, output)
+                self.assertNotIn('LeakSanitizer', output)
+                self.assertNotIn('ERROR: AddressSanitizer', output)
+                self.assertNotIn('runtime error:', output)
+                if not valid_output:
+                    self.assertFalse(os.path.exists(graph), output)
+                    self.assertIn('Boundary setup error', output)
+            finally:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except OSError as error:
+                        if error.errno != errno.ESRCH:
+                            raise
+                    process.wait()
+
+    def test_successful_generation_exits_normally(self):
+        self.generation(True)
+
+    def test_output_error_still_fails(self):
+        self.generation(False)
+
 
 if __name__ == '__main__':
     rostest.rosrun('boundary_handler', 'test_startup_shutdown_ros1', StartupShutdownTest)
