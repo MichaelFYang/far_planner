@@ -352,6 +352,12 @@ TeleopPanel uses typed member-pointer connections for buttons, binary checkboxes
 
 On ROS 2, the panel now shares RViz's clock after initialization, as the Goalpoint tool already does. Its constructor retains a node-clock fallback for use before RViz supplies a context. A regression switches the running RViz context to paused simulation time at 200 seconds and checks goal, resume, and manual joystick stamps. The previous panel failed this check because its independent publisher node kept system time. The ROS 1 panel uses the global ROS clock.
 
+The stock Jazzy RViz application also loads the shipped default, Matterport, and boundary layouts under an isolated Xvfb display with software OpenGL. Each stays running, exits normally on SIGINT, and reports no ROS error/fatal or plugin-load errors. Screenshots show the planner control panels and Goalpoint toolbar; no sensor publishers were supplied. This extends the custom test-window checks to those three stock layouts on Jazzy, without validating hardware graphics or stock layouts on the other SDKs.
+
+## Dependency resolution
+
+The ROS 2 OpenCV manifest key is `libopencv-dev`, matching ROS 1. The former `opencv4` key is absent from the current rosdep rules and made the README dependency command return an error on Humble, Jazzy, and Lyrical even with OpenCV installed. After the correction, `rosdep check --from-paths src --ignore-src` passes on all five SDKs using freshly downloaded official rules in a private cache. This check installs or upgrades no packages.
+
 ## ROS 1 SDK compatibility
 
 Release builds and fresh full-workspace test runs pass in the official `osrf/ros:melodic-desktop-full` and `osrf/ros:noetic-desktop-full` images, with no manually started ROS master. Each reports 270 checks, zero errors/failures/skips. The core C++ suite contains 110 tests. Earlier totals of 264/265 preceded its rostest wrapper and the boundary process regressions. Container runs use `ROS_IP=127.0.0.1` when networking is disabled.
@@ -451,6 +457,12 @@ Each goal required a new false-to-true arrival sequence and independent XYZ erro
 
 Both ROS 1 launches and masters exited with code zero and no ROS error/fatal log entries. Humble's FAR planner and graph decoder also stopped normally with no error/fatal entries in their launch log. Several external Humble simulator executables aborted during shutdown; the launcher's zero exit does not establish clean child-process teardown. That external-stack limitation remains separate from the passed planner navigation checks. Simulation assets, container recipes, logs, and observers remain outside this repository.
 
+## SDK-matched ROS 1 garage validation
+
+Noetic planner source `8285435` and matching simulator source `bf0cba71365271ebff09831a05afd78578150300` completed the five garage goals listed above in 124.05 wall seconds, using simulated ROS time, `is_multi_layer=true`, and `is_static_env=true`. The private headless wrapper enabled terrain connectivity, started at `(0, 74, 0.85)`, and retained the camera placeholder used for indoor validation. Simulator C++ sources were unchanged; the existing garage mesh was mounted read-only.
+
+All goals required a fresh false-to-true arrival sequence, requested-XYZ error below 0.6 m, and a one-second dwell inside that bound, with a 180-second budget per goal. Maximum error was 0.484 m. Vehicle height spanned 3.300 m; graph height spanned 3.701 m. All 270 graph snapshots passed the frame/geometry/ID/connection checks, and 259 waypoints were finite. The launch and owned ROS master exited with code zero without ROS error/fatal log entries. This extends multi-layer integration evidence to ROS 1; it is not a cross-SDK speed comparison or a shortest-route claim.
+
 ## Dynamic terrain retention validation
 
 Live ROS 1 and ROS 2 retention regressions create an obstacle, clear it with a farther raw return, and continue publishing stale terrain through 13 seconds after clearing. They verify that the obstacle stays excluded and can enter the map again after the configured interval expires. The old defaults failed both regressions; the ROS 2 regression also passes with AddressSanitizer and UndefinedBehaviorSanitizer, including leak detection and clean shutdown.
@@ -458,6 +470,27 @@ Live ROS 1 and ROS 2 retention regressions create an obstacle, clear it with a f
 A subsequent 878-second dynamic-mode run on the committed scan/terrain wiring (`9f06cbf`, with the earlier 10-second exclusion) completed 20 route cycles and all 60 goals. Across elapsed windows 60–300, 300–600, and 600–878 seconds, sampled RSS medians were 124.37, 125.46, and 126.52 MiB; the overall range after 60 seconds was 121.39–130.62 MiB. The published graph peaked at 92 nodes and ended at 83. These are process RSS observations, including allocator and middleware behavior, rather than a proof of bounded live heap.
 
 A separate moving-barrier experiment placed a 2.6 × 0.5 × 1.5 m box across the corridor, held it while the vehicle approached, then withdrew it along the corridor and into the adjacent room. With the 10-second exclusion, obsolete gate points reappeared after the upstream terrain outlived the exclusion, and the goal was not reached within 70 seconds. With 15 seconds, the old location stayed clear and all three goals reported arrival (14.44, 18.60, and 13.40 seconds from each command). This exercises one controlled obstacle withdrawal, not general moving-obstacle avoidance.
+
+A later Jazzy run on `a7ee644` placed the same barrier after initial mapping and requested two route cycles. It and an instrumented repeat both exceeded the first goal's 110-second budget, with zero arrivals; neither is counted as passing repeated-barrier navigation. They produced 338/335 consistent graphs and 325/326 finite waypoints, observed the held barrier, and stopped the planners normally. The repeat retained its input recording and path/map traces. Replaying its inputs through the unchanged planner produced 648 map/ray updates and showed the old barrier front face clearing. Late points in the wider spatial box matched the static side wall (within 0.083 m of the supplied mesh preview). That box count does not establish a clearing defect. The vehicle's long detour remains an unresolved integration case; the earlier successful single-withdrawal result does not cover it.
+
+## Source migration notes
+
+The planner and RViz headers are internal source interfaces; these packages install executables/plugins rather than an exported planner library. Forks that call their C++ helpers must update alongside this refactor. All in-repository callers compile on the five supported SDKs.
+
+| Previous use | Required update |
+| --- | --- |
+| `TransformPCLFrame` / `TransformPoint3DFrame` without time | Pass the original ROS measurement stamp (`rclcpp::Time` or `ros::Time`). Handle TF failure before changing state; sensor clouds require a positive stamp. |
+| `RemoveNanInfPoints(cloud)` | Pass `true` for terrain height-cost intensity validation, `false` for XYZ-only scans. |
+| `ReEvaluateGoalPosition(goal, adjust_height)` | Pass the current odometry position between these arguments; refinement no longer relies on an earlier traversal. |
+| `SetLocalTerrainObsCloud(cloud)` | Supply a monotonically changing revision when the accepted local terrain changes, including clears; unchanged revisions reuse cached projection. |
+| `GraphPlannerParams::free_thred` | Remove the unused field and its `free_counter_thred` configuration. Other removed parameter reads are listed above. |
+| `ResetCloudIntensityWithTime`, `VoteRankInVotes`, `RemoveIndicesFromCloud` | Use `StackCloudByTime` for retention, `far_planner::TopTwoScores` for contour selection, or an explicit PCL filter for caller-owned index removal. These unused wrappers are removed. |
+| `IdxStack`, `cur_scan_cloud_` | Use `std::vector<std::size_t>` for indices; retain stamped scan history in code that needs scan/terrain pairing. |
+| `point_hash` / `point_comp` | Define an exact or explicitly quantized key and matching equality; tolerant point equality cannot safely back the old exact-float hash. |
+| `nodeptr_gcomp`, `nodeptr_fgcomp`, `TNodeptr_fcomp` | Queue immutable `(cost, node)` entries and skip stale entries; changing a queued node's cost must not change heap ordering. |
+| Old RViz header paths | Use `goalpoint_rviz_plugin/goalpoint_tool.hpp` and `teleop_rviz_plugin/{teleop_panel,drive_widget}.hpp`. Keep Qt5 on Humble/Jazzy/ROS 1 and Qt6 on Lyrical. |
+
+`GraphExtractor` now owns graph teardown and is noncopyable; retain it by reference or unique ownership. Graph message schemas, `.vgh` layout, and default ROS topic names remain compatible.
 
 ## Branch validation baseline
 
