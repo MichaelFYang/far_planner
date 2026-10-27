@@ -53,14 +53,9 @@ Point3D grid_center_ = Point3D(0,0,0);
 std::unique_ptr<grid_ns::Grid<char>> free_terrain_grid_;
 far_planner::GoalGridSearch goal_grid_search_;
 
-float PriorityScore(const NavNodePtr& node_ptr);
-
 bool ReconstructPath(const NavNodePtr& goal_node_ptr,
                      const bool& is_free_nav,
                      NodePtrStack& global_path);
-
-bool IsNodeConnectInFree(const NavNodePtr& current_node,
-                         const NavNodePtr& neighbor_node);
 
 bool IsValidConnectToGoal(const NavNodePtr& node_ptr, 
                           const NavNodePtr& goal_node_ptr);

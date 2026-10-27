@@ -309,8 +309,6 @@ TEST(GraphLifecycle, OrdinaryContourUpdateReleasesRetiredVertices)
     auto b = std::make_shared<CTNode>();
     a->front = b;
     b->back = a;
-    a->connect_nodes.push_back(b);
-    b->connect_nodes.push_back(a);
     ContourGraph::contour_graph_ = {a, b};
 
     auto nav = std::make_shared<NavNode>();
@@ -327,8 +325,8 @@ TEST(GraphLifecycle, OrdinaryContourUpdateReleasesRetiredVertices)
     const bool all_released = weak_a.expired() && weak_b.expired();
     if (!all_released) {
         a = weak_a.lock(); b = weak_b.lock();
-        if (a) { a->front.reset(); a->back.reset(); a->connect_nodes.clear(); }
-        if (b) { b->front.reset(); b->back.reset(); b->connect_nodes.clear(); }
+        if (a) { a->front.reset(); a->back.reset(); }
+        if (b) { b->front.reset(); b->back.reset(); }
         a.reset(); b.reset();
     }
     EXPECT_TRUE(neighbor_released);
