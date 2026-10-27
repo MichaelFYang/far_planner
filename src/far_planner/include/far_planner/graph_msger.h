@@ -18,6 +18,7 @@ struct GraphMsgerParams {
 
 
 class GraphMsger {
+    friend class GraphEncodingTestAccess;
 public:
     GraphMsger() = default;
     ~GraphMsger() = default;
@@ -26,33 +27,23 @@ public:
 
     void UpdateGlobalGraph(const NodePtrStack& graph);
 
+    static bool ValidateGraphMessage(const visibility_graph_msg::msg::Graph& graph,
+                                     const std::string& expected_frame, std::string& error);
+
 private:
     rclcpp::Node::SharedPtr nh_;
     GraphMsgerParams gm_params_;
     rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr  graph_pub_;
     rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_;
 
-    NodePtrStack   global_graph_;
-    PointCloudPtr  nodes_cloud_ptr_;
-    PointKdTreePtr kdtree_graph_cloud_;
-    
     void CreateDecodedNavNode(const visibility_graph_msg::msg::Node& vnode, NavNodePtr& node_ptr);
 
-    inline bool IsEncodeType(const NavNodePtr& node_ptr) {
+    static inline bool IsEncodeType(const NavNodePtr& node_ptr) {
         if (node_ptr->is_odom || !node_ptr->is_finalized || FARUtil::IsOutsideGoal(node_ptr)) {
             return false;
         }
         return true;
     }
-
-    inline bool IsMismatchFreeNode(const NavNodePtr& nearest_ptr, const visibility_graph_msg::msg::Node& vnode) {
-        if (nearest_ptr == NULL) return false;
-        const bool is_navpoint = vnode.is_navpoint == 0 ? false : true;
-        const bool is_boundary = vnode.is_boundary == 0 ? false : true;
-        if (nearest_ptr->is_navpoint != is_navpoint || nearest_ptr->is_boundary != is_boundary) return true;
-        return false;
-    }
-    
 
     inline NavNodePtr IdToNodePtr(const std::size_t& node_id, const IdxMap& idx_map, const NodePtrStack& node_stack) {
         const auto it = idx_map.find(node_id);
@@ -65,19 +56,9 @@ private:
         return NULL;
     }
 
-    NavNodePtr NearestNodePtrOnGraph(const Point3D p, const float radius);
-
-    void EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
+    static bool EncodeGraph(const NodePtrStack& graphIn, visibility_graph_msg::msg::Graph& graphOut);
 
     void GraphCallBack(const visibility_graph_msg::msg::Graph::SharedPtr msg);
-
-    void PublishGlobalGraph(const NodePtrStack& graphIn);
-
-    void ExtractConnectIdxs(const visibility_graph_msg::msg::Node& node,
-                            IdxStack& connect_idxs,
-                            IdxStack& poly_idxs,
-                            IdxStack& contour_idxs,
-                            IdxStack& traj_idxs);
 
 };
 

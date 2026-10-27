@@ -4,11 +4,10 @@
   <version>0.0.1</version>
   <description>Visibility Graph Message</description>
   <maintainer email="fanyang2@alumni.cmu.edu">Fan Yang</maintainer>
-  <license>BSD</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>builtin_interfaces</depend>

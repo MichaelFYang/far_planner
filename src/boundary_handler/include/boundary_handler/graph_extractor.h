@@ -7,12 +7,10 @@
 #include <vector>
 #include <unordered_map>
 
-#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
 
 #include <visibility_graph_msg/msg/graph.hpp> 
 #include <visibility_graph_msg/msg/node.hpp> 
-
-#include <std_srvs/srv/trigger.hpp>  // instead of std_srvs/Trigger.h
 
 #include <geometry_msgs/msg/point.hpp>  // instead of geometry_msgs/Point.h
 
@@ -20,6 +18,8 @@
 #include <visualization_msgs/msg/marker_array.hpp>  // instead of visualization_msgs/MarkerArray.h
 
 #include "boundary_handler/point_struct.h"
+#include "boundary_handler/input_parser.h"
+#include <algorithm>
 
 typedef visualization_msgs::msg::Marker Marker;
 typedef visualization_msgs::msg::MarkerArray MarkerArray;
@@ -99,7 +99,9 @@ struct GraphExtractorParams {
 class GraphExtractor {
 public:
     GraphExtractor();
-    ~GraphExtractor() = default;
+    ~GraphExtractor() { ResetGraph(extracted_graph_); }
+    GraphExtractor(const GraphExtractor&) = delete;
+    GraphExtractor& operator=(const GraphExtractor&) = delete;
 
     void Init();
     void Run();
@@ -123,9 +125,8 @@ private:
     Point3D free_p_;
     PointStack traj_;
 
-    PointCloudPtr boundary_ptr_;
 
-    void LoadParmas();
+    void LoadParams();
 
     void ConstructVGraph(const PolygonStack& polysIn, NodePtrStack& graphOut);
 
@@ -137,11 +138,10 @@ private:
     
     void SetColor(const VizColor& color, const float alpha, Marker& scan_marker);
 
-    void ReadBoundaryFile(const PointCloudPtr& bd_cloud, PolygonStack& polysOut);
+    void ReadBoundaryFile(PolygonStack& polysOut);
 
     void ReadTrajFile(Point3D& free_p);
 
-    void FilterPolyBoundary(const PointCloudPtr& bd_cloud, PolygonStack& polysOut);
 
     bool IsValidConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2);
 
@@ -223,7 +223,14 @@ private:
         }
     }
 
-    inline void ResetGraph(NodePtrStack& graphOut) {
+    // Break reciprocal links while the owning vector still retains every node.
+    static void ResetGraph(NodePtrStack& graphOut) {
+        for (const auto& node : graphOut) {
+            node->connect_nodes.clear();
+            node->poly_connects.clear();
+            node->contour_connects.clear();
+            node->traj_connects.clear();
+        }
         graphOut.clear();
     }
 

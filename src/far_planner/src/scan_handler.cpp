@@ -1,11 +1,16 @@
 /*
  * Dynamic Route Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
 
 #include "far_planner/scan_handler.h"
+#include "far_planner/parameter_validation.h"
+
+#include <cstdint>
+#include <utility>
 
 /***************************************************************************************/
 
@@ -16,11 +21,13 @@ const char RAY_BIT  = char(4); // 0100
 
 void ScanHandler::Init(const ScanHandlerParams& params) {
     scan_params_ = params;
-    row_num_ = std::ceil(scan_params_.terrain_range * 2.0f / scan_params_.voxel_size);
-    if (row_num_ % 2 == 0) row_num_ ++;
+    row_num_ = far_planner::CheckedDimension(
+        static_cast<double>(scan_params_.terrain_range) * 2.0, scan_params_.voxel_size,
+        "scan grid width", 0, true);
     col_num_ = row_num_;
-    level_num_ = std::ceil(scan_params_.ceil_height * 2.0f / scan_params_.voxel_size);
-    if (level_num_ % 2 == 0) level_num_ ++;
+    level_num_ = far_planner::CheckedDimension(
+        static_cast<double>(scan_params_.ceil_height) * 2.0, scan_params_.voxel_size,
+        "scan grid height", 0, true);
     Eigen::Vector3i grid_size(row_num_, col_num_, level_num_);
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(scan_params_.voxel_size, scan_params_.voxel_size, scan_params_.voxel_size);
@@ -47,28 +54,44 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
 void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const PointCloudPtr& freeCloudIn) {
     if (!is_grids_init_ || scanCloudIn->empty()) return;
     // remove free scan points
-    PointCloudPtr copyObsScanCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud);
-    FARUtil::RemoveOverlapCloud(copyObsScanCloud, freeCloudIn, true);
-    for (const auto& point : copyObsScanCloud->points) { // assign obstacle scan voxels
+    PointCloudPtr obstacle_scan = scanCloudIn;
+    if (!freeCloudIn->empty()) {
+        obstacle_scan.reset(new PointCloud);
+        pcl::copyPointCloud(*scanCloudIn, *obstacle_scan);
+        FARUtil::RemoveOverlapCloud(obstacle_scan, freeCloudIn, true);
+    }
+    const double max_distance = static_cast<double>(scan_params_.voxel_size) *
+        (static_cast<double>(row_num_) + col_num_ + level_num_);
+    const auto clipped_span = [](int center, int radius, int size) {
+        const auto first = std::max<std::int64_t>(0, static_cast<std::int64_t>(center) - radius);
+        const auto last = std::min<std::int64_t>(size - 1, static_cast<std::int64_t>(center) + radius);
+        return std::make_pair(static_cast<int>(first), static_cast<int>(last));
+    };
+    for (const auto& point : obstacle_scan->points) { // assign obstacle scan voxels
         const float r = pcl::euclideanDistance(point, center_p_);
-        const int L = static_cast<int>(std::ceil((r * ANG_RES_X)/scan_params_.voxel_size/2.0f))+FARUtil::kObsInflate;
-        const int N = static_cast<int>(std::ceil((r * ANG_RES_Y)/scan_params_.voxel_size/2.0f));
-        Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
-        for (int i = -L; i <= L; i++) {
-            for (int j = -L; j <= L; j++) {
-                for (int k = -N; k <= N; k++) {
-                    Eigen::Vector3i sub;
-                    sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = c_sub.z() + k;
-                    if (voxel_grids_->InRange(sub)) {
-                        const int ind = voxel_grids_->Sub2Ind(sub);
-                        voxel_grids_->GetCell(ind) = voxel_grids_->GetCell(ind) | SCAN_BIT;
-                    }
+        if (!std::isfinite(r) || static_cast<double>(r) > max_distance) continue;
+        const int L = static_cast<int>(std::min<double>(
+            std::ceil(static_cast<double>(r) * ANG_RES_X / scan_params_.voxel_size / 2.0),
+            row_num_)) + FARUtil::kObsInflate;
+        const int N = static_cast<int>(std::min<double>(
+            std::ceil(static_cast<double>(r) * ANG_RES_Y / scan_params_.voxel_size / 2.0),
+            level_num_));
+        const Eigen::Vector3i center = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
+        const auto x = clipped_span(center.x(), L, row_num_);
+        const auto y = clipped_span(center.y(), L, col_num_);
+        const auto z = clipped_span(center.z(), N, level_num_);
+        for (int ix = x.first; ix <= x.second; ++ix) {
+            for (int iy = y.first; iy <= y.second; ++iy) {
+                for (int iz = z.first; iz <= z.second; ++iz) {
+                    const int ind = voxel_grids_->Sub2Ind(Eigen::Vector3i(ix, iy, iz));
+                    voxel_grids_->GetCell(ind) |= SCAN_BIT;
                 }
             }
         }
     }
     for (const auto& point : scanCloudIn->points) {
+        const float r = pcl::euclideanDistance(point, center_p_);
+        if (!std::isfinite(r) || static_cast<double>(r) > max_distance) continue;
         Eigen::Vector3i sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         this->SetRayCloud(sub);
     }
@@ -86,26 +109,33 @@ void ScanHandler::SetSurroundObsCloud(const PointCloudPtr& obsCloudIn, const boo
 }
 
 void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointCloudPtr& dyObsCloudOut) {
-    if (!is_grids_init_ || cloudIn->empty()) return;
     dyObsCloudOut->clear();
+    if (!is_grids_init_ || cloudIn->empty()) return;
     for (const auto& point : cloudIn->points) {
         Eigen::Vector3i sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!voxel_grids_->InRange(sub)) continue;
         const int ind = voxel_grids_->Sub2Ind(sub);
         const char cell_c = voxel_grids_->GetCell(ind);
         if ((cell_c | RAY_BIT) == cell_c) {
-            dyObsCloudOut->points.push_back(point);
+            dyObsCloudOut->push_back(point);
         }
     }
 }
 
 void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
-    Eigen::Vector3i dir_sub = point_sub - center_sub_; 
-    if (dir_sub.squaredNorm() < 1.0) return;
+    const Eigen::Vector3i dir_sub = point_sub - center_sub_;
+    if (dir_sub.x() == 0 && dir_sub.y() == 0 && dir_sub.z() == 0) return;
     Eigen::Vector3i steps_sub;
     steps_sub.x() = abs(dir_sub.x()), steps_sub.y() = abs(dir_sub.y()), steps_sub.z() = abs(dir_sub.z());
     Eigen::Vector3i sign_sub;
     sign_sub.x() = FARUtil::Signum(dir_sub.x()), sign_sub.y() = FARUtil::Signum(dir_sub.y()), sign_sub.z() = FARUtil::Signum(dir_sub.z());
+    const auto mark_ray_cell = [this](const Eigen::Vector3i& sub) {
+        if (!voxel_grids_->InRange(sub)) return false;
+        char& cell = voxel_grids_->GetCell(voxel_grids_->Sub2Ind(sub));
+        if ((cell | SCAN_BIT) == cell) return false; // hit scan point cell
+        cell = cell | RAY_BIT;
+        return true;
+    };
     if (steps_sub.x() >= std::max(steps_sub.y(), steps_sub.z())) {
         const int N = steps_sub.x();
         const float rx2y = (float)steps_sub.y() / (float)steps_sub.x();
@@ -115,11 +145,7 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += i * sign_sub.x();
             csub.y() += (int)std::floor(i*rx2y) * sign_sub.y();
             csub.z() += (int)std::floor(i*rx2z) * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind); 
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     } else if (steps_sub.y() >= std::max(steps_sub.x(), steps_sub.z())) {
         const int N = steps_sub.y();
@@ -130,11 +156,7 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += (int)std::floor(i*ry2x) * sign_sub.x();
             csub.y() += i * sign_sub.y();
             csub.z() += (int)std::floor(i*ry2z) * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind);
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     } else {
         const int N = steps_sub.z();
@@ -145,19 +167,15 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             csub.x() += (int)std::floor(i*rz2x) * sign_sub.x();
             csub.y() += (int)std::floor(i*rz2y) * sign_sub.y();
             csub.z() += i * sign_sub.z();
-            if (!voxel_grids_->InRange(csub)) break;
-            const int ind = voxel_grids_->Sub2Ind(csub);
-            const char cell_c = voxel_grids_->GetCell(ind);
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if (!mark_ray_cell(csub)) break;
         }
     }
 }
 
 void ScanHandler::GridVisualCloud(const PointCloudPtr& cloudOut, const GridStatus& type) {
+    cloudOut->clear();
     if (!is_grids_init_) return;
     const int N = voxel_grids_->GetCellNumber();
-    cloudOut->clear();
     char RType;
     switch (type) {
         case GridStatus::SCAN:
@@ -176,7 +194,7 @@ void ScanHandler::GridVisualCloud(const PointCloudPtr& cloudOut, const GridStatu
     for (int ind=0; ind<N; ind++) {
         const char c_type = voxel_grids_->GetCell(ind);
         if ((c_type | RType) == c_type) {
-            cloudOut->points.push_back(this->Ind2PCLPoint(ind));
+            cloudOut->push_back(this->Ind2PCLPoint(ind));
         }
     }
 }

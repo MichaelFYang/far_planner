@@ -1,10 +1,17 @@
-#ifndef GoalPOINT_TOOL_H
-#define GoalPOINT_TOOL_H
+// Copyright (c) 2021-2026 Fan Yang and contributors
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+#ifndef GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_
+#define GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_
 
 
 #include <QObject>
 
 #include <sstream>
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/qos.hpp>
 
@@ -32,12 +39,13 @@ namespace goalpoint_rviz_plugin
 class GoalpointTool : public rviz_default_plugins::tools::PoseTool
 {
   Q_OBJECT
+
 public:
   GoalpointTool();
-  
+
   ~GoalpointTool() override;
-  
-  virtual void onInitialize() override;
+
+  void onInitialize() override;
 
 protected:
   void odomHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom);
@@ -47,19 +55,20 @@ private Q_SLOTS:
   void updateTopic();
 
 private:
-  float vehicle_z;
+  std::mutex odom_mutex_;
+  nav_msgs::msg::Odometry::ConstSharedPtr latest_odom_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_;
   rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr pub_;
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr pub_joy_;
-  
+
   rclcpp::Clock::SharedPtr clock_;
-  
+
   rviz_common::properties::StringProperty * topic_property_;
   rviz_common::properties::QosProfileProperty * qos_profile_property_;
 
   rclcpp::QoS qos_profile_;
 };
-}
+}  // namespace goalpoint_rviz_plugin
 
 
-#endif  // GoalPOINT_RVIZ_PLUGIN_WAYPOINT_TOOL_H
+#endif  // GOALPOINT_RVIZ_PLUGIN__GOALPOINT_TOOL_HPP_

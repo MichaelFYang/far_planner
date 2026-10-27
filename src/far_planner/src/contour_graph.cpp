@@ -1,6 +1,7 @@
 /*
  * FAR Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
@@ -14,10 +15,8 @@
 void ContourGraph::Init(const rclcpp::Node::SharedPtr nh, const ContourGraphParams& params) {
     nh_ = nh;
     ctgraph_params_ = params;
-    ContourGraph::contour_graph_.clear();
-    ContourGraph::contour_polygons_.clear();
+    this->ClearContourGraph();
     ALIGN_ANGLE_COS = cos(M_PI - FARUtil::kAcceptAlign / 2.0f);
-    is_robot_inside_poly_ = false;
     ContourGraph::global_contour_set_.clear();
     ContourGraph::boundary_contour_set_.clear();
 }
@@ -41,7 +40,6 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
             this->AddCTNodeToGraph(new_ctnode_ptr);
         } else {
             CTNodeStack ctnode_stack;
-            ctnode_stack.clear();
             const int N = poly_ptr->vertices.size();
             for (int idx=0; idx<N; idx++) {
                 this->CreateCTNode(poly_ptr->vertices[idx], new_ctnode_ptr, poly_ptr, false);
@@ -373,15 +371,8 @@ void ContourGraph::EnclosePolygonsCheck() {
 void ContourGraph::CreateCTNode(const Point3D& pos, CTNodePtr& ctnode_ptr, const PolygonPtr& poly_ptr, const bool& is_pillar) {
     ctnode_ptr = std::make_shared<CTNode>();
     ctnode_ptr->position = pos;
-    ctnode_ptr->front = NULL;
-    ctnode_ptr->back  = NULL;
-    ctnode_ptr->is_global_match = false;
-    ctnode_ptr->is_contour_necessary = false;
-    ctnode_ptr->is_ground_associate = false;
-    ctnode_ptr->nav_node_id = 0;
     ctnode_ptr->poly_ptr = poly_ptr;
     ctnode_ptr->free_direct = is_pillar ? NodeFreeDirect::PILLAR : NodeFreeDirect::UNKNOW;
-    ctnode_ptr->connect_nodes.clear();
 }
 
 void ContourGraph::CreatePolygon(const PointStack& poly_points, PolygonPtr& poly_ptr) {
@@ -443,13 +434,14 @@ void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_grap
             ctnode_ptr->poly_ptr->is_pillar = true;
             ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         } else {
+            // UpdateContourGraph links every non-pillar polygon into a closed ring.
             CTNodePtr next_ctnode;
             // front direction
             next_ctnode = ctnode_ptr->front;
             Point3D start_p = ctnode_ptr->position;
             Point3D end_p = next_ctnode->position;
             float edist = (end_p - ctnode_ptr->position).norm_flat();
-            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
+            while (next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
                 next_ctnode = next_ctnode->front;
                 start_p = end_p;
                 end_p = next_ctnode->position;
@@ -468,7 +460,7 @@ void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_grap
             start_p = ctnode_ptr->position;
             end_p   = next_ctnode->position;
             edist = (end_p - ctnode_ptr->position).norm_flat();
-            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
+            while (next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
                 next_ctnode = next_ctnode->back;
                 start_p = end_p;
                 end_p = next_ctnode->position;
@@ -498,6 +490,8 @@ bool ContourGraph::IsAPillarPolygon(const PointStack& vertex_points, float& peri
         perimeter += dist;
         prev_p = cur_p;
     }
+    perimeter += std::hypotf(vertex_points.front().x - prev_p.x,
+                             vertex_points.front().y - prev_p.y);
     return perimeter > ctgraph_params_.kPillarPerimeter ? false : true;
 }
 
@@ -524,7 +518,7 @@ bool ContourGraph::IsEdgeCollidePoly(const PointStack& poly, const ConnectPair& 
 
 void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) {
     if (ctnode_ptr->surf_dirs.first  == Point3D(0,0,-1) || ctnode_ptr->surf_dirs.second == Point3D(0,0,-1) || ctnode_ptr->poly_ptr->is_pillar) {
-        ctnode_ptr->surf_dirs.first = Point3D(0,0,-1), ctnode_ptr->surf_dirs.second == Point3D(0,0,-1);
+        ctnode_ptr->surf_dirs = {Point3D(0,0,-1), Point3D(0,0,-1)};
         ctnode_ptr->poly_ptr->is_pillar = true;
         ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
         return;
@@ -655,35 +649,31 @@ bool ContourGraph::IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr
 }
 
 void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& global_free_p) {
-    Point3D free_p = odom_ptr->position;
-    bool is_free_p = true;
-    PointStack free_sample_points;
+    global_free_p = odom_ptr->position;
+    bool robot_inside_poly = false;
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
         if (!poly_ptr->is_pillar && poly_ptr->is_robot_inside) {
-            is_free_p = false;
-            FARUtil::CreatePointsAroundCenter(free_p, FARUtil::kNavClearDist, FARUtil::kLeafSize, free_sample_points);
+            robot_inside_poly = true;
             break;
         }
     }
-    if (is_free_p) is_robot_inside_poly_ = false;
-    global_free_p = free_p;
-    if (!is_free_p && !is_robot_inside_poly_) {
-        bool is_free_pos_found = false;
-        for (const auto& p : free_sample_points) {
-            bool is_sample_free = true;
-            for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
-                if (!poly_ptr->is_pillar && FARUtil::PointInsideAPoly(poly_ptr->vertices, p)) {
-                    is_sample_free = false;
-                    break;
-                }
-            }
-            if (is_sample_free) {
-                global_free_p = p;
-                is_free_pos_found = true;
+    if (!robot_inside_poly) return;
+
+    PointStack free_sample_points;
+    FARUtil::CreatePointsAroundCenter(global_free_p, FARUtil::kNavClearDist,
+                                      FARUtil::kLeafSize, free_sample_points);
+    for (const auto& p : free_sample_points) {
+        bool is_sample_free = true;
+        for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
+            if (!poly_ptr->is_pillar && FARUtil::PointInsideAPoly(poly_ptr->vertices, p)) {
+                is_sample_free = false;
                 break;
             }
         }
-        if (!is_free_pos_found) is_robot_inside_poly_ = true;
+        if (is_sample_free) {
+            global_free_p = p;
+            return;
+        }
     }
 }
 
@@ -726,7 +716,6 @@ void ContourGraph::ResetCurrentContour() {
     ContourGraph::boundary_contour_set_.clear();
 
     odom_node_ptr_ = NULL;
-    is_robot_inside_poly_ = false;
 }   
 
 

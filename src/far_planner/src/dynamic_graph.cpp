@@ -1,12 +1,14 @@
 /*
  * FAR Planner
- * Copyright (C) 2021 Fan Yang - All rights reserved
+ * Copyright (C) 2021 Fan Yang
+ * SPDX-License-Identifier: MIT
  * fanyang2@andrew.cmu.edu,   
  */
 
 
 
 #include "far_planner/dynamic_graph.h"
+#include "far_planner/vote_selection.h"
 
 /***************************************************************************************/
 
@@ -25,9 +27,10 @@ void DynamicGraph::Init(const rclcpp::Node::SharedPtr nh, const DynamicGraphPara
     terrain_planner_.Init(nh, tp_params_);
 }
 
-void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos) {
+void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos,
+                                       std::uint64_t local_terrain_revision) {
     robot_pos_ = robot_pos;
-    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_);
+    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_, local_terrain_revision);
     if (odom_node_ptr_ == NULL) {
         this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true);
         this->AddNodeToGraph(odom_node_ptr_);
@@ -54,7 +57,8 @@ bool DynamicGraph::IsInterNavpointNecessary() {
         if (min_dist > FARUtil::kNavClearDist && min_dist < FARUtil::kINF) return true;
     } 
     if ((FARUtil::free_odom_p - last_connect_pos_).norm() > FARUtil::kNearDist || 
-        (it != odom_node_ptr_->edge_votes.end() && it->second.back() == 1)) 
+        (it != odom_node_ptr_->edge_votes.end() && !it->second.empty() &&
+         it->second.back() == 1))
     {
         last_connect_pos_ = FARUtil::free_odom_p;
     }
@@ -62,9 +66,9 @@ bool DynamicGraph::IsInterNavpointNecessary() {
 }
 
 bool DynamicGraph::ExtractGraphNodes(const CTNodeStack& new_ctnodes) {
-    if (new_ctnodes.empty()) return false;
-    NavNodePtr new_node_ptr = NULL;
     new_nodes_.clear();
+    NavNodePtr new_node_ptr;
+    // Trajectory sampling also runs when no unmatched contour vertices remain.
     if (this->IsInterNavpointNecessary()) { // check wheter or not need inter navigation points
         if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "DG: One trajectory node has been created.");
         this->CreateNavNodeFromPoint(last_connect_pos_, new_node_ptr, false, true);
@@ -82,8 +86,7 @@ bool DynamicGraph::ExtractGraphNodes(const CTNodeStack& new_ctnodes) {
             new_nodes_.push_back(new_node_ptr);
         }
     }
-    if (new_nodes_.empty()) return false;
-    else return true;
+    return !new_nodes_.empty();
 }
 
 void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
@@ -178,9 +181,9 @@ void DynamicGraph::UpdateNavGraph(const NodePtrStack& new_nodes,
                     outside_break_nodes.push_back(cnode);
                 } 
             }
-            for (std::size_t j=0; j<near_nav_nodes_.size(); j++) {
+            for (std::size_t j=0; j<i; j++) {
                 const NavNodePtr nav_ptr2 = near_nav_nodes_[j];
-                if (i == j || j > i || nav_ptr2->is_odom) continue;
+                if (nav_ptr2->is_odom) continue;
                 if (this->IsValidConnect(nav_ptr1, nav_ptr2, true)) {
                     this->AddPolyEdge(nav_ptr1, nav_ptr2), this->AddEdge(nav_ptr1, nav_ptr2);
                 } else {
@@ -327,9 +330,7 @@ bool DynamicGraph::IsOnTerrainConnect(const NavNodePtr& node_ptr1, const NavNode
 
 bool DynamicGraph::IsNodeFullyCovered(const NavNodePtr& node_ptr) {
     if (FARUtil::IsFreeNavNode(node_ptr) || node_ptr->is_covered) return true;
-    NodePtrStack check_odom_list = internav_near_nodes_;
-    check_odom_list.push_back(odom_node_ptr_);
-    for (const auto& near_optr : check_odom_list) {
+    const auto covered_by = [&node_ptr](const NavNodePtr& near_optr) {
         const float cur_dist = (node_ptr->position - near_optr->position).norm();
         if (cur_dist < FARUtil::kMatchDist) return true;
         if (node_ptr->free_direct != NodeFreeDirect::PILLAR) {
@@ -342,8 +343,10 @@ bool DynamicGraph::IsNodeFullyCovered(const NavNodePtr& node_ptr) {
                 }
             }
         }
-    }
-    return false;
+        return false;
+    };
+    return std::any_of(internav_near_nodes_.begin(), internav_near_nodes_.end(), covered_by) ||
+           covered_by(odom_node_ptr_);
 }
 
 bool DynamicGraph::IsFrontierNode(const NavNodePtr& node_ptr) {
@@ -535,19 +538,21 @@ void DynamicGraph::ReEvaluateConvexity(const NavNodePtr& node_ptr) {
 }
 
 void DynamicGraph::TopTwoContourConnector(const NavNodePtr& node_ptr) {
-    std::vector<int> votesc;
+    far_planner::TopTwoScores top_scores;
     for (const auto& vote : node_ptr->contour_votes) {
         if (FARUtil::IsVoteTrue(vote.second, false)) {
-            votesc.push_back(std::accumulate(vote.second.begin(), vote.second.end(), 0));
+            top_scores.Observe(std::accumulate(vote.second.begin(), vote.second.end(), 0));
         }
     }
-    std::sort(votesc.begin(), votesc.end(), std::greater<int>());
     for (const auto& cnode_ptr : node_ptr->potential_contours) {
         const auto it = node_ptr->contour_votes.find(cnode_ptr->id);
-        // DEBUG
-        if (it == node_ptr->contour_votes.end()) RCLCPP_ERROR(nh_->get_logger(), "DG: contour potential node matching error");
-        const int itc = std::accumulate(it->second.begin(), it->second.end(), 0);
-        if (FARUtil::VoteRankInVotes(itc, votesc) < 2 && FARUtil::IsVoteTrue(it->second, false)) {
+        if (it == node_ptr->contour_votes.end()) {
+            RCLCPP_ERROR(nh_->get_logger(), "DG: contour potential node matching error");
+        }
+        const bool selected = it != node_ptr->contour_votes.end() &&
+            FARUtil::IsVoteTrue(it->second, false) &&
+            top_scores.Includes(std::accumulate(it->second.begin(), it->second.end(), 0));
+        if (selected) {
             DynamicGraph::AddContourConnect(node_ptr, cnode_ptr);
             this->AddEdge(node_ptr, cnode_ptr);
         } else if (DynamicGraph::DeleteContourConnect(node_ptr, cnode_ptr) && !FARUtil::IsTypeInStack(cnode_ptr, node_ptr->poly_connects)) {
@@ -656,9 +661,9 @@ void DynamicGraph::FillContourConnect(const NavNodePtr& node_ptr1,
     if (node_ptr1 == node_ptr2) return;
     const auto it1 = node_ptr1->contour_votes.find(node_ptr2->id);
     const auto it2 = node_ptr2->contour_votes.find(node_ptr1->id);
-    std::deque<int> vote_queue1(queue_size, 1);
-    std::deque<int> vote_queue2(queue_size, 1);
     if (it1 == node_ptr1->contour_votes.end() || it2 == node_ptr2->contour_votes.end()) {
+        std::deque<int> vote_queue1(queue_size, 1);
+        std::deque<int> vote_queue2(queue_size, 1);
         // init polygon edge votes
         node_ptr1->contour_votes.insert({node_ptr2->id, vote_queue1});
         node_ptr2->contour_votes.insert({node_ptr1->id, vote_queue2});

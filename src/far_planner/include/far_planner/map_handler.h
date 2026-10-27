@@ -41,6 +41,8 @@ public:
 
     static bool IsNavPointOnTerrainNeighbor(const Point3D& p, const bool& is_extend);
 
+    // Choose the closest vertical-cell mean in this XY column. Input Z includes
+    // vehicle height; return ground height, or input Z minus vehicle height if unmatched.
     static float NearestTerrainHeightofNavPoint(const Point3D& point, bool& is_associated);
 
     /**
@@ -60,6 +62,8 @@ public:
         pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
         minH = maxH = p.z;
         is_matched = false;
+        if (!kdtree_terrain_clould_ || !kdtree_terrain_clould_->getInputCloud() ||
+            kdtree_terrain_clould_->getInputCloud()->empty()) return p.z;
         if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) {
             float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity;
             minH = maxH = avgH;
@@ -130,13 +134,16 @@ public:
     void ClearObsCellThroughPosition(const Point3D& point);
 
 private:
+    friend class MapHandlerTestAccess;
     MapHandlerParams map_params_;
     int neighbor_Lnum_, neighbor_Hnum_;
     Eigen::Vector3i robot_cell_sub_;
+    Point3D terrain_robot_pos_;
     int INFLATE_N;
     bool is_init_ = false;
     PointCloudPtr flat_terrain_cloud_;
     static PointKdTreePtr kdtree_terrain_clould_;
+    void ClearTerrainHeightData();
 
     template <typename Position>
     static inline float NearestHeightOfPoint(const Position& p, float& dist_square) {
@@ -146,6 +153,8 @@ private:
         PCLPoint pcl_p;
         dist_square = FARUtil::kINF;
         pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
+        if (!kdtree_terrain_clould_ || !kdtree_terrain_clould_->getInputCloud() ||
+            kdtree_terrain_clould_->getInputCloud()->empty()) return p.z;
         if (kdtree_terrain_clould_->nearestKSearch(pcl_p, 1, pIdxK, pdDistK) > 0) {
             pcl_p = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]];
             dist_square = pdDistK[0];
@@ -168,17 +177,6 @@ private:
         }
     }
 
-    inline void Expansion2D(const Eigen::Vector3i& csub, std::vector<Eigen::Vector3i>& subs, const int& n) {
-        subs.clear();
-        for (int ix=-n; ix<=n; ix++) {
-            for (int iy=-n; iy<=n; iy++) {
-                Eigen::Vector3i sub = csub;
-                sub.x() += ix, sub.y() += iy;
-                subs.push_back(sub); 
-            }
-        }
-    }
-
     void ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs,
                                      std::unordered_set<int>& extend_terrain_obs);
 
@@ -186,16 +184,13 @@ private:
     static std::unordered_set<int> neighbor_obs_indices_;  // surrounding obs cloud grid indices stack
     static std::unordered_set<int> extend_obs_indices_;    // extended surrounding obs cloud grid indices stack
 
-    std::vector<int> global_visited_induces_;
-    std::vector<int> util_obs_modified_list_;
-    std::vector<int> util_free_modified_list_;
-    std::vector<int> util_remove_check_list_;
+    std::unordered_set<int> visited_cell_indices_;
     static std::vector<int> terrain_grid_occupy_list_;
     static std::vector<int> terrain_grid_traverse_list_;
 
     
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> world_free_cloud_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr, true>> world_obs_cloud_grid_;
     static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_;
  
 };

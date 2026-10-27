@@ -1,6 +1,8 @@
 #ifndef TERRIAN_PLANNER_H
 #define TERRIAN_PLANNER_H
 
+#include <cstdint>
+
 #include "utility.h"
 #include "planner_visualizer.h"
 
@@ -16,23 +18,16 @@ struct TerrainNode {
     TerrainNode() = default;
     int id;
     Point3D position;
-    bool is_occupied;
-    float fscore;
-    float gscore;
+    bool is_occupied = false;
+    bool is_closed = false;
+    float fscore = FARUtil::kINF;
+    float gscore = FARUtil::kINF;
     std::shared_ptr<TerrainNode> parent;
 };
 
 typedef std::shared_ptr<TerrainNode> TerrainNodePtr;
 typedef std::vector<TerrainNode> TerrainNodeStack;
 
-
-struct TNodeptr_fcomp
-{
-  bool operator()(const TerrainNodePtr& n1, const TerrainNodePtr& n2) const
-  {
-    return n1->fscore > n2->fscore;
-  }
-};
 
 class TerrainPlanner {
 
@@ -44,7 +39,7 @@ public:
 
     void UpdateCenterNode(const NavNodePtr& node_ptr);
     
-    void SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn);
+    void SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn, std::uint64_t revision);
     
     bool PlanPathFromPToP(const Point3D& from_p, const Point3D& to_p, PointStack& path);
 
@@ -74,8 +69,16 @@ private:
 
     rclcpp::Publisher<Marker>::SharedPtr local_path_pub_; 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr terrain_map_pub_;
+    sensor_msgs::msg::PointCloud2 terrain_map_msg_;
+    bool terrain_map_dirty_ = true;
 
     std::unique_ptr<grid_ns::Grid<TerrainNodePtr>> terrain_grids_;
+    std::vector<int> occupied_cells_;
+    std::vector<int> searched_cells_;
+    PointCloudPtr local_obs_cloud_;
+    std::uint64_t local_terrain_revision_ = 0;
+    std::uint64_t last_projected_revision_ = 0;
+    bool needs_projection_ = true;
 
     void ExtractPath(const TerrainNodePtr& end_ptr, PointStack& path);
 
@@ -94,9 +97,10 @@ private:
 
     inline void ResetGridsOccupancy() {
         if (!is_grids_init_) return;
-        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (const int i : occupied_cells_) {
             terrain_grids_->GetCell(i)->is_occupied = false;
         }
+        occupied_cells_.clear();
     }
 
     inline void ResetGridsPositions() {
@@ -108,11 +112,13 @@ private:
 
     inline void ResetGridsPlanStatus() {
         if (!is_grids_init_) return;
-        for (int i=0; i<terrain_grids_->GetCellNumber(); i++) {
+        for (const int i : searched_cells_) {
+            terrain_grids_->GetCell(i)->is_closed = false;
             terrain_grids_->GetCell(i)->fscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->gscore = FARUtil::kINF;
             terrain_grids_->GetCell(i)->parent = NULL;
         }
+        searched_cells_.clear();
     }
 
     inline Point3D Ind2Point3D(const int& ind) {

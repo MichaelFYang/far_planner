@@ -2,6 +2,7 @@
 #define FAR_PLANNER_H
 
 #include "utility.h"
+#include "sensor_timing.h"
 #include "dynamic_graph.h"
 #include "contour_detector.h"
 #include "contour_graph.h"
@@ -36,12 +37,14 @@ class FARMaster
 {
 public:
     FARMaster();
-    ~FARMaster() = default;
+    ~FARMaster();
     
     void Init(); // ROS initialization
     rclcpp::Node::SharedPtr GetNodeHandle() { return nh_; }
 
 private:
+    friend class LocalTerrainCallbackTestAccess;
+    friend class ViewpointExtensionTestAccess;
     rclcpp::Node::SharedPtr nh_;
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reset_graph_sub_;
@@ -70,10 +73,25 @@ private:
 
     rclcpp::TimerBase::SharedPtr planning_event_;
     rclcpp::TimerBase::SharedPtr main_event_;
+    rclcpp::TimerBase::SharedPtr sensor_retry_event_;
 
     std_msgs::msg::Float32 runtimer_, plan_timer_;
 
     Point3D robot_pos_, robot_heading_, nav_heading_;
+    far_planner::OdometryHistory odometry_history_;
+    far_planner::PendingMeasurementQueue<nav_msgs::msg::Odometry::SharedPtr> pending_odometry_{200};
+    far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_scans_;
+    far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_terrains_{2};
+    far_planner::PendingMeasurementQueue<sensor_msgs::msg::PointCloud2::SharedPtr> pending_local_terrains_{2};
+    struct ProcessedScan {
+        PointCloudPtr cloud;
+        Point3D origin;
+    };
+    far_planner::RecentMeasurementHistory<ProcessedScan> recent_scans_;
+    far_planner::ClockEpoch clock_epoch_;
+    std::uint64_t last_scan_stamp_ = 0, last_terrain_stamp_ = 0, last_local_terrain_stamp_ = 0;
+    std::uint64_t local_terrain_revision_ = 0;
+    std::uint64_t sensor_time_tolerance_ns_ = 200000000ULL;
 
     bool is_reset_env_, is_stop_update_, is_init_completed_;
 
@@ -125,11 +143,15 @@ private:
     ContourGraphParams  cg_params_;
     MapHandlerParams    map_params_;
     ScanHandlerParams   scan_params_;
-    GraphMsgerParams    msger_parmas_;
+    GraphMsgerParams    msger_params_;
 
     void LoadROSParams();
 
     void ResetEnvironmentAndGraph();
+
+    void CheckClockEpoch();
+
+    bool ValidMeasurementTime(std::uint64_t stamp) const;
 
     void LocalBoundaryHandler(const std::vector<PointPair>& local_boundary);
 
@@ -137,7 +159,16 @@ private:
 
     void PlanningCallBack();
     
-    void PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut);
+    enum class CloudProcessResult { ACCEPTED, INVALID, TF_UNAVAILABLE };
+    CloudProcessResult ProcessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
+                                   const PointCloudPtr& cloudOut, bool require_intensity,
+                                   Point3D* sensor_origin = nullptr);
+    void ProcessPendingScans();
+    void ProcessPendingOdometry();
+    void ProcessPendingTerrain();
+    void ProcessPendingLocalTerrain();
+    void ProcessTerrainCloud(const sensor_msgs::msg::PointCloud2::SharedPtr& pc,
+                             const Point3D& terrain_robot_pos);
 
     
     Point3D ExtendViewpointOnObsCloud(const NavNodePtr& nav_node_ptr, const PointCloudPtr& obsCloudIn, float& free_dist);
@@ -151,12 +182,12 @@ private:
 
     // Rest of your callback functions...
 
-    inline void ResetGraphCallBack(const std_msgs::msg::Empty::SharedPtr msg) {
+    inline void ResetGraphCallBack(const std_msgs::msg::Empty::SharedPtr) {
         is_reset_env_ = true;
     }
 
     inline void JoyCommandCallBack(const sensor_msgs::msg::Joy::SharedPtr msg) {
-        if (msg->buttons[4] > 0.5) {
+        if (msg->buttons.size() > 4 && msg->buttons[4] > 0) {
             is_reset_env_ = true;
         }
     } 
@@ -190,7 +221,7 @@ private:
         }
     }
 
-    inline void ReadFileCommand(const std_msgs::msg::String::SharedPtr msg) {
+    inline void ReadFileCommand(const std_msgs::msg::String::SharedPtr) {
         if (!FARUtil::IsDebug) { // Terminal Output
             printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
             FakeTerminalInit();
@@ -198,10 +229,7 @@ private:
     }
 
     inline void SaveFileCommand(const std_msgs::msg::String::SharedPtr msg) {
-        if (!FARUtil::IsDebug) { // Terminal Output
-            printf("\033[2J"), printf("\033[0;0H"); // cleanup screen
-            FakeTerminalInit();
-        }
+        ReadFileCommand(msg);
     }
 
     void ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc);
